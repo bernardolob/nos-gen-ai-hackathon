@@ -112,6 +112,32 @@ guardar os commits de cada pessoa. Antes de cada merge atualiza-se o branch
 com a `main` e confirma-se o lint e os testes. Ver
 [DEVELOPMENT.md](DEVELOPMENT.md).
 
+### 11. A deteção recebe o cliente como parâmetro
+
+`detection.detect(lines, generate)` não importa nenhum cliente: recebe uma
+função `generate(instrução_de_sistema, conteúdo) -> texto`.
+
+- **Porquê:** testa-se sem chave nem rede (`tests/test_detection.py`), e o
+  cliente real liga-se com um adaptador pequeno. Se o cliente mudar, só o
+  adaptador muda.
+- **Um elemento mal formado não deita fora os outros.** Fica de fora e gera um
+  aviso; só uma resposta que não seja uma lista JSON é repetida. Deitar fora
+  tudo por causa de um elemento perderia proteção; aceitar o elemento
+  estragado quebraria o mascaramento.
+- **Tolerante na forma, exigente no conteúdo.** Maiúsculas, espaços nas
+  pontas, acentos nos ids e `1.0` por `1` não deitam um valor fora: um
+  anonimizador que falha em silêncio por uma diferença cosmética é pior do
+  que um que a absorve. O `text` passa a ser o que está na linha, para o
+  mascaramento o encontrar. O que muda o sentido (categoria desconhecida,
+  linha fora do documento, acentos diferentes no valor) continua a ser
+  rejeitado, com aviso.
+- **Uma lista vazia levanta suspeita.** É válida, mas se as regras de
+  segurança apanharam algo, `empty_answer_warnings` avisa.
+- **As mensagens nunca repetem a resposta do modelo**, porque pode conter os
+  dados sensíveis.
+- **Categorias e níveis de confiança numa só definição** (`src/categories.py`),
+  usada pela deteção e pelo relatório, em vez de duas cópias.
+
 ## Decisões em aberto
 
 1. **Uma só definição de "palavra" para o mascaramento e a verificação.** A

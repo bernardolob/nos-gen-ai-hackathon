@@ -42,7 +42,7 @@ mascaramento. Se os dois apanham o mesmo valor, o relatório junta-os num só.
 |---|---|---|---|---|---|
 | 1 | Extração | `submission/src/pdf_extractor.py` | caminho do PDF | texto, sem linhas vazias nem espaços no fim, com pontuação e acentos originais | feito |
 | 2 | Prompt interna | `internal_prompt.txt` | | instruções enviadas ao Gemini | feita, por testar |
-| 3 | Deteção | `src/detection.py` | linhas numeradas | itens | por fazer |
+| 3 | Deteção | `src/detection.py` | linhas numeradas e um cliente | itens e avisos | feito, falta ligar o cliente real do Gemini |
 | 4 | Regras de segurança | `src/safety_rules.py` | linhas | itens | feito |
 | 5 | Mascaramento | `src/masking.py` | linhas e itens | linhas mascaradas e avisos | feito |
 | 6 | Verificação | `src/verification.py` | linhas originais e mascaradas | lista de problemas | em desenvolvimento (`feature/verification`) |
@@ -93,8 +93,9 @@ e na deteção.
    é, como devolver a lista. Genérica, para qualquer tipo de documento. O
    documento vai numerado e é tratado como dados, nunca como instruções.
 3. **Deteção.** Envia a prompt e o documento ao Gemini (`temperature=0`) e
-   valida o JSON devolvido. A chave vem de uma variável de ambiente e nunca é
-   guardada no repositório.
+   valida o JSON devolvido. Recebe o cliente como parâmetro, por isso testa-se
+   sem o Gemini. Ver [DETECTION.md](DETECTION.md). A chave vem de uma
+   variável de ambiente e nunca é guardada no repositório.
 4. **Regras de segurança.** Padrões fixos (regex) para dados com formato
    conhecido. Apanham o que o modelo deixe passar e garantem um mínimo se a
    API falhar.
@@ -122,18 +123,21 @@ submission/
     ARCHITECTURE.md           este documento
     DECISIONS.md              decisões de desenho e as razões
     DEVELOPMENT.md            como trabalhar no projeto
+    DETECTION.md              deteção e validação da resposta
     MASKING.md                regras do mascaramento
     taxonomy.md               categorias de dados sensíveis
     internal_prompt.txt       2 Prompt interna
     src/
+      categories.py           categorias e confiança (partilhado)
+      detection.py            3 Deteção
       safety_rules.py         4 Regras de segurança
       masking.py              5 Mascaramento
       report.py               7 Relatório
     tests/                    testes de tudo o que está acima
 ```
 
-Por fazer: `src/detection.py` (3), `src/verification.py` (6, em
-desenvolvimento), `eval/` (8) e o ponto de entrada.
+Por fazer: o cliente real do Gemini para a deteção, `src/verification.py` (6,
+em desenvolvimento), `eval/` (8) e o ponto de entrada.
 
 ## Problemas conhecidos
 

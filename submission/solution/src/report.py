@@ -13,17 +13,7 @@ Os itens com o mesmo texto na mesma linha são juntados num só, com as
 origens somadas e a maior confiança.
 """
 
-CATEGORY_NAMES = {
-    "identificacao": "Identificação pessoal",
-    "saude": "Saúde",
-    "genetico": "Dados genéticos",
-    "biometrico": "Dados biométricos",
-    "origem_religiao_politica": "Origem, religião, política ou orientação",
-    "financeiro": "Dados financeiros",
-    "familia": "Vida familiar",
-    "comportamento": "Comportamentos pessoais",
-    "quasi_identificador": "Quasi-identificadores",
-}
+from categories import CATEGORY_NAMES, CONFIDENCE_LEVELS
 
 SOURCE_NAMES = {
     "gemini": "Gemini",
@@ -31,7 +21,9 @@ SOURCE_NAMES = {
 }
 
 DEFAULT_SOURCE = "gemini"
-CONFIDENCE_ORDER = {"certo": 0, "provavel": 1, "incerto": 2}
+CONFIDENCE_ORDER = {
+    level: rank for rank, level in enumerate(CONFIDENCE_LEVELS)
+}
 CONFIDENCE_NAMES = {
     "certo": "certo",
     "provavel": "provável",
