@@ -43,8 +43,8 @@ Fora de `localhost`, o endereço tem de ser `https`.
   e para documentos de umas 30 000 letras. Um pedido maior é recusado
   **antes** de ser enviado, com uma mensagem a dizer o tamanho. Se o Worker
   mudar o limite, defina `GEMINI_GATEWAY_MAX_PROMPT` com o mesmo valor.
-- **Origem e ritmo.** Sem `Origin` autorizado o Worker responde 403; passa
-  10 pedidos por minuto por IP.
+- **Origem e ritmo.** Sem `Origin` autorizado o Worker responde 403; passam
+  até 60 pedidos por minuto por IP para acomodar os lotes de vídeo.
 
 ## Erros
 

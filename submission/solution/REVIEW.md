@@ -1,7 +1,9 @@
 # Revisão manual (UI e backend)
 
-O utilizador envia o documento, vê o texto anonimizado com os `*` destacados
-e **aprova ou rejeita**. Ao rejeitar escreve observações, para ocultar mais ("Mascara também
+O utilizador envia um documento, fotografia ou vídeo, revê as ocultações e
+**aprova ou rejeita**. Em texto vê os `*`; em imagem/vídeo pode criar, mover,
+redimensionar e limitar no tempo regiões pixelizadas. Ver [MEDIA.md](MEDIA.md)
+para a análise multimodal. Ao rejeitar escreve observações, para ocultar mais ("Mascara também
 o nome do centro") ou menos ("Não mascares a informação médica"): o
 utilizador tem a palavra final. Essas observações passam a ser a **prompt do
 utilizador** (ver [DETECTION.md](DETECTION.md)) e o pipeline corre outra vez,
@@ -17,10 +19,13 @@ FastAPI, uma só sessão em memória (um servidor local para uma pessoa).
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`); corre o pipeline e começa a revisão (até 10 MB) |
+| `POST /api/document` | corpo = PDF/texto, imagem ou vídeo; inicia a revisão |
 | `GET /api/current` | `has_document`, `attempt`, `text`, `approved`, `history`, `mode` (`model` ou `rules`), `warnings`, `issues` |
 | `POST /api/reject` | `{attempt, text, reason}`: guarda a versão, junta `reason` às instruções e gera a seguinte |
 | `POST /api/approve` | aprova a versão atual |
+| `PUT /api/media/regions` | guarda as regiões multimédia editadas |
+| `GET /api/media/source` | serve o original temporário para revisão |
+| `GET /api/media/output` | serve a versão multimédia aprovada |
 
 Comportamento:
 
@@ -40,14 +45,17 @@ Privacidade: escuta só em `127.0.0.1` e o CORS só aceita as origens da UI
 (`REVIEW_UI_ORIGINS`, separadas por vírgulas; por defeito `localhost` e
 `127.0.0.1` nas portas 8080, 5173 e 3000; `*` não é aceite). O documento
 fica só em memória e perde-se ao reiniciar. As mensagens de erro nunca
-incluem o texto.
+incluem o texto. Ficheiros multimédia ficam numa pasta temporária da sessão;
+as amostras visuais são enviadas ao Gemini quando a análise automática está
+ativa.
 
 ## Arranque
 
 ```bash
 # backend, a partir de submission/solution/src
 pip install -r ../requirements.txt
-export GEMINI_GATEWAY_URL=...  GEMINI_GATEWAY_ORIGIN=...   # opcional
+export GEMINI_GATEWAY_URL=https://nos-gemini-gateway.jnhorta05.workers.dev
+export GEMINI_GATEWAY_ORIGIN=http://localhost:5173
 python user_validation.py            # http://127.0.0.1:8000
 
 # UI, a partir de submission/solution/Lovable_UI_JunctionX

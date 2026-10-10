@@ -49,10 +49,13 @@ mascaramento. Se os dois apanham o mesmo valor, o relatório junta-os num só.
 | 7 | Relatório | `src/report.py` | itens e avisos | texto em Markdown | feito |
 | 8 | Avaliação própria | `eval/evaluate.py` | saída e documento de referência | precisão e recall por palavra | **fora de âmbito** (decisão da equipa) |
 
-O pipeline fala com o Gemini pelo **gateway Cloudflare** (`src/gateway.py`,
+O pipeline de texto fala com o Gemini pelo **gateway Cloudflare** (`src/gateway.py`,
 só biblioteca padrão): a chave fica no Worker e nunca chega a este código.
 O cliente direto do Gemini (`src/gemini/`) e a API HTTP opcional (`api/`) são
-alternativas para desenvolvimento local.
+alternativas para desenvolvimento local. Imagens e fotogramas de vídeo usam o
+cliente multimodal direto, exclusivamente no backend local, porque o gateway
+de texto não aceita bytes. A arquitetura e os contratos estão em
+[MEDIA.md](MEDIA.md).
 
 O **ponto de entrada** é `src/pipeline.py`: lê o PDF (ou texto), chama cada
 passo, verifica o resultado e grava `submission.txt` e `report.md`. O modelo
