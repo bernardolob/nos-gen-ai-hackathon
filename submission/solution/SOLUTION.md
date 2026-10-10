@@ -70,10 +70,12 @@ python pipeline.py ../../../raw_data/document_to_anonymize.pdf --no-model --out 
 
 Sem `--out` é um ensaio: só mostra o resumo (linhas, itens, avisos e
 problemas da verificação, nunca valores). Com `--out DIR` escreve
-`submission.txt` e `report.md`. `--instructions "..."` junta instruções do
-utilizador e `--include-values` mostra os valores no relatório. Saída 0 sem
-problemas, 1 se a verificação encontrou problemas, 2 em erro. Sem `--no-model`, o
-Gemini é chamado pelo gateway Cloudflare: defina `GEMINI_GATEWAY_URL` e
+`submission.txt` e `report.md`. `--instructions "..."` (ou
+`--instructions-file`) junta as instruções do utilizador, em texto livre (ver
+[DETECTION.md](DETECTION.md)), e `--include-values` mostra os valores no
+relatório. Saída 0 sem problemas, 1 se a verificação encontrou problemas, 2
+em erro. Sem `--no-model`, o Gemini é chamado pelo gateway Cloudflare: defina
+`GEMINI_GATEWAY_URL` e
 `GEMINI_GATEWAY_ORIGIN` (ver [GATEWAY.md](GATEWAY.md)); sem elas dá erro.
 
 Em código, o `pipeline.run(lines, generate)` faz o mesmo e devolve as linhas

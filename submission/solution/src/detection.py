@@ -21,6 +21,7 @@ from categories import CATEGORY_NAMES, CONFIDENCE_LEVELS
 
 SOURCE = "gemini"
 DEFAULT_ATTEMPTS = 2
+TAG = re.compile(r"<(/?)(document|user_instructions)>", re.IGNORECASE)
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "internal_prompt.txt"
 
 
@@ -43,10 +44,21 @@ def normalize_lines(lines):
     return [unicodedata.normalize("NFC", line) for line in lines]
 
 
+def _defuse(text):
+    """Impede que o texto feche ou abra os blocos do pedido.
+
+    ``</document>`` dentro do documento ou ``</user_instructions>`` nas
+    instruções ficam com um espaço (``< /document>``): lê-se na mesma, mas já
+    não é uma etiqueta.
+    """
+    return TAG.sub(r"< \1\2>", text)
+
+
 def number_lines(lines):
     """Numera as linhas a partir de 1: ``[7] Nome: ...``."""
     return "\n".join(
-        "[%d] %s" % (number, line) for number, line in enumerate(lines, 1)
+        "[%d] %s" % (number, _defuse(line))
+        for number, line in enumerate(lines, 1)
     )
 
 
@@ -61,7 +73,7 @@ def build_request(lines, user_instructions=None):
         parts += [
             "",
             "<user_instructions>",
-            user_instructions.strip(),
+            _defuse(user_instructions.strip()),
             "</user_instructions>",
         ]
     return "\n".join(parts)

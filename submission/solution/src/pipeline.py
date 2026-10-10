@@ -35,6 +35,7 @@ EXIT_OK = 0
 EXIT_VERIFICATION = 1
 EXIT_ERROR = 2
 
+MAX_INSTRUCTIONS = 2000  # o pedido ao gateway tem um limite total
 SUBMISSION_FILE = "submission.txt"
 REPORT_FILE = "report.md"
 
@@ -56,6 +57,24 @@ def read_lines(path):
     if not text:
         return []
     return detection.normalize_lines(text.split("\n"))
+
+
+def read_instructions(text=None, path=None):
+    """Instruções do utilizador, do texto ou de um ficheiro (UTF-8).
+
+    Devolve ``None`` se não houver nenhuma. Levanta ``ValueError`` se forem
+    mais compridas que ``MAX_INSTRUCTIONS``; a mensagem nunca as inclui.
+    """
+    if path is not None:
+        text = Path(path).read_text(encoding="utf-8")
+    if text is None or not text.strip():
+        return None
+    text = text.strip()
+    if len(text) > MAX_INSTRUCTIONS:
+        raise ValueError(
+            "As instruções têm %d caracteres; o máximo é %d."
+            % (len(text), MAX_INSTRUCTIONS))
+    return text
 
 
 def run(lines, generate=None, user_instructions=None, include_values=False):
@@ -114,8 +133,12 @@ def build_parser():
     parser.add_argument(
         "--no-model", action="store_true",
         help="só as regras de segurança, sem o Gemini")
-    parser.add_argument(
-        "--instructions", help="instruções do utilizador para o modelo")
+    instructions = parser.add_mutually_exclusive_group()
+    instructions.add_argument(
+        "--instructions", help="instruções do utilizador, em texto livre")
+    instructions.add_argument(
+        "--instructions-file", metavar="FICHEIRO",
+        help="ficheiro de texto (UTF-8) com as instruções do utilizador")
     parser.add_argument(
         "--out", metavar="DIR",
         help="escreve submission.txt e report.md aqui (sem isto, ensaio)")
@@ -139,10 +162,11 @@ def main(argv=None, generate=None):
                       "--no-model para correr só as regras de segurança.",
                       file=sys.stderr)
                 return EXIT_ERROR
+        instructions = read_instructions(
+            args.instructions, args.instructions_file)
         lines = read_lines(args.document)
-        result = run(lines, generate, args.instructions,
-                     args.include_values)
-    except (OSError, RuntimeError, detection.DetectionError,
+        result = run(lines, generate, instructions, args.include_values)
+    except (OSError, RuntimeError, ValueError, detection.DetectionError,
             gateway.GatewayError) as error:
         print("Erro: %s" % error, file=sys.stderr)
         return EXIT_ERROR

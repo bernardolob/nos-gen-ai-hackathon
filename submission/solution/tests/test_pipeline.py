@@ -77,6 +77,36 @@ class RunTest(unittest.TestCase):
 
 
 @unittest.skipIf(pipeline is None, "o PyMuPDF não está instalado")
+class ReadInstructionsTest(unittest.TestCase):
+    def test_blank_instructions_are_none(self):
+        for blank in (None, "", "  \n "):
+            self.assertIsNone(pipeline.read_instructions(blank))
+
+    def test_text_is_trimmed(self):
+        self.assertEqual(
+            pipeline.read_instructions("  Mascara as datas.\n"),
+            "Mascara as datas.")
+
+    def test_a_file_is_read_as_utf8(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "instr.txt"
+            path.write_text("Mascara também o centro.\n", encoding="utf-8")
+            self.assertEqual(
+                pipeline.read_instructions(path=path),
+                "Mascara também o centro.")
+
+    def test_too_long_instructions_are_refused_without_echoing_them(self):
+        text = "segredo " * 400
+        with self.assertRaises(ValueError) as caught:
+            pipeline.read_instructions(text)
+        self.assertNotIn("segredo", str(caught.exception))
+
+    def test_the_limit_itself_is_allowed(self):
+        text = "a" * pipeline.MAX_INSTRUCTIONS
+        self.assertEqual(pipeline.read_instructions(text), text)
+
+
+@unittest.skipIf(pipeline is None, "o PyMuPDF não está instalado")
 class MainTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -165,6 +195,50 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, pipeline.EXIT_OK)
         masked = (self.out / pipeline.SUBMISSION_FILE).read_text("utf-8")
         self.assertEqual(masked.split("\n")[0], "Nome: * *")
+
+    def test_instructions_reach_the_model(self):
+        seen = []
+
+        def generate(system, content):
+            seen.append(content)
+            return "[]"
+        code, _, _ = self.run_main(
+            str(self.document), "--instructions", "Mascara as cidades.",
+            generate=generate)
+        self.assertEqual(code, pipeline.EXIT_OK)
+        self.assertIn("<user_instructions>\nMascara as cidades.\n", seen[0])
+
+    def test_instructions_can_come_from_a_file(self):
+        seen = []
+
+        def generate(system, content):
+            seen.append(content)
+            return "[]"
+        file = Path(self.tmp.name) / "instr.txt"
+        file.write_text("Mascara os hospitais.", encoding="utf-8")
+        self.run_main(str(self.document), "--instructions-file", str(file),
+                      generate=generate)
+        self.assertIn("Mascara os hospitais.", seen[0])
+
+    def test_both_instruction_options_together_are_a_usage_error(self):
+        with self.assertRaises(SystemExit):
+            self.run_main(str(self.document), "--no-model",
+                          "--instructions", "a", "--instructions-file", "b")
+
+    def test_too_long_instructions_are_an_error_and_nothing_is_sent(self):
+        seen = []
+        code, _, err = self.run_main(
+            str(self.document), "--instructions", "x" * 5000,
+            generate=lambda s, c: seen.append(c) or "[]")
+        self.assertEqual(code, pipeline.EXIT_ERROR)
+        self.assertIn("máximo", err)
+        self.assertEqual(seen, [])
+
+    def test_a_missing_instructions_file_is_an_error(self):
+        code, _, _ = self.run_main(
+            str(self.document), "--no-model",
+            "--instructions-file", str(Path(self.tmp.name) / "nao.txt"))
+        self.assertEqual(code, pipeline.EXIT_ERROR)
 
     def test_a_missing_file_is_an_error(self):
         code, _, err = self.run_main(
