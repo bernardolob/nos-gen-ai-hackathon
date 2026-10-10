@@ -1,3 +1,5 @@
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { isMockMode } from "../lib/review/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -125,6 +127,15 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {isMockMode && (
+        <aside aria-label="Demo mode notice" className="sticky top-0 z-50 w-full border-b border-border bg-muted/40 px-4 py-2">
+          <Alert className="mx-auto max-w-5xl border-border bg-background py-2 text-center">
+            <AlertDescription className="text-xs sm:text-sm font-medium text-foreground">
+              Demo mode: no document is processed and the data is fake. Set VITE_API_URL to connect to the real backend.
+            </AlertDescription>
+          </Alert>
+        </aside>
+      )}
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>

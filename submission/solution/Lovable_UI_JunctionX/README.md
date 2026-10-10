@@ -21,6 +21,20 @@ npm i
 npm run dev
 ```
 
+## Backend Configuration
+
+By default, the application runs in demo mode with mock data when `VITE_API_URL` is not set.
+
+To connect to the real backend, create a `.env` file (see `.env.example`):
+
+```sh
+cp .env.example .env
+```
+
+```env
+VITE_API_URL=http://127.0.0.1:8000
+```
+
 ## Built with
 
 - TanStack Start
