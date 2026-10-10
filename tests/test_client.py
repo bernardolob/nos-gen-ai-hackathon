@@ -13,6 +13,7 @@ from nos_anonymizer import (
     GeminiRequestError,
     GeminiServiceError,
     GeminiTimeoutError,
+    InvalidInputError,
     ModelMismatchError,
     ModelUnavailableError,
     RateLimitError,
@@ -82,6 +83,60 @@ def test_connection_check_allows_missing_model_limits(settings, fake_sdk):
 
     assert info.input_token_limit is None
     assert info.output_token_limit is None
+
+
+def test_generate_text_uses_exact_model_and_validates_response(settings, fake_sdk):
+    client = GeminiClient(settings, _sdk_client=fake_sdk)
+
+    result = client.generate_text("say hi")
+
+    assert fake_sdk.models.generate_calls == [
+        {"model": MODEL_ID, "contents": "say hi"}
+    ]
+    assert result.model == MODEL_ID
+    assert result.text == "Hi from Gemini!"
+
+
+@pytest.mark.parametrize("prompt", ["", "   ", None])
+def test_generate_text_rejects_invalid_input(settings, fake_sdk, prompt):
+    client = GeminiClient(settings, _sdk_client=fake_sdk)
+
+    with pytest.raises(InvalidInputError):
+        client.generate_text(prompt)
+
+    assert fake_sdk.models.generate_calls == []
+
+
+@pytest.mark.parametrize("text", [None, "", "   ", 42])
+def test_generate_text_rejects_invalid_response_text(settings, fake_sdk, text):
+    fake_sdk.models.generate_result.text = text
+    client = GeminiClient(settings, _sdk_client=fake_sdk)
+
+    with pytest.raises(ResponseValidationError, match="invalid text response"):
+        client.generate_text("hello")
+
+
+def test_generate_text_rejects_model_mismatch(settings, fake_sdk):
+    fake_sdk.models.generate_result.model_version = "gemini-3.6-flash"
+    client = GeminiClient(settings, _sdk_client=fake_sdk)
+
+    with pytest.raises(ModelMismatchError, match="no fallback"):
+        client.generate_text("hello")
+
+
+def test_generate_text_sanitizes_response_property_failure(settings, fake_sdk):
+    class BrokenResponse:
+        @property
+        def text(self):
+            raise ValueError("private provider response")
+
+    fake_sdk.models.generate_result = BrokenResponse()
+    client = GeminiClient(settings, _sdk_client=fake_sdk)
+
+    with pytest.raises(ResponseValidationError) as caught:
+        client.generate_text("hello")
+
+    assert "private provider response" not in str(caught.value)
 
 
 @pytest.mark.parametrize(

@@ -14,12 +14,24 @@ class FakeModels:
         )
         self.get_error = None
         self.get_calls = []
+        self.generate_result = SimpleNamespace(
+            text="Hi from Gemini!",
+            model_version="gemini-3.5-flash",
+        )
+        self.generate_error = None
+        self.generate_calls = []
 
     def get(self, **kwargs):
         self.get_calls.append(kwargs)
         if self.get_error:
             raise self.get_error
         return self.get_result
+
+    def generate_content(self, **kwargs):
+        self.generate_calls.append(kwargs)
+        if self.generate_error:
+            raise self.generate_error
+        return self.generate_result
 
 
 class FakeSdkClient:

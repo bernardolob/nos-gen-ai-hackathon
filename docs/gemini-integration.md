@@ -1,10 +1,11 @@
 # Gemini connection integration
 
-This milestone does one thing: it creates a secure Python connection to Google
-Gemini and verifies access to exactly `gemini-3.5-flash`.
+The package creates a secure Python connection to Google Gemini and uses exactly
+`gemini-3.5-flash`.
 
-It only retrieves model metadata. It does not generate content, inspect input
-text, read files, process PDFs, perform OCR, store data, or redact documents.
+`check_connection()` retrieves model metadata. `generate_text()` can send plain
+text and returns a validated `GenerationResult`. Neither method reads files,
+processes PDFs, performs OCR, stores data, or anonymizes documents.
 
 ## Usage
 
@@ -33,6 +34,17 @@ print(model_info.requested_model)
 
 `check_connection()` requests model metadata and validates the returned model
 identity and optional token-limit metadata. It does not generate any content.
+
+To generate text after the explicit caller has supplied it:
+
+```python
+with GeminiClient(GeminiSettings.from_env()) as client:
+    result = client.generate_text("say hi")
+
+print(result.text)
+```
+
+The API key remains an environment-only credential and the model ID is pinned.
 
 ## Configuration
 

@@ -47,3 +47,7 @@ class GeminiRequestError(GeminiIntegrationError):
 
 class ResponseValidationError(GeminiIntegrationError):
     """Raised when a response is structurally or semantically invalid."""
+
+
+class InvalidInputError(GeminiIntegrationError):
+    """Raised before Gemini is called when caller input is invalid."""

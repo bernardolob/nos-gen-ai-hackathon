@@ -1,4 +1,4 @@
-"""Secure Gemini client for connection verification."""
+"""Secure client for the pinned Gemini model."""
 
 from __future__ import annotations
 
@@ -17,12 +17,13 @@ from .errors import (
     GeminiRequestError,
     GeminiServiceError,
     GeminiTimeoutError,
+    InvalidInputError,
     ModelMismatchError,
     ModelUnavailableError,
     RateLimitError,
     ResponseValidationError,
 )
-from .models import ModelInfo
+from .models import GenerationResult, ModelInfo
 
 MODEL_ID = "gemini-3.5-flash"
 RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]
@@ -96,6 +97,35 @@ class GeminiClient:
                 "output token limit",
             ),
         )
+
+    def generate_text(self, prompt: str) -> GenerationResult:
+        """Send caller-provided text to the pinned model and validate its answer."""
+
+        self._ensure_open()
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise InvalidInputError("The prompt must contain text.")
+
+        response = self._call(
+            lambda: self._sdk_client.models.generate_content(
+                model=MODEL_ID,
+                contents=prompt,
+            ),
+        )
+        try:
+            text = response.text
+            provider_model = getattr(response, "model_version", None)
+        except Exception:
+            raise ResponseValidationError(
+                "Gemini returned an invalid text response."
+            ) from None
+
+        if provider_model is not None:
+            self._require_matching_model(provider_model)
+        if not isinstance(text, str) or not text.strip():
+            raise ResponseValidationError(
+                "Gemini returned an invalid text response."
+            )
+        return GenerationResult(model=MODEL_ID, text=text)
 
     def _call(self, operation: Callable[[], T]) -> T:
         try:

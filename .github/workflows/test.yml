@@ -33,7 +33,29 @@ jobs:
       - name: Run tests with coverage
         run: pytest --cov=nos_anonymizer --cov-report=term-missing
 
-      - name: Verify package and CLI imports
+      - name: Build package
+        run: python -m build
+
+      - name: Verify package and entry points
         run: |
-          python -c "import nos_anonymizer; assert nos_anonymizer.MODEL_ID == 'gemini-3.5-flash'"
+          python -c "import nos_anonymizer; import nos_anonymizer.api; assert nos_anonymizer.MODEL_ID == 'gemini-3.5-flash'"
           nos-gemini-check --help
+
+  worker-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Type-check Cloudflare Worker
+        run: npm run check

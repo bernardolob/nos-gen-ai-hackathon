@@ -5,20 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nos-anonymizer"
 version = "0.1.0"
-description = "Secure connection verification for Google Gemini"
+description = "Secure FastAPI and Cloudflare gateway for Google Gemini"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
+  "fastapi>=0.115,<1",
   "google-genai>=2.28,<3",
   "httpx>=0.28,<1",
   "pydantic>=2.12,<3",
   "pydantic-settings>=2.11,<3",
+  "uvicorn>=0.32,<1",
 ]
 
 [project.optional-dependencies]
 test = [
+  "build>=1.2,<2",
   "flake8>=7.3,<8",
   "pytest>=8.4,<9",
   "pytest-cov>=7,<8",
@@ -26,6 +29,7 @@ test = [
 
 [project.scripts]
 nos-gemini-check = "nos_anonymizer.cli:main"
+nos-anonymizer-api = "nos_anonymizer.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

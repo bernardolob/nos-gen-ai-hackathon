@@ -11,12 +11,13 @@ from .errors import (
     GeminiRequestError,
     GeminiServiceError,
     GeminiTimeoutError,
+    InvalidInputError,
     ModelMismatchError,
     ModelUnavailableError,
     RateLimitError,
     ResponseValidationError,
 )
-from .models import ModelInfo
+from .models import GenerationResult, ModelInfo
 
 __all__ = [
     "MODEL_ID",
@@ -30,6 +31,8 @@ __all__ = [
     "GeminiServiceError",
     "GeminiSettings",
     "GeminiTimeoutError",
+    "GenerationResult",
+    "InvalidInputError",
     "ModelInfo",
     "ModelMismatchError",
     "ModelUnavailableError",

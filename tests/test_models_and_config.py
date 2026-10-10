@@ -1,7 +1,12 @@
 import pytest
 from pydantic import ValidationError
 
-from nos_anonymizer import ConfigurationError, GeminiSettings, ModelInfo
+from nos_anonymizer import (
+    ConfigurationError,
+    GenerationResult,
+    GeminiSettings,
+    ModelInfo,
+)
 
 
 def test_settings_load_from_environment(monkeypatch):
@@ -62,3 +67,9 @@ def test_model_info_is_strict_and_immutable():
             provider_name="models/gemini-3.5-flash",
             unexpected=True,
         )
+
+
+def test_generation_result_hides_text_from_repr():
+    result = GenerationResult(model="gemini-3.5-flash", text="private answer")
+
+    assert "private answer" not in repr(result)

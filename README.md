@@ -54,11 +54,12 @@ Converting PDF documents to text can be essential for leveraging existing conten
 In this section, we will outline the expectations for project submission. Understanding these guidelines is crucial to ensure your work is evaluated correctly. There are specific methods and criteria for submission, which you should follow closely to enhance your chances of success. Make sure to read through the following points carefully.
 For more detailed information on the submission process and what is expected, please refer to the [Submission Process Guide](submission/README.md).
 
-## 5. Secure Gemini integration milestone
+## 5. Secure Gemini gateway
 
-The repository now includes a small Python integration that securely connects
-to Gemini and verifies access to `gemini-3.5-flash` exactly. It only retrieves
-model metadata; it does not generate content or process documents.
+The repository includes a Python Gemini client, a protected FastAPI service, a
+production Docker image, and a Cloudflare Worker that routes requests to the
+FastAPI container. The model is pinned to `gemini-3.5-flash` with no fallback.
+This milestone accepts plain text only; it does not process or anonymize files.
 
 ### Install for development
 
@@ -90,5 +91,6 @@ pytest --cov=nos_anonymizer --cov-report=term-missing
 flake8 .
 ```
 
-See the [Gemini integration guide](docs/gemini-integration.md) for the connection
-API, security controls, and configuration.
+See the [backend API guide](docs/backend-api.md), [Gemini integration guide](docs/gemini-integration.md),
+and [Cloudflare deployment guide](docs/cloudflare-containers.md). The Cloudflare
+files are deployment preparation only; nothing is deployed automatically.
