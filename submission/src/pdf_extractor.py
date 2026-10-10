@@ -10,7 +10,9 @@ def remove_empty_lines(text: str) -> str:
     """
     # .splitlines() divide o texto onde há quebras de linha
     # line.strip() verifica se a linha tem conteúdo real
-    linhas_validas = [line.rstrip() for line in text.splitlines() if line.strip() != ""]
+    linhas_validas = [
+        line.rstrip() for line in text.splitlines() if line.strip() != ""
+    ]
 
     # Volta a unir o texto apenas com as linhas que têm conteúdo
     return "\n".join(linhas_validas)
