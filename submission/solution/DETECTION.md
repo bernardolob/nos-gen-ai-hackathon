@@ -112,13 +112,15 @@ deve chamá-la e juntar o aviso aos outros.
 
 - **Um só pedido por documento.** Documentos longos que não caibam no pedido
   não são divididos. O limite da API opcional (10 000 caracteres por prompt)
-  já fica apertado: a prompt interna (cerca de 6 200) e o documento do
-  desafio (cerca de 3 000) somam cerca de 9 200.
+  já fica apertado: a prompt interna (cerca de 6 500) e o documento do
+  desafio (cerca de 3 000) somam cerca de 9 500.
 - **Itens mal formados perdem proteção.** Um elemento rejeitado deixa o valor
   por mascarar; o aviso é a única pista. Convém mostrá-los a quem executa.
 - **Etiqueta incluída no valor.** Se o modelo devolve `Nome: Rui Pinto` em vez
   de `Rui Pinto`, o mascaramento oculta também a etiqueta (`*: * *`). A
-  deteção não a adivinha; a correção é na prompt, que já o proíbe.
+  deteção não a adivinha. A prompt proíbe-o na regra 1, com um exemplo
+  errado e um certo lado a lado; falta medir com o Gemini se isso basta (ver
+  [DECISIONS.md](DECISIONS.md)).
 - **Resposta cortada.** Um JSON truncado (limite de tokens de saída) dá
   `DetectionError` e a repetição provavelmente trunca de novo. A solução é no
   cliente: pedir resposta em JSON e um limite de saída adequado.
