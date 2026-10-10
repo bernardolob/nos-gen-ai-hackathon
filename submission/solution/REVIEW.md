@@ -1,10 +1,11 @@
 # Revisão manual (UI e backend)
 
 O utilizador envia o documento, vê o texto anonimizado com os `*` destacados
-e **aprova ou rejeita**. Ao rejeitar escreve observações ("Mascara também o
-nome do centro"); essas observações passam a ser a **prompt do utilizador**
-(ver [DETECTION.md](DETECTION.md)) e o pipeline corre outra vez, gerando a
-tentativa seguinte. As versões rejeitadas ficam no histórico da sessão.
+e **aprova ou rejeita**. Ao rejeitar escreve observações, para ocultar mais ("Mascara também
+o nome do centro") ou menos ("Não mascares a informação médica"): o
+utilizador tem a palavra final. Essas observações passam a ser a **prompt do
+utilizador** (ver [DETECTION.md](DETECTION.md)) e o pipeline corre outra vez,
+gerando a tentativa seguinte. As versões rejeitadas ficam no histórico da sessão.
 
 ```
 UI (Lovable_UI_JunctionX/) <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)

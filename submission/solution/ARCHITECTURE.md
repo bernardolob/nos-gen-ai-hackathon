@@ -41,13 +41,13 @@ mascaramento. Se os dois apanham o mesmo valor, o relatório junta-os num só.
 | # | Componente | Ficheiro | Entrada | Saída | Estado |
 |---|---|---|---|---|---|
 | 1 | Extração | `src/pdf_extractor.py` | caminho do PDF | texto, sem linhas vazias nem espaços no fim, com pontuação e acentos originais | feito |
-| 2 | Prompt interna | `internal_prompt.txt` | | instruções enviadas ao Gemini | feita, por testar |
-| 3 | Deteção | `src/detection.py` | linhas numeradas e um cliente | itens e avisos | feito, falta ligar o cliente real do Gemini |
+| 2 | Prompt interna | `internal_prompt.txt` | | instruções enviadas ao Gemini | feita, testada com o Gemini |
+| 3 | Deteção | `src/detection.py` | linhas numeradas e um cliente | itens e avisos | feito, ligado ao Gemini pelo gateway |
 | 4 | Regras de segurança | `src/safety_rules.py` | linhas | itens | feito |
 | 5 | Mascaramento | `src/masking.py` | linhas e itens | linhas mascaradas e avisos | feito |
 | 6 | Verificação | `src/verification.py` | linhas originais e mascaradas | lista de problemas | feito |
 | 7 | Relatório | `src/report.py` | itens e avisos | texto em Markdown | feito |
-| 8 | Avaliação própria | `eval/evaluate.py` | saída e documento de referência | precisão e recall por palavra | por fazer |
+| 8 | Avaliação própria | `eval/evaluate.py` | saída e documento de referência | precisão e recall por palavra | **fora de âmbito** (decisão da equipa) |
 
 O pipeline fala com o Gemini pelo **gateway Cloudflare** (`src/gateway.py`,
 só biblioteca padrão): a chave fica no Worker e nunca chega a este código.
@@ -112,8 +112,9 @@ e na deteção.
 7. **Relatório.** Para cada item mascarado indica linha, categoria, razão,
    confiança e origem. Por defeito **não mostra os valores originais**, para
    o relatório não revelar o que foi ocultado.
-8. **Avaliação própria.** Mede o efeito de cada alteração à prompt contra um
-   documento anonimizado à mão.
+8. **Avaliação própria (fora de âmbito).** Mediria o efeito de cada alteração
+   à prompt contra um documento anonimizado à mão. A equipa decidiu não a
+   fazer: as execuções comparam-se à mão.
 
 ## Extras
 
@@ -153,6 +154,7 @@ submission/
       pipeline.py             ponto de entrada que liga tudo
       gateway.py              liga o pipeline ao Gemini pelo Worker
       labels.py               deixa as etiquetas visíveis (itens do modelo)
+      visibility.py           valores que o utilizador pediu para ficarem visíveis
       user_validation.py      backend da revisão manual (FastAPI)
       gemini/                 cliente direto do Gemini (alternativa)
       audio/                  extra: transcrição, alinhamento e redação
@@ -164,7 +166,7 @@ submission/
     tests/                    testes de tudo o que está acima
 ```
 
-Por fazer: o cliente real do Gemini para a deteção e `eval/` (8).
+Fora de âmbito: `eval/` (8), a avaliação própria.
 
 ## Problemas conhecidos
 

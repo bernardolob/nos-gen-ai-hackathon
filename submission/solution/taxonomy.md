@@ -58,7 +58,8 @@ Every person mentioned receives the same protection as the main subject.
 
 The prompt applies the defaults above to every document. Anything specific
 to one document or one organization goes into the **user instructions**,
-which can only add things to flag or make the flagging stricter.
+which can add things to flag or take things out: the user has the final
+word on what is masked.
 
 Examples of choices left to the user instructions:
 

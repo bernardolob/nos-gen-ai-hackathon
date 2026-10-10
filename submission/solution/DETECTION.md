@@ -21,7 +21,7 @@ items, warnings = detection.detect(lines, generate)
 |---|---|
 | `lines` | Linhas do documento, em NFC |
 | `generate` | `generate(instrução_de_sistema, conteúdo) -> texto` |
-| `user_instructions` | Instruções opcionais do utilizador (só acrescentam regras) |
+| `user_instructions` | Instruções opcionais do utilizador (têm a palavra final sobre o que se mascara) |
 | `system_prompt` | Prompt a usar; por defeito a `internal_prompt.txt` |
 | `attempts` | Tentativas se a resposta não for utilizável (por defeito 2) |
 
@@ -59,9 +59,20 @@ as duas. Exemplos:
 
 Regras:
 
-- **Só acrescentam.** A prompt interna diz ao modelo que as instruções não
-  podem mandar ignorar as regras, deixar de marcar uma categoria nem mudar o
-  formato da resposta. Pedir para **não** mascarar algo não tem efeito.
+- **O utilizador tem a palavra final sobre o que se mascara.** Pode pedir
+  mais (`Mascara também o nome do centro`) ou menos (`Não mascares a
+  informação médica`); se pedir para não mascarar algo, o modelo não devolve
+  itens para isso. Se dois pedidos se contradizem, vale o mais recente. As
+  instruções nunca mudam o formato da resposta nem fazem do conteúdo do
+  documento instruções.
+- **Também valem para as regras de segurança.** As regras (NIF, email,
+  telefone, cartão...) correm sem o modelo, por isso, quando o utilizador
+  pede para deixar algo visível, o modelo devolve esses valores com
+  `"visible": true` (regra 9 da prompt). Não se mascaram e cancelam os itens
+  do modelo ou das regras que se sobreponham na mesma linha
+  (`src/visibility.py`). O resumo mostra "deixados visíveis a pedido do
+  utilizador: N". Sem instruções do utilizador, um `visible` é ignorado e
+  gera um aviso, para um erro do modelo não deixar dados à vista.
 - **Dependem do modelo.** Não há garantia de que o Gemini as cumpra à letra;
   o relatório mostra o que foi mascarado e a origem.
 - **Máximo de 2000 caracteres** (`pipeline.MAX_INSTRUCTIONS`); mais do que
@@ -172,6 +183,16 @@ segurança apanham identificadores quase de certeza que o modelo falhou
 `empty_answer_warnings(itens_do_modelo, itens_das_regras)` devolve um aviso
 nesse caso, sem repetir valores. Quem liga os componentes (o ponto de entrada)
 deve chamá-la e juntar o aviso aos outros.
+
+## Verificação do "deixar visível"
+
+Com o Gemini real e `Não mascares os emails, o NIF nem os números de
+telefone`: o NIF, os 5 emails e os 4 telefones do documento do desafio
+ficaram visíveis (8 itens cancelados); o Cartão de Cidadão e a Segurança
+Social, que não foram pedidos, continuaram mascarados. Sem instruções não
+houve nenhum `visible`. Depende de o modelo identificar todos os valores
+pedidos: um que o modelo não devolva continua mascarado pelas regras, que é
+o lado seguro.
 
 ## Limitações
 
