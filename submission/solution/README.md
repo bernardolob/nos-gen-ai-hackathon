@@ -50,6 +50,8 @@ sozinho pode ser um telefone, um NIF ou uma apólice.
 - A pontuação nas pontas de cada palavra mantém-se: `Santos,` passa a `*,` e
   `(João,` passa a `(*,`. Símbolos como `+` e `€` contam como parte da
   palavra.
+- Um símbolo isolado, sem letras nem números (por exemplo `-`), não é uma
+  palavra e mantém-se.
 - Os espaços e a estrutura das linhas não mudam.
 
 ### Localização dos itens no código
@@ -60,9 +62,15 @@ sozinho pode ser um telefone, um NIF ou uma apólice.
 3. Se mesmo assim falhar, devolver um aviso (`line`, `text`, `problem`) para
    a verificação e a revisão manual tratarem.
 4. Mascarar também as outras ocorrências do mesmo valor (por exemplo,
-   "Maria Santos" no texto corrido). Só se aplica a valores com 4 ou mais
-   caracteres e quando aparecem como palavra inteira, para não mascarar
-   números curtos sem relação.
+   "Maria Santos" no texto corrido). Só se aplica quando o valor aparece
+   como palavra inteira (`Ana` não apanha `Anabela`) e a valores com pelo
+   menos 3 caracteres, se tiverem letras, ou 4, se forem só números. Assim
+   um `2` isolado não mascara outros `2` sem relação.
+
+O texto dos itens tem de coincidir exatamente com o do documento. Se o Gemini
+devolver o mesmo texto com os acentos decompostos (Unicode NFD), o item não é
+encontrado e gera um aviso. Convém normalizar o texto para NFC na extração e
+na deteção.
 
 ## Como correr o projeto
 
@@ -96,6 +104,18 @@ Sem nenhuma mensagem de erro, o código está conforme. Os erros mais comuns
 são linhas com mais de 79 caracteres, imports não usados, espaços no fim da
 linha e a falta de duas linhas em branco entre funções.
 
+### Correr os testes
+
+Os testes usam apenas a biblioteca padrão do Python (`unittest`). A partir
+da raiz do repositório:
+
+```bash
+python -m unittest discover -s submission/solution/tests -v
+```
+
+Cobrem as regras de segurança (`tests/test_safety_rules.py`) e o
+mascaramento (`tests/test_masking.py`).
+
 ### Executar a solução
 
 A fazer: instruções de execução, depois de existir o ponto de entrada.
@@ -105,7 +125,8 @@ A fazer: instruções de execução, depois de existir o ponto de entrada.
 - [x] Taxonomia (rascunho)
 - [x] Prompt interna (versão 2, por testar)
 - [x] Regras de segurança (regex)
-- [x] Mascaramento
+- [x] Mascaramento (em revisão no branch `feature/masking`)
+- [x] Testes das regras de segurança e do mascaramento
 - [ ] Testar a prompt no documento real
 - [ ] Extração, deteção, verificação, relatório
 - [ ] Avaliação própria

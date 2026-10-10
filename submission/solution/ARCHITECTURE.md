@@ -65,6 +65,9 @@ submission/solution/
     masking.py
     verification.py
     report.py
+  tests/
+    test_safety_rules.py
+    test_masking.py
   eval/
     evaluate.py
 ```

@@ -12,8 +12,12 @@ Regras:
 - Os espaços e a estrutura das linhas não mudam.
 - Cada item é procurado na sua linha; se não estiver lá, nas linhas vizinhas
   e depois no documento todo. Se não for encontrado, gera um aviso.
-- Os valores com pelo menos ``MIN_PROPAGATION_LENGTH`` caracteres são também
-  mascarados nas outras ocorrências, quando aparecem como palavra inteira.
+- Os valores são também mascarados nas outras ocorrências, quando aparecem
+  como palavra inteira: os que têm letras com pelo menos
+  ``MIN_PROPAGATION_LETTERS`` caracteres e os só com números com pelo menos
+  ``MIN_PROPAGATION_LENGTH``.
+- Um símbolo isolado, sem letras nem números (como ``-``), não é uma palavra
+  e mantém-se.
 """
 
 import re
@@ -21,6 +25,7 @@ import re
 MASK = "*"
 EDGE_PUNCTUATION = ",;:.!?()[]{}\"'"
 MIN_PROPAGATION_LENGTH = 4
+MIN_PROPAGATION_LETTERS = 3
 
 
 def mask_lines(lines, items):
@@ -42,7 +47,7 @@ def mask_lines(lines, items):
             continue
         index, start = found
         spans[index].append((start, start + len(text)))
-        if len(text) >= MIN_PROPAGATION_LENGTH:
+        if _should_propagate(text):
             _add_other_occurrences(lines, text, spans)
     masked = [_apply(line, spans[i]) for i, line in enumerate(lines)]
     return masked, warnings
@@ -88,6 +93,18 @@ def _find(line, text, occurrence):
     return start
 
 
+def _should_propagate(text):
+    """Diz se o valor também deve ser mascarado nas outras ocorrências.
+
+    Valores só com números precisam de ``MIN_PROPAGATION_LENGTH`` caracteres;
+    os que têm letras (nomes, por exemplo) precisam de
+    ``MIN_PROPAGATION_LETTERS``.
+    """
+    if any(char.isalpha() for char in text):
+        return len(text) >= MIN_PROPAGATION_LETTERS
+    return len(text) >= MIN_PROPAGATION_LENGTH
+
+
 def _add_other_occurrences(lines, text, spans):
     """Acrescenta as ocorrências de ``text`` como palavra inteira."""
     pattern = re.compile(r"(?<!\w)" + re.escape(text) + r"(?!\w)")
@@ -124,8 +141,7 @@ def _mask_span(segment):
 
 def _mask_word(word):
     """Troca a palavra por ``*``, mantendo a pontuação nas pontas."""
-    core = word.strip(EDGE_PUNCTUATION)
-    if not core:
+    if not any(char.isalnum() for char in word):
         return word
     lead = len(word) - len(word.lstrip(EDGE_PUNCTUATION))
     trail = len(word) - len(word.rstrip(EDGE_PUNCTUATION))
