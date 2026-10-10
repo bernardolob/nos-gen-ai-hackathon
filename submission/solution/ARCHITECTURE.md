@@ -122,9 +122,9 @@ Fora da numeração 1-8 acima (essa numeração segue os critérios dos
 organizadores). Um extra pode reaproveitar o pipeline de texto sem lhe
 tocar.
 
-| Extra | Ficheiros previstos | Estado |
+| Extra | Ficheiros | Estado |
 |---|---|---|
-| Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | feito, por testar com a chave real do ElevenLabs, ver [AUDIO.md](AUDIO.md) |
+| Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | feito e testado com a API real do ElevenLabs, ver [AUDIO.md](AUDIO.md) |
 
 ## Estrutura de pastas
 
