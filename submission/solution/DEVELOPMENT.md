@@ -33,6 +33,19 @@ $env:GEMINI_API_KEY = "a-tua-chave"
 notebooks nem em *commits*. Uma chave que tenha ido para um *commit* ou para o
 chat tem de ser revogada. O ficheiro `.env` está no `.gitignore`.
 
+### Extra: censura de áudio
+
+Só é preciso para `audio_pipeline.py` (ver [AUDIO.md](AUDIO.md)); o resto do
+projeto não depende disto.
+
+- **`ffmpeg`** instalado no sistema (binário, não um pacote Python) — o
+  `audio/redactor.py` chama-o diretamente por `subprocess`.
+- **`ELEVENLABS_API_KEY`**, da mesma forma que a chave do Gemini acima.
+
+```bash
+export ELEVENLABS_API_KEY="a-tua-chave"
+```
+
 ## Lint
 
 O workflow `lint.yml` corre `flake8 .` em cada push e em cada pull request,
@@ -58,6 +71,10 @@ Cobrem as regras de segurança, o mascaramento e o relatório, e só precisam da
 biblioteca padrão. O `pytest` também os corre
 (`python -m pytest submission/solution/tests`) e passa a ser preciso quando
 entrarem os testes do cliente do Gemini.
+
+Os testes de `audio/redactor.py` e de `audio_pipeline.py` que escrevem áudio
+precisam do `ffmpeg` instalado; sem ele, saltam-se sozinhos
+(`@unittest.skipUnless`), não falham.
 
 ## Correr o código à mão
 
