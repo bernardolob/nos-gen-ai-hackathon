@@ -65,7 +65,10 @@ class SafetyRulesTest(unittest.TestCase):
 
     def test_biometric_ids(self):
         self.assertEqual(
-            found_texts(["ID-BIO-12345", "FACE-ID-78901"]),
+            found_texts([
+                "Impressão digital registada: ID-BIO-12345",
+                "Reconhecimento facial: FACE-ID-78901",
+            ]),
             ["ID-BIO-12345", "FACE-ID-78901"],
         )
 
