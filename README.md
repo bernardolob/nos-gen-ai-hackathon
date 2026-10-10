@@ -94,15 +94,3 @@ flake8 .
 See the [Gemini integration guide](docs/gemini-integration.md) for the public
 API, security controls, architecture, model-deprecation caveat, configuration,
 and future adapter boundary.
-
-## 6. Secure HTTP backend milestone
-
-The repository also includes a FastAPI service around the existing client. It
-provides public `GET /health`, protected `GET /ready`, and protected
-`POST /api/v1/detect`; it adds no PDF, OCR, storage, masking, frontend, n8n, or
-submission-generation behavior.
-
-See the [backend API guide](docs/backend-api.md) for local and Docker usage and
-the [Cloudflare Containers guide](docs/cloudflare-containers.md) for the
-prepared (not deployed) Worker configuration, secret setup, limitations, and
-rollback procedure.
