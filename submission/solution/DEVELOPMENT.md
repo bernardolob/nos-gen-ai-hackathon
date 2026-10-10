@@ -45,7 +45,9 @@ estado).
   Python) — o `audio/redactor.py` chama-o diretamente por `subprocess`. No
   Windows: `winget install Gyan.FFmpeg`; o PATH só se atualiza num terminal
   novo. Sem ele, os testes de áudio que o usam saltam-se.
-- **`ELEVENLABS_API_KEY`**, da mesma forma que a chave do Gemini acima.
+- **`ELEVENLABS_API_KEY`**, da mesma forma que a chave do Gemini acima. É a
+  chave do **servidor**: quem usa a UI não precisa de nenhuma (ver
+  [DECISIONS.md](DECISIONS.md), 16). Nunca a ponha no repositório.
 
 ```bash
 export ELEVENLABS_API_KEY="a-tua-chave"

@@ -53,6 +53,8 @@ Comportamento:
 ### Áudio
 
 - **Disponível só com** `ELEVENLABS_API_KEY` e `ffmpeg`/`ffprobe` instalados.
+  A chave é **do servidor**, não de quem usa a UI: o utilizador só envia o
+  áudio (ver [DECISIONS.md](DECISIONS.md), 16).
   Sem eles `audio_enabled` é `false` e `POST /api/audio` responde 503; a UI
   deve esconder ou desativar o envio de áudio.
 - **O áudio original sai da máquina.** Vai para o ElevenLabs, **ainda com os
