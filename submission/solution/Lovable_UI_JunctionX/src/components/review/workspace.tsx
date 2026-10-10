@@ -76,7 +76,7 @@ export function ReviewWorkspace({
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Attempt" value={snapshot.attempt} />
-        <Stat label="Redacted items" value={masks} />
+        <Stat label="Masked words" value={masks} />
         <Stat label="Warnings" value={snapshot.warnings} tone={snapshot.warnings > 0 ? "warn" : undefined} />
         <Stat label="Issues" value={snapshot.issues} tone={snapshot.issues > 0 ? "warn" : undefined} />
       </div>
@@ -159,7 +159,7 @@ export function ReviewWorkspace({
             onChange={(e) => setReason(e.target.value)}
             maxLength={MAX_REASON_CHARS}
             rows={5}
-            placeholder="E.g.: also hide the doctor's name and the diagnosis."
+            placeholder="E.g.: also hide the clinic name - or: do not hide medical information."
             aria-label="Feedback"
           />
           <p className="text-right text-xs text-muted-foreground">{reason.length} / {MAX_REASON_CHARS}</p>
