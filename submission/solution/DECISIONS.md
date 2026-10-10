@@ -189,6 +189,22 @@ Se o valor sensível é `Ana` e aparece dentro de `Ana-Maria`, mascara-se
 - **O apelido só se mascara se for apontado** (ou se o item for o nome
   completo). O código não sabe o que é o apelido de quem.
 
+### 15. Áudio: transcrever uma só vez por sessão
+
+**O problema.** Na revisão manual, cada rejeição gera uma versão nova. Se
+cada uma voltasse a transcrever, o áudio, com os dados sensíveis, seria
+enviado outra vez ao ElevenLabs, com custo em créditos e mais exposição.
+
+**A decisão.** A rota de áudio transcreve uma só vez, quando se envia o
+áudio, e guarda a transcrição e os tempos das palavras. Cada rejeição repete
+só a deteção e a censura (`audio_pipeline.run_transcript`), sempre a partir do
+áudio original guardado numa pasta temporária privada, que se apaga ao
+substituir o documento, ao fechar a sessão e ao sair do servidor.
+
+**O que se perde.** O histórico guarda só o texto das versões rejeitadas, não
+o seu áudio. E se a transcrição estiver errada, rejeitar não a corrige: é
+preciso enviar o áudio outra vez.
+
 ## Decisões em aberto
 
 1. **Normalização Unicode.** Se o Gemini devolver `ç` decomposto (NFD), o

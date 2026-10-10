@@ -65,11 +65,23 @@ def run(audio_path, call_scribe, generate=None, user_instructions=None,
     segurança.
     """
     lines, word_times = transcribe(audio_path, call_scribe)
+    return run_transcript(
+        lines, word_times, generate, user_instructions, include_values)
+
+
+def run_transcript(lines, word_times, generate=None, user_instructions=None,
+                   include_values=False):
+    """A parte de ``run`` que não toca no áudio, a partir da transcrição.
+
+    Permite repetir a deteção (por exemplo, com novas instruções do
+    utilizador) sem voltar a transcrever, ou seja, sem voltar a enviar o
+    áudio ao ElevenLabs. Devolve o mesmo que ``run``.
+    """
     lines = detection.normalize_lines(lines)
     result = pipeline.run(lines, generate, user_instructions, include_values)
-    ranges = find_masked_ranges(lines, result["masked"], word_times)
     result["lines"] = lines
-    result["ranges"] = ranges
+    result["ranges"] = find_masked_ranges(
+        lines, result["masked"], word_times)
     return result
 
 

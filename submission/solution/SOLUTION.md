@@ -53,8 +53,8 @@ Gemini.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, contrato de dados e estrutura de pastas |
 | [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
-| [REVIEW.md](REVIEW.md) | Revisão manual: UI, backend e rejeição com observações |
-| [AUDIO.md](AUDIO.md) | Extra: censura de áudio |
+| [REVIEW.md](REVIEW.md) | Revisão manual (texto e áudio): UI, backend, rotas e rejeição com observações |
+| [AUDIO.md](AUDIO.md) | Extra: censura de áudio (linha de comandos e rota do backend) |
 | [GATEWAY.md](GATEWAY.md) | Como o pipeline chama o Gemini pelo Worker Cloudflare |
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
@@ -179,9 +179,15 @@ Aceita um ficheiro de áudio, transcreve-o com a ElevenLabs Scribe
 (timestamps por palavra), corre o mesmo `pipeline.run` sobre a
 transcrição, e substitui cada palavra ocultada por um som personalizado
 (não silêncio) no áudio. Reaproveita o pipeline de texto sem alterações —
-só a transcrição e a redação do áudio são novas. Feito e testado (ponto de
-entrada `audio_pipeline.py`), exceto o cliente real do ElevenLabs
-(`audio/elevenlabs_client.py`), por testar com uma chave verdadeira.
+só a transcrição e a redação do áudio são novas. Feito e verificado com a
+API real do ElevenLabs na linha de comandos (`audio_pipeline.py`).
+
+O backend da revisão manual tem também a **rota de áudio** (`POST
+/api/audio` e `GET /api/audio/current`, ver [REVIEW.md](REVIEW.md)): envia-se
+um áudio, ouve-se a versão censurada e rejeita-se com observações, como no
+texto, sem voltar a enviar o áudio ao ElevenLabs. Testada com a transcrição e
+a censura falsas; **a UI de áudio ainda não existe**. Nota de privacidade: o
+áudio original, ainda com os dados sensíveis, vai para o ElevenLabs.
 Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
 
 ## Como a solução responde aos critérios

@@ -125,6 +125,7 @@ tocar.
 | Extra | Ficheiros | Estado |
 |---|---|---|
 | Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | feito e testado com a API real do ElevenLabs, ver [AUDIO.md](AUDIO.md) |
+| Rota de áudio da revisão | `src/user_validation.py` (`/api/audio`) | feita e testada com a transcrição e a censura falsas; UI por fazer, ver [REVIEW.md](REVIEW.md) |
 
 ## Estrutura de pastas
 
@@ -140,6 +141,7 @@ submission/
     DETECTION.md              deteção e validação da resposta
     MASKING.md                regras do mascaramento
     AUDIO.md                  extra: censura de áudio
+    REVIEW.md                 revisão manual: UI, backend e rotas
     taxonomy.md               categorias de dados sensíveis
     internal_prompt.txt       2 Prompt interna
     src/
@@ -155,7 +157,7 @@ submission/
       gateway.py              liga o pipeline ao Gemini pelo Worker
       labels.py               deixa as etiquetas visíveis (itens do modelo)
       visibility.py           valores que o utilizador pediu para ficarem visíveis
-      user_validation.py      backend da revisão manual (FastAPI)
+      user_validation.py      backend da revisão manual, texto e áudio (FastAPI)
       gemini/                 cliente direto do Gemini (alternativa)
       audio/                  extra: transcrição, alinhamento e redação
       audio_pipeline.py       extra: ponto de entrada da censura de áudio
