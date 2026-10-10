@@ -4,22 +4,32 @@ Confere se a versão mascarada:
 
 - tem o mesmo número de linhas e de palavras por linha que o original;
 - não tem linhas vazias;
-- só altera uma palavra quando a mascara por completo (``*``, mantendo a
-  pontuação nas pontas — a mesma regra do ``masking.py``) ou a mantém
-  idêntica ao original. Um símbolo isolado, sem letras nem números, nunca
-  é mascarado.
+- só altera uma palavra quando a mascara por completo, com a mesma regra
+  de ``masking.py`` (pontuação nas pontas mantida; vírgula, ponto e
+  vírgula e barra separam palavras coladas, exceto entre dois dígitos;
+  endereços web são uma só palavra; um símbolo isolado nunca é mascarado),
+  ou a mantém idêntica ao original.
 
-Esta regra está duplicada aqui (em vez de importada de ``masking.py``)
-porque essa branch ainda não está integrada em ``main``; quando os dois
-módulos existirem no mesmo lugar, vale a pena partilhar uma só definição.
+Esta regra está duplicada de propósito a partir de ``masking.py`` (em vez
+de partilhada por um módulo comum): extrair esse módulo implicava editar
+``masking.py``, que já está integrado por outra pessoa da equipa, e isso
+foi deixado fora deste branch. Enquanto a duplicação existir, uma mudança
+futura na regra de ``masking.py`` tem de ser repetida aqui à mão — ver a
+decisão em aberto nº 1 em ``DECISIONS.md``.
 
 Não confere se os itens da deteção foram todos encontrados no texto; essa
 verificação precisa da lista de itens e fica para quando o mascaramento e a
 deteção estiverem integrados.
 """
 
-EDGE_PUNCTUATION = ",;:.!?()[]{}\"'"
+import re
+
 MASK = "*"
+EDGE_PUNCTUATION = ",;:.!?()[]{}\"'"
+# Vírgula, ponto e vírgula ou barra que não está entre dois dígitos.
+LIST_SEPARATOR = re.compile(r"((?<!\d)[,;/]|[,;/](?!\d))")
+# Endereços web são sempre uma só palavra, apesar das barras.
+WEB_ADDRESS = re.compile(r"^\W*(?:https?://|www\.)", re.IGNORECASE)
 
 
 def compare_files(original_path, masked_path):
@@ -96,16 +106,38 @@ def _compare_words(number, original_line, masked_line):
 def _is_valid(original_word, masked_word):
     """Diz se ``masked_word`` é uma versão válida de ``original_word``.
 
-    É válida se ficou idêntica (palavra não mascarada) ou se ficou
-    totalmente mascarada, mantendo a pontuação nas pontas. Um símbolo
-    isolado, sem letras nem números, nunca é mascarado.
+    É válida se ficou idêntica (palavra não mascarada) ou se corresponde
+    ao que ``masking.py`` produziria a partir do original.
     """
-    if masked_word == original_word:
-        return True
-    if not any(char.isalnum() for char in original_word):
-        return False
-    lead = len(original_word) - len(original_word.lstrip(EDGE_PUNCTUATION))
-    trail = len(original_word) - len(original_word.rstrip(EDGE_PUNCTUATION))
-    core_end = len(original_word) - trail
-    expected = original_word[:lead] + MASK + original_word[core_end:]
-    return masked_word == expected
+    return masked_word in (original_word, _mask_token(original_word))
+
+
+def _mask_token(token):
+    """Mascara uma sequência sem espaços, separando as palavras coladas.
+
+    Espelha ``masking._mask_token``: a vírgula, o ponto e vírgula e a
+    barra separam palavras mesmo sem espaço (``João,Ana`` passa a
+    ``*,*``), exceto entre dois dígitos. Os endereços web contam como uma
+    só palavra.
+    """
+    if WEB_ADDRESS.match(token):
+        return _mask_word(token)
+    parts = LIST_SEPARATOR.split(token)
+    return "".join(
+        part if index % 2 else _mask_word(part)
+        for index, part in enumerate(parts)
+    )
+
+
+def _mask_word(word):
+    """Troca a palavra por ``*``, mantendo a pontuação nas pontas.
+
+    Espelha ``masking._mask_word``: um símbolo isolado, sem letras nem
+    números, nunca é mascarado.
+    """
+    if not any(char.isalnum() for char in word):
+        return word
+    lead = len(word) - len(word.lstrip(EDGE_PUNCTUATION))
+    trail = len(word) - len(word.rstrip(EDGE_PUNCTUATION))
+    core_end = len(word) - trail
+    return word[:lead] + MASK + word[core_end:]

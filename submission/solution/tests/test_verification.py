@@ -65,6 +65,54 @@ class CompareLinesTest(unittest.TestCase):
         self.assertEqual(issues[0]["type"], "line_count_mismatch")
 
 
+class JoinedWordsTest(unittest.TestCase):
+    """Casos que o masking.py separa sem espaço (ver MASKING.md)."""
+
+    def test_comma_without_space_is_not_flagged(self):
+        issues = verification.compare_lines(
+            ["Filhos: João,Ana"], ["Filhos: *,*"]
+        )
+        self.assertEqual(issues, [])
+
+    def test_semicolon_without_space_is_not_flagged(self):
+        issues = verification.compare_lines(
+            ["Contactos: Rui;Ana;Rita"], ["Contactos: *;*;*"]
+        )
+        self.assertEqual(issues, [])
+
+    def test_slash_between_words_is_not_flagged(self):
+        issues = verification.compare_lines(
+            ["Pessoas: Rui/Ana"], ["Pessoas: */*"]
+        )
+        self.assertEqual(issues, [])
+
+    def test_comma_between_digits_is_not_flagged(self):
+        issues = verification.compare_lines(
+            ["Altura: 1,68m"], ["Altura: *"]
+        )
+        self.assertEqual(issues, [])
+
+    def test_slash_between_digits_is_not_flagged(self):
+        issues = verification.compare_lines(
+            ["Data: 12/03/1978"], ["Data: *"]
+        )
+        self.assertEqual(issues, [])
+
+    def test_web_address_is_not_flagged(self):
+        url = "https://www.exemplo.pt/perfil/maria"
+        issues = verification.compare_lines(
+            ["Site: " + url], ["Site: *"]
+        )
+        self.assertEqual(issues, [])
+
+    def test_wrong_split_is_still_flagged(self):
+        issues = verification.compare_lines(
+            ["Filhos: João,Ana"], ["Filhos: *"]
+        )
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0]["type"], "unexpected_word_change")
+
+
 class CompareFilesTest(unittest.TestCase):
     def test_reads_and_compares_files(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -45,7 +45,7 @@ mascaramento. Se os dois apanham o mesmo valor, o relatório junta-os num só.
 | 3 | Deteção | `src/detection.py` | linhas numeradas e um cliente | itens e avisos | feito, falta ligar o cliente real do Gemini |
 | 4 | Regras de segurança | `src/safety_rules.py` | linhas | itens | feito |
 | 5 | Mascaramento | `src/masking.py` | linhas e itens | linhas mascaradas e avisos | feito |
-| 6 | Verificação | `src/verification.py` | linhas originais e mascaradas | lista de problemas | em desenvolvimento (`feature/verification`) |
+| 6 | Verificação | `src/verification.py` | linhas originais e mascaradas | lista de problemas | feito |
 | 7 | Relatório | `src/report.py` | itens e avisos | texto em Markdown | feito |
 | 8 | Avaliação própria | `eval/evaluate.py` | saída e documento de referência | precisão e recall por palavra | por fazer |
 
@@ -132,21 +132,23 @@ submission/
       detection.py            3 Deteção
       safety_rules.py         4 Regras de segurança
       masking.py              5 Mascaramento
+      verification.py         6 Verificação
       report.py               7 Relatório
     tests/                    testes de tudo o que está acima
 ```
 
-Por fazer: o cliente real do Gemini para a deteção, `src/verification.py` (6,
-em desenvolvimento), `eval/` (8) e o ponto de entrada.
+Por fazer: o cliente real do Gemini para a deteção, `eval/` (8) e o ponto de
+entrada.
 
 ## Problemas conhecidos
 
-- **A verificação e o mascaramento têm de partilhar a definição de palavra.**
-  O mascaramento separa `João,Ana` em `*,*` (e `Rui/Ana` em `*/*`). A versão da
-  verificação em desenvolvimento só aceita uma palavra mascarada como um `*`
-  com pontuação nas pontas, e por isso marca estes casos como
-  `unexpected_word_change`. O documento do desafio não os tem, mas qualquer
-  outro pode ter. Tem de se resolver antes de juntar a verificação (ver
-  [DECISIONS.md](DECISIONS.md)).
+- **A verificação duplica a definição de palavra do mascaramento, em vez de
+  a partilhar.** `verification.py` tem a sua própria cópia da regra de
+  `masking.py` (vírgula, ponto e vírgula e barra separam palavras coladas,
+  exceto entre dois dígitos; endereços web são uma só palavra), por isso já
+  não marca `João,Ana` ou `Rui/Ana` como `unexpected_word_change`. Mas, como
+  é uma cópia e não um módulo partilhado, uma mudança futura na regra de
+  `masking.py` tem de ser repetida à mão em `verification.py` — ver a
+  decisão em aberto nº 1 em [DECISIONS.md](DECISIONS.md).
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.
