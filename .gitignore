@@ -122,6 +122,8 @@ ipython_config.py
 # Python Environment Files
 # ----------------------------------------
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/

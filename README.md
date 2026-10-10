@@ -53,3 +53,44 @@ Converting PDF documents to text can be essential for leveraging existing conten
 
 In this section, we will outline the expectations for project submission. Understanding these guidelines is crucial to ensure your work is evaluated correctly. There are specific methods and criteria for submission, which you should follow closely to enhance your chances of success. Make sure to read through the following points carefully.
 For more detailed information on the submission process and what is expected, please refer to the [Submission Process Guide](submission/README.md).
+
+## 5. Secure Gemini integration milestone
+
+The repository now includes a reusable, text-only Python integration for
+sensitive-entity detection. It uses `gemini-3.5-flash` exactly, validates
+structured responses and source offsets, does not implement client-side model
+fallback, and opts out of Interactions API storage.
+
+### Install for development
+
+Python 3.10 or newer is required.
+
+```bash
+python -m pip install -e ".[test]"
+```
+
+Create a fresh Gemini API key and provide it through the environment. Never put
+a real key in the repository or pass it as a command-line argument.
+
+```bash
+export GEMINI_API_KEY="your-new-key"
+nos-gemini-check
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:GEMINI_API_KEY = "your-new-key"
+nos-gemini-check
+```
+
+Run the offline test suite with:
+
+```bash
+pytest --cov=nos_anonymizer --cov-report=term-missing
+flake8 .
+```
+
+See the [Gemini integration guide](docs/gemini-integration.md) for the public
+API, security controls, architecture, model-deprecation caveat, configuration,
+and future adapter boundary.
