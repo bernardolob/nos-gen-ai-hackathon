@@ -5,7 +5,7 @@ import { Loader2, LockKeyhole, Moon, ShieldCheck, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadStep } from "@/components/anonymizer/steps";
 import { ReviewWorkspace } from "@/components/review/workspace";
-import { approveVersion, getCurrent, isMockMode, rejectVersion, uploadDocument } from "@/lib/review/api";
+import { approveVersion, getCurrent, isAudioFile, isMockMode, rejectVersion, uploadFile } from "@/lib/review/api";
 import { ApiError, type Snapshot } from "@/lib/review/types";
 
 export const Route = createFileRoute("/")({
@@ -63,7 +63,7 @@ function Index() {
     setUploading(true);
     setError(null);
     try {
-      setSnapshot(await uploadDocument(file));
+      setSnapshot(await uploadFile(file));
       setFile(null);
       setWantsNew(false);
     } catch (e) {
@@ -172,9 +172,14 @@ function Index() {
               onFile={(f) => { setFile(f); setError(null); }}
               onAnalyze={upload}
               loading={uploading}
-              status="Analyzing the document... (about 8 s)"
+              status={
+                file && isAudioFile(file)
+                  ? "Transcribing and censoring the audio... this can take several seconds."
+                  : "Analyzing the document... (about 8 s)"
+              }
               error={error}
               onRetry={() => (file ? void upload() : void load())}
+              audioEnabled={snapshot?.audio_enabled ?? false}
             />
           </div>
         ) : (
