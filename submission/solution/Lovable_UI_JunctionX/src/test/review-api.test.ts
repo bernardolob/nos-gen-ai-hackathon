@@ -100,8 +100,9 @@ describe("audio contract", () => {
       audio_enabled: true,
     });
     expect(snap.text.split("\n")).toHaveLength(SAMPLE_TRANSCRIPT.split("\n").length);
-    expect(snap.audio_ranges).toBe((snap.text.match(/\*+/g) ?? []).length);
-    expect(snap.audio_ranges).toBeGreaterThan(0);
+    // "Maria Santos" is two masked words but one stretch of audio, like the backend
+    expect(snap.text).toContain("is * *.");
+    expect(snap.audio_ranges).toBe(3);
   });
 
   it("the censored audio URL is playable in demo mode and null without audio", async () => {

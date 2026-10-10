@@ -36,8 +36,12 @@ export function maskWords(text: string, strict: boolean): string {
     .join("\n");
 }
 
-/** How many masked stretches the text has (runs of '*'). */
-export const countMasks = (text: string): number => (text.match(/\*+/g) ?? []).length;
+/**
+ * How many stretches of the audio are replaced by a sound. Like the backend,
+ * consecutive masked words on a line are one stretch ("* *" is one, not two).
+ */
+export const countRanges = (text: string): number =>
+  text.split("\n").reduce((total, line) => total + (line.match(/\*(?: \*)*/g) ?? []).length, 0);
 
 /** A short silent WAV as a data URI, so the audio player works in demo mode. */
 function silentWavUri(seconds = 2, sampleRate = 8000): string {
@@ -104,7 +108,7 @@ export async function mockUploadAudio(): Promise<Snapshot> {
     attempt: 1,
     text,
     audio_url: AUDIO_PATH,
-    audio_ranges: countMasks(text),
+    audio_ranges: countRanges(text),
   };
   return structuredClone(state);
 }
@@ -126,7 +130,7 @@ export async function mockReject(attempt: number, reason: string): Promise<Snaps
     text,
     approved: false,
     warnings: 0,
-    audio_ranges: state.kind === "audio" ? countMasks(text) : 0,
+    audio_ranges: state.kind === "audio" ? countRanges(text) : 0,
   };
   return structuredClone(state);
 }
