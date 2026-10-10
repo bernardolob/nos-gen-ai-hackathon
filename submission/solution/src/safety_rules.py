@@ -44,6 +44,10 @@ DATE = (
 
 OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
 
+# Identificador com pelo menos um dígito (grupo de captura).
+PROFESSIONAL_ID = r"((?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{2,})\b"
+BIOMETRIC_ID = r"((?=[A-Z0-9_-]*\d)[A-Z0-9][A-Z0-9_-]{3,})\b"
+
 
 def _rule(category, reason, pattern, confidence=CERTO, flags=0):
     """Cria uma regra: categoria, razão, confiança e padrão compilado."""
@@ -97,8 +101,19 @@ RULES = [
     ),
     _rule(
         "identificacao",
-        "Número de cédula profissional (CRM).",
-        r"\bCRM" + SEP + r"(\d+-[A-Z]{2})\b",
+        "Número de registo ou cédula profissional.",
+        r"(?:\b(?:CRM|CRO|OM|OA|OE)\b|C[ée]dula(?: profissional)?"
+        r"|Licen[çc]a profissional"
+        r"|Registo profissional|Carteira profissional|N[º°o.]* de ordem)"
+        + SEP + PROFESSIONAL_ID,
+        flags=IGNORE_CASE,
+    ),
+    _rule(
+        "identificacao",
+        "Matrícula de veículo.",
+        r"\b(?:\d{2}-\d{2}-[A-Z]{2}|\d{2}-[A-Z]{2}-\d{2}"
+        r"|[A-Z]{2}-\d{2}-\d{2}|[A-Z]{2}-\d{2}-[A-Z]{2})\b",
+        PROVAVEL,
     ),
     _rule(
         "identificacao",
@@ -160,7 +175,10 @@ RULES = [
     _rule(
         "biometrico",
         "Identificador biométrico.",
-        r"\b(?:ID-BIO|FACE-ID)-\d+\b",
+        r"(?:impress[ãa]o digital|reconhecimento facial|fingerprint"
+        r"|face ?id|biometri\w*|[ií]ris|voz)[^:\n]{0,40}:[ ]*"
+        + BIOMETRIC_ID,
+        flags=IGNORE_CASE,
     ),
 ]
 

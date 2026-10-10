@@ -160,6 +160,41 @@ class OtherIdentifiersTest(unittest.TestCase):
         self.assertEqual(found("Referência: ADM-2025-04-15-089"), [])
 
 
+class ProfessionalAndBiometricIdTest(unittest.TestCase):
+    def test_professional_registration_in_any_profession(self):
+        self.assertEqual(found("CRM: 12345-PT"), ["12345-PT"])
+        self.assertEqual(found("Advogada, OA 12345L"), ["12345L"])
+        self.assertEqual(
+            found("Cédula profissional nº 45678"), ["45678"])
+        self.assertEqual(
+            found("Ordem dos Engenheiros: n.º de ordem 98765"), ["98765"])
+
+    def test_biometric_id_needs_a_label(self):
+        self.assertEqual(
+            found("Impressão digital registada: ID-BIO-12345"),
+            ["ID-BIO-12345"],
+        )
+        self.assertEqual(
+            found("Reconhecimento facial: FACE-ID-78901"),
+            ["FACE-ID-78901"],
+        )
+        self.assertEqual(found("Fingerprint: FP_88231"), ["FP_88231"])
+
+    def test_unlabelled_or_empty_biometric_text_is_not_flagged(self):
+        self.assertEqual(found("Código ID-BIO-12345"), [])
+        self.assertEqual(found("Dados biométricos: não recolhidos"), [])
+        self.assertEqual(found("Voz: normal"), [])
+
+    def test_vehicle_plates(self):
+        self.assertEqual(found("Matrícula: 12-AB-34"), ["12-AB-34"])
+        self.assertEqual(found("Veículo AB-12-CD"), ["AB-12-CD"])
+        self.assertEqual(found("Veículo 12-34-AB"), ["12-34-AB"])
+
+    def test_numbers_that_are_not_plates(self):
+        self.assertEqual(found("Fatura 12-03-19"), [])
+        self.assertEqual(found("Referência: ADM-2025-04-15-089"), [])
+
+
 class OverlapTest(unittest.TestCase):
     def test_longest_item_wins(self):
         items = safety_rules.find_sensitive(["IBAN: PT50 0002 0123 1234 5678"])
