@@ -69,11 +69,10 @@ Regras:
 - **Não fecham o bloco.** `</user_instructions>` ou `<document>` escritos nas
   instruções (ou `</document>` no documento) ficam com um espaço
   (`< /document>`), para não trocarem o papel de cada bloco.
-- **Gastam o orçamento do gateway.** O Worker aceita 10 000 caracteres no
-  total e a prompt interna mais o documento do desafio já usam cerca de
-  9 500: ali cabem só umas 500 letras de instruções. Se o pedido passar do
+- **Contam para o limite do gateway.** O Worker aceita 40 000 caracteres no
+  total; a prompt interna e o documento do desafio usam cerca de 9 500, por
+  isso as instruções (até 2000) cabem folgadamente. Se o pedido passar do
   limite, o gateway recusa-o antes de enviar e diz quantos caracteres tem.
-  Subir `MAX_PROMPT_LENGTH` no `wrangler.jsonc` resolve.
 
 ## O que valida na resposta
 
@@ -111,6 +110,18 @@ reconcilia com `João`), e `line` ou `occurrence` em texto (`"1"`) continuam a
 ser rejeitados. Se o valor não está na linha indicada, fica como veio: o
 mascaramento procura nas linhas vizinhas e no documento todo.
 
+### Valores que atravessam linhas
+
+O `gemini-3.5-flash-lite` devolve por vezes um valor que continua na linha
+seguinte, com o marcador da linha copiado para o texto
+(`dores
+[16] abdominais intensas`). Num teste com o modelo real isto deixava
+6 a 7 itens por aplicar por execução (as linhas 15 a 17 e 41 a 47 do
+documento do desafio), ou seja, texto clínico por mascarar. Agora cada
+pedaço passa a um item na sua linha, sem o marcador, com a mesma categoria,
+razão e confiança; a `occurrence` só vale para o primeiro. Um pedaço fora do
+documento gera um aviso. A prompt interna também pede um item por linha.
+
 ## Erros e avisos
 
 | Situação | O que acontece |
@@ -140,9 +151,10 @@ deve chamá-la e juntar o aviso aos outros.
 ## Limitações
 
 - **Um só pedido por documento.** Documentos longos que não caibam no pedido
-  não são divididos. O limite da API opcional (10 000 caracteres por prompt)
-  já fica apertado: a prompt interna (cerca de 6 500) e o documento do
-  desafio (cerca de 3 000) somam cerca de 9 500.
+  não são divididos. O gateway aceita 40 000 caracteres por pedido (a prompt
+  interna usa cerca de 6 500); a API opcional tem o seu próprio limite
+  (`BACKEND_MAX_PROMPT_LENGTH`, 10 000 por defeito), que fica apertado para
+  o documento do desafio.
 - **Itens mal formados perdem proteção.** Um elemento rejeitado deixa o valor
   por mascarar; o aviso é a única pista. Convém mostrá-los a quem executa.
 - **Etiqueta incluída no valor.** Se o modelo devolve `Nome: Rui Pinto` em vez

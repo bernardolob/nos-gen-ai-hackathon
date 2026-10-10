@@ -21,6 +21,7 @@ from categories import CATEGORY_NAMES, CONFIDENCE_LEVELS
 
 SOURCE = "gemini"
 DEFAULT_ATTEMPTS = 2
+MARKER = re.compile(r"\s*\[(\d+)\]\s*")
 TAG = re.compile(r"<(/?)(document|user_instructions)>", re.IGNORECASE)
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "internal_prompt.txt"
 
@@ -140,12 +141,53 @@ def parse_response(answer, lines):
         if problem:
             warnings.append(_warning(index, raw, problem))
             continue
-        item["text"] = _reconcile(item["text"], lines[item["line"] - 1])
-        key = (item["line"], item["text"], item.get("occurrence"))
-        if key not in seen:
-            seen.add(key)
-            items.append(item)
+        pieces, problem = _split_lines(item, len(lines))
+        if problem:
+            warnings.append(_warning(index, raw, problem))
+            continue
+        for piece in pieces:
+            piece["text"] = _reconcile(piece["text"], lines[piece["line"] - 1])
+            key = (piece["line"], piece["text"], piece.get("occurrence"))
+            if key not in seen:
+                seen.add(key)
+                items.append(piece)
     return items, warnings
+
+
+def _split_lines(item, line_count):
+    """Divide um valor que atravessa linhas num item por linha.
+
+    O modelo pode devolver um valor que continua na linha seguinte, às vezes
+    com o marcador da linha copiado (``dores<quebra>[16] abdominais``). Cada
+    pedaço passa a ser um item na sua linha, sem o marcador, com a mesma
+    categoria, razão e confiança. A ``occurrence`` só vale para o primeiro.
+    Devolve ``([itens], None)`` ou ``(None, problema)`` se um pedaço cair fora
+    do documento.
+    """
+    parts = re.split(r"\r?\n", item["text"])
+    if len(parts) == 1:
+        return [item], None
+    pieces, line = [], item["line"]
+    for position, part in enumerate(parts):
+        marker = MARKER.match(part)
+        if marker:
+            part = part[marker.end():]
+            if position:
+                line = int(marker.group(1))
+        elif position:
+            line += 1
+        part = part.strip()
+        if not part:
+            continue
+        if not 1 <= line <= line_count:
+            return None, "valor em várias linhas fora do documento"
+        piece = dict(item, line=line, text=part)
+        if pieces:
+            piece.pop("occurrence", None)
+        pieces.append(piece)
+    if not pieces:
+        return None, "texto vazio"
+    return pieces, None
 
 
 def _load_json(answer):
