@@ -152,6 +152,7 @@ submission/
       report.py               7 Relatório
       pipeline.py             ponto de entrada que liga tudo
       gateway.py              liga o pipeline ao Gemini pelo Worker
+      labels.py               deixa as etiquetas visíveis (itens do modelo)
       user_validation.py      backend da revisão manual (FastAPI)
       gemini/                 cliente direto do Gemini (alternativa)
       audio/                  extra: transcrição, alinhamento e redação (planeado)

@@ -24,7 +24,7 @@
   "vars": {
     "PUBLIC_APP_ORIGINS": "http://localhost:5173",
     "GEMINI_MODEL": "gemini-3.5-flash-lite",
-    "MAX_PROMPT_LENGTH": "10000",
+    "MAX_PROMPT_LENGTH": "40000",
     "MAX_REQUEST_BYTES": "1048576"
   }
 }

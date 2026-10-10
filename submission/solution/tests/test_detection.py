@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import detection  # noqa: E402
+import gateway  # noqa: E402
 import masking  # noqa: E402
 import report  # noqa: E402
 
@@ -117,11 +118,16 @@ class BuildRequestTest(unittest.TestCase):
         self.assertIn('Wrong: "text": "Nome: Rui Pinto"', prompt)
         self.assertIn('Right: "text": "Rui Pinto"', prompt)
 
-    def test_prompt_and_document_fit_the_optional_api_limit(self):
-        """A API opcional recusa mais de 10 000 caracteres por pedido."""
+    def test_prompt_and_a_long_document_fit_the_gateway_limit(self):
+        """O gateway recusa pedidos acima do limite do Worker."""
+        document = detection.build_request(["x" * 80] * 200)
+        total = len(detection.load_internal_prompt()) + len(document)
+        self.assertLess(total, gateway.DEFAULT_MAX_PROMPT)
+
+    def test_the_challenge_sized_request_leaves_room_for_instructions(self):
         document = detection.build_request(["x" * 60] * 50)
         total = len(detection.load_internal_prompt()) + len(document)
-        self.assertLess(total, 10000)
+        self.assertLess(total + 2000, gateway.DEFAULT_MAX_PROMPT)
 
     def test_normalize_lines_to_nfc(self):
         decomposed = unicodedata.normalize("NFD", "Conceição")
@@ -512,6 +518,73 @@ class EndToEndTest(unittest.TestCase):
         self.assertIn("- Itens ocultados: 3", text)
         self.assertIn("Gemini", text)
         self.assertNotIn("Rui Pinto", text)
+
+
+class MultiLineValueTest(unittest.TestCase):
+    """Um valor que atravessa linhas passa a um item por linha."""
+
+    DOC = [
+        "A paciente relatou dores",
+        "abdominais intensas.",
+        "Fim",
+    ]
+
+    def parse(self, text, **extra):
+        element = dict(NAME, line=1, text=text, **extra)
+        return detection.parse_response(answer(element), self.DOC)
+
+    def test_a_copied_line_marker_is_removed(self):
+        items, warnings = self.parse("dores\n[2] abdominais intensas")
+        self.assertEqual(warnings, [])
+        self.assertEqual(
+            [(i["line"], i["text"]) for i in items],
+            [(1, "dores"), (2, "abdominais intensas")])
+
+    def test_without_a_marker_the_next_line_is_assumed(self):
+        items, _ = self.parse("dores\nabdominais")
+        self.assertEqual(
+            [(i["line"], i["text"]) for i in items],
+            [(1, "dores"), (2, "abdominais")])
+
+    def test_the_pieces_keep_category_reason_and_confidence(self):
+        items, _ = self.parse("dores\n[2] abdominais")
+        for item in items:
+            self.assertEqual(item["category"], "identificacao")
+            self.assertEqual(item["reason"], "Nome do funcionário.")
+            self.assertEqual(item["confidence"], "certo")
+            self.assertEqual(item["source"], "gemini")
+
+    def test_occurrence_only_applies_to_the_first_piece(self):
+        items, _ = self.parse("dores\n[2] abdominais", occurrence=1)
+        self.assertEqual(items[0].get("occurrence"), 1)
+        self.assertNotIn("occurrence", items[1])
+
+    def test_windows_line_breaks_and_blank_pieces(self):
+        items, _ = self.parse("dores\r\n\r\n[2] abdominais")
+        self.assertEqual([i["text"] for i in items], ["dores", "abdominais"])
+
+    def test_a_piece_outside_the_document_is_a_warning(self):
+        items, warnings = self.parse("Fim\n[9] fora")
+        self.assertEqual(items, [])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("fora do documento", warnings[0]["problem"])
+
+    def test_only_line_breaks_is_an_empty_text(self):
+        items, warnings = self.parse("\n\n")
+        self.assertEqual(items, [])
+        self.assertEqual(len(warnings), 1)
+
+    def test_a_single_line_value_is_untouched(self):
+        items, _ = self.parse("dores")
+        self.assertEqual([(i["line"], i["text"]) for i in items],
+                         [(1, "dores")])
+
+    def test_masking_the_pieces_protects_both_lines(self):
+        items, _ = self.parse("dores\n[2] abdominais intensas")
+        masked, warnings = masking.mask_lines(self.DOC, items)
+        self.assertEqual(warnings, [])
+        self.assertEqual(masked, [
+            "A paciente relatou *", "* *.", "Fim"])
 
 
 if __name__ == "__main__":
