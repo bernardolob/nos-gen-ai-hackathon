@@ -3,7 +3,9 @@
 Sistema que deteta e oculta dados pessoais e sensíveis num documento
 (RGPD), trocando cada palavra sensível por `*`.
 
-Este README é incremental: vai crescendo com a arquitetura.
+Este documento é incremental: vai crescendo com a arquitetura. O
+`submission/README.md` é o guia de submissão da organização e não deve ser
+alterado.
 
 ## Ficheiros
 
@@ -11,7 +13,7 @@ Este README é incremental: vai crescendo com a arquitetura.
 |---|---|
 | `taxonomy.md` | Taxonomia de dados sensíveis: categorias, exemplos do documento, o que não ocultar e decisões em aberto. |
 | `ARCHITECTURE.md` | Componentes núcleo, fluxo e estrutura de pastas. |
-| `internal_prompt.txt` | Prompt interna enviada ao Gemini (versão 2, com linhas numeradas; ainda por testar). |
+| `internal_prompt.txt` | Prompt interna enviada ao Gemini (versão 3, genérica para qualquer tipo de documento; ainda por testar). |
 
 ## Prompt interna
 
