@@ -2,7 +2,9 @@
 
 Gateway HTTP em FastAPI à volta do cliente Gemini (`src/gemini/`, ver
 [GEMINI.md](../GEMINI.md)). É uma camada opcional: o pipeline em `src/`
-funciona sem esta pasta, e nada no núcleo depende dela.
+funciona sem esta pasta, e nada no núcleo depende dela. Em produção, o browser
+deve chamar o Worker descrito em [CLOUDFLARE.md](../CLOUDFLARE.md); o Worker
+injeta o token privado ao encaminhar o pedido para esta API.
 
 Código de origem: branch `Ai-studios-connection` (Joao Horta), reorganizado e
 fatorizado.
@@ -64,7 +66,8 @@ Todas as variáveis estão em `.env.example`. As da API (`api/settings.py`):
 | `BACKEND_MAX_REQUEST_BYTES` | `1048576` | Máximo de bytes do corpo |
 
 O token serve para testes privados e chamadas entre servidores. **Nunca o
-coloques em JavaScript de um browser.**
+coloques em JavaScript de um browser.** O gateway Cloudflare na raiz do
+repositório mantém este token no servidor e não o entrega ao cliente.
 
 ## O que mudou em relação ao branch original
 
@@ -88,13 +91,14 @@ os nomes dos módulos adaptados e a formatação a 79 colunas.
   pasta (`api/`) e os testes para `tests/test_gemini/` e `tests/test_api/`.
 - **Testes novos** para a hierarquia de erros (`tests/test_gemini/test_errors.py`).
 
-## O que não veio
+## Cloudflare
 
-Ficou no branch `Ai-studios-connection`, por não ser preciso para o desafio:
-`Dockerfile`, `cloudflare/`, `wrangler.jsonc`, `package*.json`,
-`tsconfig.json`, o guia de Cloudflare e o fluxo de trabalho `test.yml`. Também
-ficaram de fora as alterações ao `.flake8`, ao `lint.yml`, ao `.gitignore` e
-ao `README.md` da raiz.
+O Worker em `cloudflare/worker.ts`, `wrangler.jsonc` e os ficheiros
+Node/TypeScript estão na raiz do repositório. O Worker gratuito funciona como
+fronteira pública: valida a origem, limita e valida pedidos, e chama diretamente
+a API REST do Gemini com uma chave secreta. O FastAPI continua disponível para
+execução local, mas não faz parte do deploy Cloudflare. Ver
+[CLOUDFLARE.md](../CLOUDFLARE.md).
 
 ## Testes
 
