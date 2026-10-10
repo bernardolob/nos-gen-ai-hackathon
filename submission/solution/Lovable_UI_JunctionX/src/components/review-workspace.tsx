@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 type RejectedVersion = { attempt: number; text: string; reason: string };
 type Snapshot = { has_document: boolean; attempt: number; text: string; approved: boolean; history: RejectedVersion[]; mode: string; warnings: number; issues: number };
 
-const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+const API = import.meta.env["VITE_API_URL"] ?? "http://127.0.0.1:8000";
 
 async function callApi(path: string, init?: RequestInit): Promise<Snapshot> {
   const res = await fetch(`${API}${path}`, init);

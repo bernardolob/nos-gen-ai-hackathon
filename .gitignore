@@ -214,3 +214,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# A regra "lib/" acima ignorava o src/lib da UI, que os componentes importam.
+!submission/solution/Lovable_UI_JunctionX/src/lib/

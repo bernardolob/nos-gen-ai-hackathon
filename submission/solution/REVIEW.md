@@ -57,10 +57,24 @@ npm run dev
 A UI procura o backend em `http://127.0.0.1:8000`; muda-se com
 `VITE_API_URL`.
 
+## Verificado a correr
+
+Com o backend só em regras (sem Gemini) e a UI em `npm run dev`
+(`http://localhost:8080`): enviar um texto, ver o NIF mascarado, rejeitar com
+observações (a tentativa 1 fica no histórico) e aprovar. `npx tsc --noEmit` e
+`npm run build` passam e a consola do browser não mostra erros.
+
+Faltavam em `src/lib/` quatro ficheiros que os componentes importam
+(`utils.ts` e três de tratamento de erros do Lovable). A regra `lib/` do
+`.gitignore` (pensada para Python) deixava-os de fora, por isso a UI não
+compilava num clone limpo. Foram recriados (a regra tem agora uma exceção
+para essa pasta). Os de erros são versões mínimas: registam na consola e
+mostram uma página de erro simples.
+
 ## O que não está verificado
 
-- **A UI não foi compilada nem corrida** nesta alteração (sem Node na máquina
-  em que foi escrita). O backend tem 21 testes; as alterações à UI
-  (`src/components/review-workspace.tsx`) devem ser vistas a correr.
-- Nunca correu com o Gemini real (quota).
+- Nunca correu com o Gemini real (quota): o texto novo gerado a partir das
+  observações só se vê com o modelo ligado.
 - Só uma sessão de cada vez: dois separadores partilham o mesmo documento.
+- O envio de um PDF pela UI não foi experimentado no browser (o do backend
+  tem teste).
