@@ -9,6 +9,9 @@ Regras:
 - Cada palavra (separada por espaços) de um valor sensível passa a ``*``.
 - A pontuação nas pontas de cada palavra mantém-se: ``Santos,`` passa a
   ``*,`` e ``(João,`` passa a ``(*,``.
+- A vírgula e o ponto e vírgula separam palavras mesmo sem espaço:
+  ``João,Ana`` passa a ``*,*``. Entre dois dígitos não separam (``1,68m`` e
+  ``2.350,50`` passam a um único ``*``). A barra e o hífen não separam.
 - Os espaços e a estrutura das linhas não mudam.
 - Cada item é procurado na sua linha; se não estiver lá, nas linhas vizinhas
   e depois no documento todo. Se não for encontrado, gera um aviso.
@@ -26,6 +29,8 @@ MASK = "*"
 EDGE_PUNCTUATION = ",;:.!?()[]{}\"'"
 MIN_PROPAGATION_LENGTH = 4
 MIN_PROPAGATION_LETTERS = 3
+# Vírgula ou ponto e vírgula que não está entre dois dígitos.
+LIST_SEPARATOR = re.compile(r"((?<!\d)[,;]|[,;](?!\d))")
 
 
 def mask_lines(lines, items):
@@ -135,7 +140,20 @@ def _mask_span(segment):
     """Troca cada palavra do segmento por um asterisco."""
     parts = re.split(r"(\s+)", segment)
     return "".join(
-        part if part.isspace() else _mask_word(part) for part in parts
+        part if part.isspace() else _mask_token(part) for part in parts
+    )
+
+
+def _mask_token(token):
+    """Mascara uma sequência sem espaços, separando as palavras coladas.
+
+    A vírgula e o ponto e vírgula separam palavras mesmo sem espaço
+    (``João,Ana`` passa a ``*,*``), exceto entre dois dígitos (``1,68m``).
+    """
+    parts = LIST_SEPARATOR.split(token)
+    return "".join(
+        part if index % 2 else _mask_word(part)
+        for index, part in enumerate(parts)
     )
 
 

@@ -50,6 +50,10 @@ sozinho pode ser um telefone, um NIF ou uma apólice.
 - A pontuação nas pontas de cada palavra mantém-se: `Santos,` passa a `*,` e
   `(João,` passa a `(*,`. Símbolos como `+` e `€` contam como parte da
   palavra.
+- A vírgula e o ponto e vírgula separam palavras mesmo sem espaço:
+  `João,Ana` e `João, Ana` dão ambos dois asteriscos (`*,*` e `*, *`). Entre
+  dois dígitos não separam: `1,68m` e `2.350,50` ficam com um único `*`. A
+  barra e o hífen não separam (`12/03/1978` e `Ana-Maria` são uma palavra).
 - Um símbolo isolado, sem letras nem números (por exemplo `-`), não é uma
   palavra e mantém-se.
 - Os espaços e a estrutura das linhas não mudam.

@@ -84,6 +84,70 @@ class MaskWordsTest(unittest.TestCase):
         self.assertEqual(len(out), len(lines))
 
 
+class JoinedWordsTest(unittest.TestCase):
+    def test_comma_without_space_separates_words(self):
+        out, _ = mask(["Filhos: João,Ana"], [{"line": 1, "text": "João,Ana"}])
+        self.assertEqual(out, ["Filhos: *,*"])
+
+    def test_comma_with_and_without_space_agree(self):
+        joined, _ = mask(["João,Ana"], [{"line": 1, "text": "João,Ana"}])
+        spaced, _ = mask(["João, Ana"], [{"line": 1, "text": "João, Ana"}])
+        self.assertEqual(joined[0].count("*"), spaced[0].count("*"))
+
+    def test_semicolon_separates_words(self):
+        out, _ = mask(
+            ["Contactos: Rui;Ana;Rita"],
+            [{"line": 1, "text": "Rui;Ana;Rita"}],
+        )
+        self.assertEqual(out, ["Contactos: *;*;*"])
+
+    def test_surname_first_format(self):
+        out, _ = mask(
+            ["Nome: Santos,Maria"],
+            [{"line": 1, "text": "Santos,Maria"}],
+        )
+        self.assertEqual(out, ["Nome: *,*"])
+
+    def test_surrounding_punctuation_is_kept(self):
+        out, _ = mask(["Filhos:(João,Ana)"], [{"line": 1, "text": "João,Ana"}])
+        self.assertEqual(out, ["Filhos:(*,*)"])
+
+    def test_comma_between_letter_and_digit_separates(self):
+        out, _ = mask(
+            ["Rua das Flores,123"],
+            [{"line": 1, "text": "Rua das Flores,123"}],
+        )
+        self.assertEqual(out, ["* * *,*"])
+
+    def test_comma_between_digits_does_not_separate(self):
+        for line, text in (
+            ("Altura: 1,68m", "1,68m"),
+            ("Salário: 2.350,50", "2.350,50"),
+            ("Dose: 0,5mg", "0,5mg"),
+        ):
+            out, _ = mask([line], [{"line": 1, "text": text}])
+            self.assertEqual(out, [line.replace(text, "*")], line)
+
+    def test_slash_and_hyphen_do_not_separate(self):
+        out, _ = mask(
+            ["Data: 12/03/1978"],
+            [{"line": 1, "text": "12/03/1978"}],
+        )
+        self.assertEqual(out, ["Data: *"])
+        out, _ = mask(
+            ["Nome: Ana-Maria"],
+            [{"line": 1, "text": "Ana-Maria"}],
+        )
+        self.assertEqual(out, ["Nome: *"])
+
+    def test_email_is_a_single_word(self):
+        out, _ = mask(
+            ["Email: ana.silva@x.pt"],
+            [{"line": 1, "text": "ana.silva@x.pt"}],
+        )
+        self.assertEqual(out, ["Email: *"])
+
+
 class LocateItemsTest(unittest.TestCase):
     def test_wrong_line_falls_back_to_neighbour(self):
         out, warnings = mask(
