@@ -30,15 +30,16 @@ Pontos do pipeline, pela ordem do fluxo:
 | # | Componente | Estado |
 |---|---|---|
 | 1 | Extração do PDF | feito (`src/pdf_extractor.py`) |
-| 2 | Prompt interna e taxonomia | feitas, **por testar com o Gemini** |
-| 3 | Deteção | feita, **falta ligar o cliente real do Gemini** (em desenvolvimento) |
+| 2 | Prompt interna e taxonomia | feitas e testadas com o Gemini (comparação manual de execuções) |
+| 3 | Deteção | feita e ligada ao Gemini pelo gateway Cloudflare |
 | 4 | Regras de segurança | feito |
 | 5 | Mascaramento | feito |
 | 6 | Verificação | feito |
 | 7 | Relatório | feito |
-| 8 | Avaliação própria | **por fazer** |
-| | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), ligado ao Gemini pelo gateway (`src/gateway.py`), por testar com a chave real |
-| | `submission/prompt.txt` e `submission/submission.txt` | **por preencher** |
+| 8 | Avaliação própria | **fora de âmbito** (decisão da equipa): as execuções comparam-se à mão |
+| | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), ligado ao Gemini pelo gateway (`src/gateway.py`), testado com o Gemini real |
+| | `submission/submission.txt` | preenchido com a execução 1 (gerada com o `gemini-3.5-flash`), **a refazer** com o modelo e o prompt atuais |
+| | `submission/prompt.txt` | **por preencher** (falta confirmar com a NOS o que lá vai) |
 
 Sem a deteção, o pipeline já corre no documento do desafio e mascara o que as
 regras de segurança apanham (data de nascimento, números de identificação,
@@ -175,8 +176,8 @@ duas origens e a maior confiança.
 
 | Critério (peso) | Onde está | Estado |
 |---|---|---|
-| Precisão (10%) | Regras de segurança, prompt, taxonomia | por medir: falta a avaliação própria |
-| Prompt (10%) | [internal_prompt.txt](internal_prompt.txt), [taxonomy.md](taxonomy.md) | por testar com o Gemini |
+| Precisão (10%) | Regras de segurança, prompt, taxonomia | sem avaliação própria (fora de âmbito); comparação manual de execuções |
+| Prompt (10%) | [internal_prompt.txt](internal_prompt.txt), [taxonomy.md](taxonomy.md) | testada com o Gemini |
 | Qualidade da anonimização (5%) | [MASKING.md](MASKING.md) | formatação preservada; contexto por medir |
 | Explicabilidade (5%) | Relatório, campo `reason` de cada item | feito |
 | Eficiência (5%) | Uma chamada ao modelo; o resto é código | por medir |
