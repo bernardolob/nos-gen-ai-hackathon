@@ -16,7 +16,7 @@ Variáveis de ambiente (nunca em ficheiros):
 |---|---|---|
 | `GEMINI_GATEWAY_URL` | (sem ela, o pipeline pede `--no-model`) | endereço do Worker, sem o caminho |
 | `GEMINI_GATEWAY_ORIGIN` | obrigatória com a URL | um `Origin` da lista `PUBLIC_APP_ORIGINS` do Worker |
-| `GEMINI_GATEWAY_MAX_PROMPT` | 10000 | limite de caracteres do Worker (`MAX_PROMPT_LENGTH`) |
+| `GEMINI_GATEWAY_MAX_PROMPT` | 40000 | limite de caracteres do Worker (`MAX_PROMPT_LENGTH`) |
 | `GEMINI_GATEWAY_TIMEOUT` | 90 | segundos por pedido |
 
 PowerShell:
@@ -37,10 +37,12 @@ Fora de `localhost`, o endereço tem de ser `https`.
   vez uma resposta inválida. As respostas podem variar entre execuções.
 - **O modelo é o do Worker.** `GEMINI_MODEL` no `wrangler.jsonc`
   (`gemini-3.5-flash-lite`); mudá-lo exige publicar o Worker de novo.
-- **10 000 caracteres.** O documento do desafio cabe (a prompt interna mais o
-  documento dão cerca de 9 500). Um documento maior é recusado **antes** de
-  ser enviado, com uma mensagem a dizer o tamanho. Para documentos maiores
-  é preciso subir `MAX_PROMPT_LENGTH` em `wrangler.jsonc`.
+- **40 000 caracteres** (`MAX_PROMPT_LENGTH` em `wrangler.jsonc`, antes
+  10 000). A prompt interna usa cerca de 6 500 e o documento do desafio cerca
+  de 3 000, por isso sobra espaço para as instruções do utilizador (até 2000)
+  e para documentos de umas 30 000 letras. Um pedido maior é recusado
+  **antes** de ser enviado, com uma mensagem a dizer o tamanho. Se o Worker
+  mudar o limite, defina `GEMINI_GATEWAY_MAX_PROMPT` com o mesmo valor.
 - **Origem e ritmo.** Sem `Origin` autorizado o Worker responde 403; passa
   10 pedidos por minuto por IP.
 

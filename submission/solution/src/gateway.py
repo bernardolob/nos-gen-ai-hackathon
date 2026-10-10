@@ -12,7 +12,7 @@ Variáveis de ambiente (ver ``from_env``):
 - ``GEMINI_GATEWAY_URL``: endereço do Worker, sem o caminho.
 - ``GEMINI_GATEWAY_ORIGIN``: um ``Origin`` que conste de ``PUBLIC_APP_ORIGINS``
   do Worker (o Worker recusa pedidos sem ele).
-- ``GEMINI_GATEWAY_MAX_PROMPT`` (10000) e ``GEMINI_GATEWAY_TIMEOUT`` (90 s).
+- ``GEMINI_GATEWAY_MAX_PROMPT`` (40000) e ``GEMINI_GATEWAY_TIMEOUT`` (90 s).
 
 As mensagens de erro são fixas: nunca incluem o texto enviado, a resposta nem
 o corpo do erro.
@@ -27,7 +27,7 @@ import urllib.parse
 import urllib.request
 
 GENERATE_PATH = "/api/v1/generate"
-DEFAULT_MAX_PROMPT = 10000
+DEFAULT_MAX_PROMPT = 40000
 DEFAULT_TIMEOUT = 90.0
 DEFAULT_ATTEMPTS = 3
 DEFAULT_DELAY = 5.0
