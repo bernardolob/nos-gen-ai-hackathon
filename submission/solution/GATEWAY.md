@@ -32,9 +32,11 @@ Fora de `localhost`, o endereço tem de ser `https`.
 ## O que o Worker aceita (e as consequências)
 
 - **Só `{"prompt": "..."}`.** A instrução de sistema e o documento seguem
-  juntos num só texto; não há `temperature=0` nem modo JSON. A deteção
-  tolera blocos de código e repete uma vez uma resposta inválida. As
-  respostas podem variar entre execuções.
+  juntos num só texto; não há modo JSON (`temperature` está obsoleta no
+  `gemini-3.5-flash-lite`). A deteção tolera blocos de código e repete uma
+  vez uma resposta inválida. As respostas podem variar entre execuções.
+- **O modelo é o do Worker.** `GEMINI_MODEL` no `wrangler.jsonc`
+  (`gemini-3.5-flash-lite`); mudá-lo exige publicar o Worker de novo.
 - **10 000 caracteres.** O documento do desafio cabe (a prompt interna mais o
   documento dão cerca de 9 500). Um documento maior é recusado **antes** de
   ser enviado, com uma mensagem a dizer o tamanho. Para documentos maiores

@@ -20,7 +20,7 @@ class FakeClient:
     def check_connection(self):
         if self.error:
             raise self.error
-        return SimpleNamespace(requested_model="gemini-3.5-flash")
+        return SimpleNamespace(requested_model="gemini-3.5-flash-lite")
 
 
 def test_cli_reports_missing_configuration(monkeypatch, capsys):
@@ -38,7 +38,7 @@ def test_cli_success_is_minimal(monkeypatch, capsys):
     assert cli.main([]) == 0
     output = capsys.readouterr()
     assert output.err == ""
-    assert "gemini-3.5-flash" in output.out
+    assert "gemini-3.5-flash-lite" in output.out
     assert "test-key" not in output.out
     assert FakeClient.closed
 

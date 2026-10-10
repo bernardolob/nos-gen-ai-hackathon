@@ -55,21 +55,22 @@ def test_settings_reject_invalid_operational_values(field, value):
 
 def test_model_info_is_strict_and_immutable():
     info = ModelInfo(
-        requested_model="gemini-3.5-flash",
-        provider_name="models/gemini-3.5-flash",
+        requested_model="gemini-3.5-flash-lite",
+        provider_name="models/gemini-3.5-flash-lite",
     )
 
     with pytest.raises(ValidationError):
         info.requested_model = "different"
     with pytest.raises(ValidationError):
         ModelInfo(
-            requested_model="gemini-3.5-flash",
-            provider_name="models/gemini-3.5-flash",
+            requested_model="gemini-3.5-flash-lite",
+            provider_name="models/gemini-3.5-flash-lite",
             unexpected=True,
         )
 
 
 def test_generation_result_hides_text_from_repr():
-    result = GenerationResult(model="gemini-3.5-flash", text="private answer")
+    result = GenerationResult(
+        model="gemini-3.5-flash-lite", text="private answer")
 
     assert "private answer" not in repr(result)
