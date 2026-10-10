@@ -1,46 +1,113 @@
 # Revisão manual (UI e backend)
 
-O utilizador envia o documento, vê o texto anonimizado com os `*` destacados
-e **aprova ou rejeita**. Ao rejeitar escreve observações, para ocultar mais ("Mascara também
-o nome do centro") ou menos ("Não mascares a informação médica"): o
-utilizador tem a palavra final. Essas observações passam a ser a **prompt do
-utilizador** (ver [DETECTION.md](DETECTION.md)) e o pipeline corre outra vez,
-gerando a tentativa seguinte. As versões rejeitadas ficam no histórico da sessão.
+O utilizador envia um **documento** (PDF ou texto) ou um **áudio**, vê o
+resultado anonimizado e **aprova ou rejeita**. Ao rejeitar escreve
+observações, para ocultar mais ("Mascara também o nome do centro") ou menos
+("Não mascares a informação médica"): o utilizador tem a palavra final. Essas
+observações passam a ser a **prompt do utilizador** (ver
+[DETECTION.md](DETECTION.md)) e o pipeline corre outra vez, gerando a
+tentativa seguinte. As versões rejeitadas ficam no histórico da sessão.
 
 ```
-UI (Lovable_UI_JunctionX/) <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)
+texto:  UI <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)
+áudio:  UI <-> src/user_validation.py -> ElevenLabs (1 vez) -> pipeline.run
+                                      -> alinhamento -> ffmpeg (sons de censura)
 ```
 
 ## Backend (`src/user_validation.py`)
 
-FastAPI, uma só sessão em memória (um servidor local para uma pessoa).
+FastAPI, uma só sessão em memória (um servidor local para uma pessoa). A
+revisão é **ou** um texto **ou** um áudio, nunca os dois: enviar um novo
+documento substitui o anterior.
 
 | Rota | O que faz |
 |---|---|
 | `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`); corre o pipeline e começa a revisão (até 10 MB) |
-| `GET /api/current` | `has_document`, `attempt`, `text`, `approved`, `history`, `mode` (`model` ou `rules`), `warnings`, `issues` |
+| `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta e censura; começa a revisão |
+| `GET /api/audio/current` | o áudio **censurado** da versão atual (`audio/mp4`, sem cache); 404 se ainda não há. Nunca devolve o original |
+| `GET /api/current` | o estado (ver abaixo) |
 | `POST /api/reject` | `{attempt, text, reason}`: guarda a versão, junta `reason` às instruções e gera a seguinte |
 | `POST /api/approve` | aprova a versão atual |
+
+O **estado** (o mesmo em todas as rotas, e o que a UI mostra) tem os campos
+`has_document`, `attempt`, `text`, `approved`, `history`, `mode` (`model` ou
+`rules`), `warnings`, `issues` e, desde o áudio, `kind` (`text` ou `audio`),
+`audio_url` (o caminho do áudio censurado, ou `null`), `audio_ranges`
+(quantos troços foram trocados por um som) e `audio_enabled` (a censura de
+áudio está disponível). No áudio, `text` é a **transcrição mascarada**.
 
 Comportamento:
 
 - **As observações acumulam-se.** Cada pedido ao modelo leva todas as
   observações anteriores, até 2000 caracteres (ficam as mais recentes). Uma
   só observação com mais de 2000 dá erro 422.
-- **Uma rejeição que falha não muda nada.** Se o modelo ou o gateway falham, a
-  resposta é 502 com uma mensagem fixa, a versão continua em revisão e a
-  observação não fica guardada.
+- **Uma rejeição que falha não muda nada.** Se o modelo, o gateway ou a
+  censura do áudio falham, a resposta é 502 com uma mensagem fixa, a versão
+  (e o seu áudio) continuam em revisão e a observação não fica guardada.
 - **Versão desatualizada.** Se o `attempt` enviado não é o atual, 409.
 - **Sem o Gemini** (`GEMINI_GATEWAY_URL` por definir) só correm as regras de
   segurança, e as observações não alteram o texto. A UI indica-o.
-- **Demora.** Com o Gemini, gerar uma versão demora cerca de um minuto; a UI
-  mostra "A gerar…".
+- **Demora.** Com o Gemini, gerar uma versão demora alguns segundos; o áudio
+  demora mais (transcrição e `ffmpeg`).
 
-Privacidade: escuta só em `127.0.0.1` e o CORS só aceita as origens da UI
+### Áudio
+
+- **Disponível só com** `ELEVENLABS_API_KEY` e `ffmpeg`/`ffprobe` instalados.
+  Sem eles `audio_enabled` é `false` e `POST /api/audio` responde 503; a UI
+  deve esconder ou desativar o envio de áudio.
+- **O áudio original sai da máquina.** Vai para o ElevenLabs, **ainda com os
+  dados sensíveis**, antes de ser censurado (ver [AUDIO.md](AUDIO.md)). A UI
+  de áudio tem de avisar o utilizador antes do envio.
+- **Transcreve-se uma só vez por sessão.** Rejeitar repete só a deteção e a
+  censura, a partir da transcrição guardada: não volta a enviar o áudio nem a
+  gastar créditos (`audio_pipeline.run_transcript`).
+- **Ficheiros temporários.** O original e o áudio censurado vivem numa pasta
+  temporária privada, que se apaga quando se envia outro documento, ao fechar
+  a sessão e ao sair do servidor. O áudio censurado de uma versão antiga
+  apaga-se quando a seguinte fica pronta; o histórico guarda só o texto.
+- **Falha alto.** Se a transcrição e o mascaramento não alinham, 502 e nada
+  é censurado, em vez de deixar uma palavra por censurar.
+- **Erros.** 415 (tipo), 413 (tamanho), 422 (áudio vazio ou sem fala), 502
+  (transcrição, alinhamento, modelo ou `ffmpeg`), 503 (sem chave ou sem
+  `ffmpeg`). As mensagens são fixas e nunca incluem o áudio nem a chave.
+
+### Privacidade
+
+Escuta só em `127.0.0.1` e o CORS só aceita as origens da UI
 (`REVIEW_UI_ORIGINS`, separadas por vírgulas; por defeito `localhost` e
 `127.0.0.1` nas portas 8080, 5173 e 3000; `*` não é aceite). O documento
-fica só em memória e perde-se ao reiniciar. As mensagens de erro nunca
-incluem o texto.
+fica só em memória (e o áudio só na pasta temporária) e perde-se ao
+reiniciar. As mensagens de erro nunca incluem o texto.
+
+## UI (`Lovable_UI_JunctionX/`)
+
+React + TanStack Start + Vite + Tailwind + shadcn, gerada pelo Lovable. A
+interface está **em inglês** (decisão da equipa).
+
+| Ficheiro | O que tem |
+|---|---|
+| `src/routes/index.tsx` | a página e os estados (arranque, envio, revisão) |
+| `src/components/review/workspace.tsx` | o espaço de revisão: texto mascarado, contadores, aprovar/rejeitar, histórico, diálogo de feedback |
+| `src/components/anonymizer/steps.tsx` | só o `UploadStep` (escolher ou largar o ficheiro) |
+| `src/lib/review/api.ts`, `types.ts`, `mock.ts` | a camada de serviço: **o contrato com o backend** |
+| `src/routes/__root.tsx`, `src/styles.css` | o esqueleto, o aviso de demonstração e os estilos |
+| `src/components/ui/` | componentes shadcn genéricos |
+
+- **O contrato é nosso.** O Lovable trata do aspeto, dos textos e das
+  interações; os formatos dos pedidos e das respostas (`src/lib/review/`) não
+  se mudam sem mudar o backend. O estado da UI é sempre o estado devolvido
+  pelo backend: nunca se derivam versões localmente (ver `AGENTS.md` na pasta
+  da UI).
+- **Modo demonstração.** Sem `VITE_API_URL` a UI usa dados falsos e mostra um
+  aviso fixo no topo. Para ligar ao backend: `cp .env.example .env`
+  (`VITE_API_URL=http://127.0.0.1:8000`).
+- **Estado da UI do áudio.** O backend já tem a rota; a **UI de áudio ainda
+  não existe** (a UI só envia texto e PDF). O que lhe falta está no
+  [AUDIO.md](AUDIO.md).
+- O trabalho do Lovable vem pelo branch `lovable/ui`, nunca diretamente para
+  a `main`, e revê-se o diff antes de juntar.
+- Gestor de pacotes: a UI traz `bun.lock`; `npm install` funciona, mas não se
+  deve commitar o `package-lock.json` que gera.
 
 ## Arranque
 
@@ -48,34 +115,36 @@ incluem o texto.
 # backend, a partir de submission/solution/src
 pip install -r ../requirements.txt
 export GEMINI_GATEWAY_URL=...  GEMINI_GATEWAY_ORIGIN=...   # opcional
+export ELEVENLABS_API_KEY=...                              # opcional (áudio)
 python user_validation.py            # http://127.0.0.1:8000
 
 # UI, a partir de submission/solution/Lovable_UI_JunctionX
 npm install
-npm run dev
+npm run dev                          # http://localhost:8080
 ```
 
-A UI procura o backend em `http://127.0.0.1:8000`; muda-se com
-`VITE_API_URL`.
+O arranque diz se o Gemini e o áudio estão ligados.
 
-## Verificado a correr
+## Testes
 
-Com o backend só em regras (sem Gemini) e a UI em `npm run dev`
-(`http://localhost:8080`): enviar um texto, ver o NIF mascarado, rejeitar com
-observações (a tentativa 1 fica no histórico) e aprovar. `npx tsc --noEmit` e
-`npm run build` passam e a consola do browser não mostra erros.
+- Backend de texto: `tests/test_user_validation.py` (21 testes).
+- Rota de áudio: `tests/test_audio_route.py`, com a transcrição, o modelo e o
+  `ffmpeg` falsos (26 testes). Um teste usa o `ffmpeg` a sério e só corre se
+  ele estiver instalado.
+- UI: `npx tsc --noEmit`, `npx vitest run` e `npm run build`, na pasta da UI.
 
-Faltavam em `src/lib/` quatro ficheiros que os componentes importam
-(`utils.ts` e três de tratamento de erros do Lovable). A regra `lib/` do
-`.gitignore` (pensada para Python) deixava-os de fora, por isso a UI não
-compilava num clone limpo. Foram recriados (a regra tem agora uma exceção
-para essa pasta). Os de erros são versões mínimas: registam na consola e
-mostram uma página de erro simples.
+## Verificado e não verificado
 
-## O que não está verificado
+Verificado:
+- O fluxo de texto de ponta a ponta, no browser, contra o backend real e o
+  Gemini: enviar, rejeitar com um pedido (a tentativa 2 respeita-o), aprovar.
+- A rota de áudio com a transcrição e a censura falsas: estado, ficheiros
+  temporários, uma só transcrição, falhas que não mudam nada, tipos e
+  tamanhos.
 
-- Nunca correu com o Gemini real (quota): o texto novo gerado a partir das
-  observações só se vê com o modelo ligado.
+Não verificado:
+- A rota de áudio com o **ElevenLabs e o `ffmpeg` reais** (não há chave nem
+  `ffmpeg` na máquina em que foi escrita). O pipeline de linha de comandos
+  foi verificado pela equipa que o fez (ver [AUDIO.md](AUDIO.md)).
+- Nenhuma UI de áudio.
 - Só uma sessão de cada vez: dois separadores partilham o mesmo documento.
-- O envio de um PDF pela UI não foi experimentado no browser (o do backend
-  tem teste).

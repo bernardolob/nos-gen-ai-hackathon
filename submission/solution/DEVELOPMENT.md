@@ -35,8 +35,11 @@ chat tem de ser revogada. O ficheiro `.env` está no `.gitignore`.
 
 ### Extra: censura de áudio
 
-Só é preciso para `audio_pipeline.py` (ver [AUDIO.md](AUDIO.md)); o resto do
-projeto não depende disto.
+Só é preciso para `audio_pipeline.py` e para a rota de áudio do backend de
+revisão (`/api/audio`, ver [AUDIO.md](AUDIO.md) e [REVIEW.md](REVIEW.md)); o
+resto do projeto não depende disto. Sem a chave ou sem o `ffmpeg`, o backend
+arranca na mesma, com a rota de áudio desligada (`audio_enabled` falso no
+estado).
 
 - **`ffmpeg`** instalado no sistema (binário, não um pacote Python) — o
   `audio/redactor.py` chama-o diretamente por `subprocess`.
@@ -72,9 +75,12 @@ biblioteca padrão. O `pytest` também os corre
 (`python -m pytest submission/solution/tests`) e passa a ser preciso quando
 entrarem os testes do cliente do Gemini.
 
-Os testes de `audio/redactor.py` e de `audio_pipeline.py` que escrevem áudio
-precisam do `ffmpeg` instalado; sem ele, saltam-se sozinhos
-(`@unittest.skipUnless`), não falham.
+Os testes de `audio/redactor.py`, de `audio_pipeline.py` e da rota de áudio
+(`tests/test_audio_route.py`) que escrevem áudio a sério precisam do `ffmpeg`
+instalado; sem ele, saltam-se sozinhos, não falham. Os restantes testes da
+rota de áudio usam a transcrição, o modelo e o `ffmpeg` falsos, por isso
+correm em qualquer máquina (precisam do `pytest`, do `fastapi` e do
+`httpx`).
 
 ## Correr o código à mão
 

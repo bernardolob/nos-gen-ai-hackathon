@@ -19,6 +19,7 @@ de alcance").
 | Alinhamento | `src/audio/alignment.py` | feito e testado |
 | Redação do áudio | `src/audio/redactor.py` | feito, testado com `ffmpeg` a sério |
 | Ponto de entrada | `src/audio_pipeline.py` | feito e testado, de ponta a ponta com a API real |
+| Rota do backend de revisão | `src/user_validation.py` | feita e testada com a transcrição e a censura falsas; **falta verificá-la com o ElevenLabs e o `ffmpeg` reais**. A UI de áudio não existe |
 
 **Confirmado com a API real do ElevenLabs** (depois de a rede deste
 ambiente passar a permitir `api.elevenlabs.io`): o esquema da resposta é o
@@ -56,6 +57,10 @@ componente novo é o que liga a transcrição com timestamps à redação do
 | Alinhamento | `src/audio/alignment.py` | linhas originais, linhas mascaradas (de `pipeline.run`), palavras com tempo | lista de intervalos de tempo a substituir |
 | Redação do áudio | `src/audio/redactor.py` | áudio original, intervalos, sons de substituição | ficheiro de áudio censurado |
 | Ponto de entrada | `src/audio_pipeline.py` | caminho do áudio | mesma forma que `pipeline.run`, mais `lines` e `ranges` |
+
+`audio_pipeline.run_transcript(lines, word_times, ...)` é a parte de `run` que
+não toca no áudio (deteção, regras, mascaramento, alinhamento): permite
+repetir a deteção sem voltar a transcrever. A rota de áudio usa-a.
 
 ### Transcrição
 
@@ -145,6 +150,40 @@ minuto — "A confirmar" em "Custo", abaixo.
   fictícios ou com consentimento**, como os da demonstração.
 - A chave (`ELEVENLABS_API_KEY`) só vem do ambiente; os erros do cliente
   nunca incluem a chave nem o áudio.
+- Na revisão manual, o original e o áudio censurado ficam numa pasta
+  temporária privada, apagada ao substituir o documento, ao fechar a sessão e
+  ao sair do servidor. O original nunca se devolve pela API.
+
+## Rota de áudio na revisão manual
+
+O backend da revisão (`src/user_validation.py`) tem duas rotas de áudio, além
+das de texto:
+
+| Rota | O que faz |
+|---|---|
+| `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta, censura e começa a revisão |
+| `GET /api/audio/current` | o áudio **censurado** da versão atual (`audio/mp4`, sem cache). Nunca o original |
+
+O estado devolvido ganha `kind` (`text` ou `audio`), `audio_url`,
+`audio_ranges` e `audio_enabled`; no áudio, `text` é a transcrição mascarada.
+Rejeitar e aprovar funcionam como no texto. Os pormenores (erros, ficheiros
+temporários, falhas) estão em [REVIEW.md](REVIEW.md); a decisão de transcrever
+uma só vez em [DECISIONS.md](DECISIONS.md) (15).
+
+Requisitos: `ELEVENLABS_API_KEY` e `ffmpeg`/`ffprobe`; sem eles
+`audio_enabled` é falso e `POST /api/audio` responde 503.
+
+### O que falta da UI de áudio
+
+A UI (Lovable) só envia texto e PDF. Para o áudio precisa de:
+
+- esconder ou desativar o envio quando `audio_enabled` é falso;
+- **avisar antes de enviar** que o áudio original vai para o ElevenLabs;
+- aceitar mp3, m4a e wav, e mostrar o estado de espera (vários segundos);
+- um leitor com a versão censurada (`audio_url`, com `?v=<attempt>` para o
+  navegador não reutilizar a versão anterior) e a transcrição mascarada por
+  baixo, com `audio_ranges`;
+- o mesmo fluxo de rejeição com observações e o histórico.
 
 ## Custo (créditos ElevenLabs)
 
@@ -182,8 +221,9 @@ gastar créditos a sério:
 - `alignment.py` não importa `verification.py`: o trabalho da verificação é
   outro (confirmar que o mascaramento não teve erros de formato), não
   listar que posições mudaram.
-- Independente do `api/` e do `Lovable_UI_JunctionX/` (revisão manual); pode
-  vir a usar esse backend mais tarde, sem alterações a este desenho.
+- Usa o backend da revisão manual (`user_validation.py`, ver
+  [REVIEW.md](REVIEW.md)) para a UI: a rota de áudio está lá (ver abaixo).
+  É independente do `api/` (a API opcional).
 
 ## Experimentar
 
@@ -194,6 +234,10 @@ Pela linha de comandos, a partir de `submission/solution/src` (precisa do
 python audio_pipeline.py audio.m4a --no-model
 python audio_pipeline.py audio.m4a --no-model --out saida
 ```
+
+Pelo backend da revisão: `python user_validation.py` (com
+`ELEVENLABS_API_KEY` definida) e `POST /api/audio` com o áudio no corpo;
+ver [REVIEW.md](REVIEW.md).
 
 Sem `--out` é um ensaio (só o resumo); com `--out DIR` escreve
 `DIR/audio_censurado.m4a`, `DIR/submission.txt` e `DIR/report.md`. Sem
