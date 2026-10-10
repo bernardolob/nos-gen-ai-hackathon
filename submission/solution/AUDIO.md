@@ -7,7 +7,24 @@ dados sensíveis falados e substituir cada palavra ocultada por um **som
 personalizado** (um efeito sonoro engraçado, não silêncio nem um "bip"
 genérico), devolvendo o áudio censurado.
 
-Planeado, por fases: primeiro **mp3**, depois vídeo (ver "Fora de alcance").
+Implementado para **mp3** (ver "Estado"); vídeo fica para depois (ver "Fora
+de alcance").
+
+## Estado
+
+| Componente | Ficheiro | Estado |
+|---|---|---|
+| Transcrição (parser) | `src/audio/transcriber.py` | feito, testado com um `call_scribe` falso |
+| Cliente real do Scribe | `src/audio/elevenlabs_client.py` | feito, **por testar com a chave real** (ver nota abaixo) |
+| Alinhamento | `src/audio/alignment.py` | feito e testado |
+| Redação do áudio | `src/audio/redactor.py` | feito, testado com `ffmpeg` a sério |
+| Ponto de entrada | `src/audio_pipeline.py` | feito e testado |
+
+**Por testar com a chave real do ElevenLabs:** não foi possível alcançar
+`api.elevenlabs.io` nem `elevenlabs.io` desde o ambiente onde isto foi
+escrito (rede bloqueada), por isso o esquema da resposta do Scribe
+(`elevenlabs_client.py`, `transcriber.py`) está por confirmar contra um
+pedido real — ver a nota no topo de `transcriber.py`.
 
 ## Porquê reaproveitar o pipeline de texto
 
@@ -17,7 +34,7 @@ mp3 -> Transcrição (ElevenLabs Scribe, com timestamps por palavra)
        regras de segurança, mascaramento, verificação, relatório]
     -> Alinhamento: cada palavra mascarada -> o seu intervalo de tempo
     -> Redação do áudio: substitui esse intervalo pelo som personalizado
-    -> audio_censurado.mp3 + report.md (reaproveitado) + transcript.txt
+    -> audio_censurado.m4a + submission.txt + report.md (reaproveitados)
 ```
 
 `pipeline.run(lines, generate, user_instructions, include_values)` já faz a
@@ -27,14 +44,14 @@ transcrição em vez das do PDF, tudo isto funciona sem alterações. O único
 componente novo é o que liga a transcrição com timestamps à redação do
 áudio; os `*` no texto continuam a significar exatamente o mesmo.
 
-## Componentes novos (planeados, por fazer)
+## Componentes
 
-| Componente | Ficheiro previsto | Entrada | Saída |
+| Componente | Ficheiro | Entrada | Saída |
 |---|---|---|---|
-| Transcrição | `src/audio/transcriber.py` | caminho do mp3 | linhas de texto + lista de palavras com `start`/`end` (segundos) |
+| Transcrição | `src/audio/transcriber.py` | caminho do áudio, cliente (`call_scribe`) | linhas de texto + lista de palavras com `start`/`end` (segundos) |
 | Alinhamento | `src/audio/alignment.py` | linhas originais, linhas mascaradas (de `pipeline.run`), palavras com tempo | lista de intervalos de tempo a substituir |
-| Redação do áudio | `src/audio/redactor.py` | mp3 original, intervalos, som personalizado | mp3 censurado |
-| Ponto de entrada | `src/audio_pipeline.py` | caminho do mp3 | mesma forma que `pipeline.run`, mais o mp3 censurado |
+| Redação do áudio | `src/audio/redactor.py` | áudio original, intervalos, sons de substituição | ficheiro de áudio censurado |
+| Ponto de entrada | `src/audio_pipeline.py` | caminho do áudio | mesma forma que `pipeline.run`, mais `lines` e `ranges` |
 
 ### Transcrição
 
@@ -44,9 +61,9 @@ ambiente (`ELEVENLABS_API_KEY`, nunca no repositório, como o
 por palavra, o instante de início e fim — é esse detalhe que torna possível
 saber **quando** cada palavra sensível foi dita, não só **que** palavra é.
 
-As linhas enviadas ao resto do pipeline agrupam um número razoável de
-palavras cada (por frase, ou um máximo de palavras por linha), para a
-deteção numerar as linhas como já faz com o PDF.
+As linhas enviadas ao resto do pipeline agrupam as palavras por frase
+(fim em `.`, `!` ou `?`), com um máximo de 20 palavras por linha quando
+não há pontuação por perto — ver "Decisões tomadas".
 
 ### Alinhamento
 
@@ -61,10 +78,11 @@ de substituição não repetir várias vezes seguidas sem necessidade.
 
 Para cada intervalo, corta esse troço do áudio original e substitui-o por um
 dos sons em `assets/censor_sounds/` (`censor_1.m4a` a `censor_4.m4a`, em
-rotação — ver "Decisões tomadas"), cortado ou repetido para ocupar
+rotação — ver "Decisões tomadas"), cortado ou repetido (`ffmpeg
+-stream_loop -1` seguido de `-t`, que serve para os dois casos) para ocupar
 exatamente a duração do intervalo (a duração total do áudio não muda). Usa
-`ffmpeg` ou `pydub` (biblioteca externa, à parte do núcleo do resto do
-pipeline, tal como o PyMuPDF é só da extração).
+o `ffmpeg` diretamente por `subprocess` — ver "Decisões tomadas" sobre
+porquê não o `pydub`.
 
 ## Decisões tomadas
 
@@ -85,15 +103,28 @@ pipeline, tal como o PyMuPDF é só da extração).
    e assim até `censor_4.m4a`, voltando depois a `censor_1.m4a`. Mais
    variado do que repetir sempre o mesmo som, sem a complexidade de uma
    escolha aleatória ou por categoria.
+5. **`ffmpeg` por `subprocess`, não `pydub`.** O `pydub` depende do módulo
+   `audioop` da biblioteca padrão, removido no Python 3.13: tentar
+   instalá-lo neste ambiente falhou com
+   `ModuleNotFoundError: No module named 'audioop'` (haveria o backport
+   `audioop-lts` no PyPI, não testado aqui, mas seria mais uma
+   dependência). Chamar o `ffmpeg` diretamente evita essa fragilidade e
+   não acrescenta nenhuma dependência Python nova — só o binário do
+   `ffmpeg` no sistema, como o `DEVELOPMENT.md` já pede.
+6. **Agrupar a transcrição em linhas por frase, com um máximo de 20
+   palavras.** Fim de frase (`.`, `!`, `?`) termina uma linha; sem
+   pontuação durante muito tempo, 20 palavras também termina uma linha,
+   para a deteção não receber uma linha gigante.
+7. **Falha alto em vez de ocultar menos.** Se a transcrição e o
+   mascaramento não alinharem (número de linhas, de palavras ou de
+   marcas de tempo diferente), `alignment.py` levanta `AlignmentError` em
+   vez de ignorar a palavra em silêncio. Ocultar menos do que devia é o
+   erro grave aqui; um erro visível é preferível a uma fuga silenciosa.
 
 ## Decisões em aberto
 
-1. **Como agrupar as palavras da transcrição em linhas.** Por frase (pontuação
-   do Scribe) ou por um número fixo de palavras; decide-se ao implementar o
-   `transcriber.py`, conforme o que o Scribe devolver para os primeiros
-   áudios de teste.
-2. **Nome exato da variável de ambiente e onde documentar o `.env.example`**
-   — seguir o padrão de `GEMINI_API_KEY`.
+Nenhuma, por agora — ver "Por testar com a chave real" em "Estado" e
+"A confirmar" em "Custo", abaixo.
 
 ## Custo (créditos ElevenLabs)
 
@@ -124,9 +155,24 @@ gastar créditos a sério:
 
 - Usa `pipeline.run` sem alterações; a única entrada nova é a lista de
   linhas, construída a partir da transcrição em vez do PDF.
-- Usa a mesma ideia de comparação de `verification.py` para encontrar as
-  palavras mascaradas, mas sobre as próprias linhas (não lê `verification.py`
-  como módulo; refaz a comparação porque precisa de manter o alinhamento com
-  as posições das palavras na transcrição).
+  `audio_pipeline.run` chama-o diretamente.
+- `alignment.py` não importa `verification.py`: o trabalho da verificação é
+  outro (confirmar que o mascaramento não teve erros de formato), não
+  listar que posições mudaram.
 - Independente do `api/` e do `Lovable_UI_JunctionX/` (revisão manual); pode
   vir a usar esse backend mais tarde, sem alterações a este desenho.
+
+## Experimentar
+
+Pela linha de comandos, a partir de `submission/solution/src` (precisa do
+`ffmpeg` instalado):
+
+```bash
+python audio_pipeline.py audio.m4a --no-model
+python audio_pipeline.py audio.m4a --no-model --out saida
+```
+
+Sem `--out` é um ensaio (só o resumo); com `--out DIR` escreve
+`DIR/audio_censurado.m4a`, `DIR/submission.txt` e `DIR/report.md`. Sem
+`--no-model`, precisa de `GEMINI_GATEWAY_URL`/`GEMINI_GATEWAY_ORIGIN` (como
+`pipeline.py`) e de `ELEVENLABS_API_KEY`.

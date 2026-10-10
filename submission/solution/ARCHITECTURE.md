@@ -123,7 +123,7 @@ tocar.
 
 | Extra | Ficheiros previstos | Estado |
 |---|---|---|
-| Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | planeado, ver [AUDIO.md](AUDIO.md) |
+| Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | feito, por testar com a chave real do ElevenLabs, ver [AUDIO.md](AUDIO.md) |
 
 ## Estrutura de pastas
 
@@ -138,7 +138,7 @@ submission/
     DEVELOPMENT.md            como trabalhar no projeto
     DETECTION.md              deteção e validação da resposta
     MASKING.md                regras do mascaramento
-    AUDIO.md                  extra: censura de áudio (planeado)
+    AUDIO.md                  extra: censura de áudio
     taxonomy.md               categorias de dados sensíveis
     internal_prompt.txt       2 Prompt interna
     src/
@@ -155,8 +155,8 @@ submission/
       labels.py               deixa as etiquetas visíveis (itens do modelo)
       user_validation.py      backend da revisão manual (FastAPI)
       gemini/                 cliente direto do Gemini (alternativa)
-      audio/                  extra: transcrição, alinhamento e redação (planeado)
-      audio_pipeline.py       extra: ponto de entrada da censura de áudio (planeado)
+      audio/                  extra: transcrição, alinhamento e redação
+      audio_pipeline.py       extra: ponto de entrada da censura de áudio
     assets/
       censor_sounds/          extra: sons de substituição (censor_1 a 4.m4a)
     api/                      API HTTP opcional
