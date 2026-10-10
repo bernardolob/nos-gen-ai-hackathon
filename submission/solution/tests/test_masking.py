@@ -221,11 +221,39 @@ class LocateItemsTest(unittest.TestCase):
         self.assertEqual(out, ["abc"])
         self.assertEqual(len(warnings), 1)
 
-    def test_decomposed_accent_is_not_found(self):
+    def test_decomposed_accent_is_found(self):
         line = unicodedata.normalize("NFC", "Conceição")
         text = unicodedata.normalize("NFD", "Conceição")
         out, warnings = mask([line], [{"line": 1, "text": text}])
-        self.assertEqual(out, [line])
+        self.assertEqual(out, ["*"])
+        self.assertEqual(warnings, [])
+
+    def test_value_without_accents_finds_the_accented_word(self):
+        out, warnings = mask(
+            ["Nome: Maria Conceição Santos", "A Conceição chegou."],
+            [{"line": 1, "text": "Conceicao"}],
+        )
+        self.assertEqual(out, ["Nome: Maria * Santos", "A * chegou."])
+        self.assertEqual(warnings, [])
+
+    def test_a_whole_word_with_accents_still_wins_over_the_folded_one(self):
+        out, _ = mask(["Joao e João"], [{"line": 1, "text": "Joao"}])
+        self.assertEqual(out, ["* e João"])
+
+    def test_value_split_over_two_lines(self):
+        out, warnings = mask(
+            ["Morada: Rua das", "Flores 12", "fim"],
+            [{"line": 1, "text": "Rua das Flores"}],
+        )
+        self.assertEqual(out, ["Morada: * *", "* 12", "fim"])
+        self.assertEqual(warnings, [])
+
+    def test_a_split_value_must_match_whole_words(self):
+        out, warnings = mask(
+            ["Rua das", "Floresta 12"],
+            [{"line": 1, "text": "Rua das Flores"}],
+        )
+        self.assertEqual(out, ["Rua das", "Floresta 12"])
         self.assertEqual(len(warnings), 1)
 
     def test_overlapping_items_are_merged(self):
@@ -468,6 +496,57 @@ class PropagationTest(unittest.TestCase):
             [{"line": 1, "text": "2018"}],
         )
         self.assertEqual(out, ["Desde *", "Em * houve consulta"])
+
+    def test_two_letter_names_propagate(self):
+        out, _ = mask(
+            ["Filho: Li", "Falou com o Li ontem."],
+            [{"line": 1, "text": "Li"}],
+        )
+        self.assertEqual(out, ["Filho: *", "Falou com o * ontem."])
+
+
+class OrganisationNameTest(unittest.TestCase):
+    """Uma palavra isolada não se propaga para o nome de uma instituição."""
+
+    LINES = [
+        "Centro Médico Lisboa",
+        "Morada: Lisboa",
+        "Transferido para o Hospital dos Santos",
+        "Filha: Rita Santos",
+    ]
+
+    def test_title_is_kept_and_the_warning_says_why(self):
+        out, warnings = mask(self.LINES, [{"line": 2, "text": "Lisboa"}])
+        self.assertEqual(out[0], "Centro Médico Lisboa")
+        self.assertEqual(out[1], "Morada: *")
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["line"], 1)
+        self.assertIn("instituição", warnings[0]["problem"])
+
+    def test_surname_is_kept_in_a_hospital_name_but_masked_elsewhere(self):
+        out, _ = mask(self.LINES, [{"line": 4, "text": "Santos"}])
+        self.assertEqual(out[2], "Transferido para o Hospital dos Santos")
+        self.assertEqual(out[3], "Filha: Rita *")
+
+    def test_the_stated_occurrence_is_always_masked(self):
+        out, _ = mask(
+            ["Centro Médico Lisboa"], [{"line": 1, "text": "Lisboa"}])
+        self.assertEqual(out, ["Centro Médico *"])
+
+    def test_multi_word_values_always_propagate(self):
+        out, warnings = mask(
+            ["Nome: Rita Santos", "Hospital Rita Santos"],
+            [{"line": 1, "text": "Rita Santos"}],
+        )
+        self.assertEqual(out, ["Nome: * *", "Hospital * *"])
+        self.assertEqual(warnings, [])
+
+    def test_the_keyword_must_be_close(self):
+        out, _ = mask(
+            ["Hospital de dia aberto, atendeu a Rita Santos", "Santos"],
+            [{"line": 2, "text": "Santos"}],
+        )
+        self.assertEqual(out[0], "Hospital de dia aberto, atendeu a Rita *")
 
 
 if __name__ == "__main__":
