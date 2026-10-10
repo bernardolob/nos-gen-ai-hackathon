@@ -41,8 +41,10 @@ resto do projeto não depende disto. Sem a chave ou sem o `ffmpeg`, o backend
 arranca na mesma, com a rota de áudio desligada (`audio_enabled` falso no
 estado).
 
-- **`ffmpeg`** instalado no sistema (binário, não um pacote Python) — o
-  `audio/redactor.py` chama-o diretamente por `subprocess`.
+- **`ffmpeg`** (e o `ffprobe`) instalado no sistema (binário, não um pacote
+  Python) — o `audio/redactor.py` chama-o diretamente por `subprocess`. No
+  Windows: `winget install Gyan.FFmpeg`; o PATH só se atualiza num terminal
+  novo. Sem ele, os testes de áudio que o usam saltam-se.
 - **`ELEVENLABS_API_KEY`**, da mesma forma que a chave do Gemini acima.
 
 ```bash

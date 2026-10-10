@@ -19,7 +19,7 @@ de alcance").
 | Alinhamento | `src/audio/alignment.py` | feito e testado |
 | Redação do áudio | `src/audio/redactor.py` | feito, testado com `ffmpeg` a sério |
 | Ponto de entrada | `src/audio_pipeline.py` | feito e testado, de ponta a ponta com a API real |
-| Rota do backend de revisão | `src/user_validation.py` | feita e testada com a transcrição e a censura falsas; **falta verificá-la com o ElevenLabs e o `ffmpeg` reais**. A UI de áudio não existe |
+| Rota do backend de revisão | `src/user_validation.py` | feita e verificada com o `ffmpeg` a sério e uma transcrição falsa (o troço certo é substituído e a duração fica igual, ver "Verificação da rota"); **falta verificá-la com o ElevenLabs real** |
 
 **Confirmado com a API real do ElevenLabs** (depois de a rede deste
 ambiente passar a permitir `api.elevenlabs.io`): o esquema da resposta é o
@@ -173,20 +173,48 @@ uma só vez em [DECISIONS.md](DECISIONS.md) (15).
 Requisitos: `ELEVENLABS_API_KEY` e `ffmpeg`/`ffprobe`; sem eles
 `audio_enabled` é falso e `POST /api/audio` responde 503.
 
-### O que falta da UI de áudio
+### A UI de áudio
 
-A UI (Lovable) só envia texto e PDF. O contrato já está feito (em
-`Lovable_UI_JunctionX/src/lib/review/`: `uploadAudio`, `uploadFile`,
-`censoredAudioUrl`, os campos novos do estado e dados de demonstração com um
-áudio silencioso); falta a parte visual. Precisa de:
+A UI (Lovable, `Lovable_UI_JunctionX/`) já trata do áudio, sobre o contrato
+de `src/lib/review/` (`uploadAudio`, `uploadFile`, `censoredAudioUrl`, os
+campos novos do estado e dados de demonstração com um áudio silencioso):
 
-- esconder ou desativar o envio quando `audio_enabled` é falso;
-- **avisar antes de enviar** que o áudio original vai para o ElevenLabs;
-- aceitar mp3, m4a e wav, e mostrar o estado de espera (vários segundos);
-- um leitor com a versão censurada (`audio_url`, com `?v=<attempt>` para o
-  navegador não reutilizar a versão anterior) e a transcrição mascarada por
-  baixo, com `audio_ranges`;
-- o mesmo fluxo de rejeição com observações e o histórico.
+- aceita mp3, m4a e wav (10 MB para documentos, 25 MB para áudio) e mostra o
+  estado de espera (vários segundos);
+- **avisa antes de enviar** que o áudio original vai para o ElevenLabs e só
+  deixa enviar depois de marcar "I understand" (repõe-se ao trocar de
+  ficheiro);
+- bloqueia o envio quando `audio_enabled` é falso e di-lo ("Audio censoring
+  is not available on this server.");
+- na revisão, um leitor com a versão censurada (`audio_url`, com
+  `?v=<attempt>` para o navegador não reutilizar a versão anterior), a
+  transcrição mascarada por baixo, "Replaced stretches" (`audio_ranges`) e
+  "Download audio";
+- o mesmo fluxo de rejeição com observações, e o histórico, que guarda só o
+  texto ("Transcript").
+
+Verificado no browser em modo demonstração e contra um backend sem a chave
+(onde o envio fica bloqueado); tem 6 testes de componentes. **Nunca correu
+com áudio real de ponta a ponta**: isso precisa da chave do ElevenLabs.
+
+### Verificação da rota
+
+Com o `ffmpeg` 9.0.2 instalado e uma transcrição falsa (sem chave do
+ElevenLabs), pela rota real (`POST /api/audio`): um tom de 440 Hz de 6 s,
+com a palavra "sensível" nos 2 a 3 s.
+
+| Troço | Diferença média para o original |
+|---|---|
+| 0,2 a 1,8 s (antes) | 56 (ruído do codec) |
+| **2,1 a 2,9 s (a palavra censurada)** | **4631** |
+| 3,2 a 4,3 s e 4,7 a 5,8 s (depois) | 53 e 50 |
+
+A duração ficou igual (6,000 s), `audio_ranges` foi 1, o texto saiu
+`Contacto * para marcar.` e rejeitar fez a tentativa 2 com **uma só
+transcrição**. Os 55 testes de áudio passam sem nenhum saltado.
+
+O que continua por verificar é a transcrição real: a rota nunca correu com o
+ElevenLabs, só o pipeline de linha de comandos (acima).
 
 ## Custo (créditos ElevenLabs)
 

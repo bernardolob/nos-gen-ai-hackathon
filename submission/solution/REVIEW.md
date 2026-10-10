@@ -101,11 +101,16 @@ interface está **em inglês** (decisão da equipa).
 - **Modo demonstração.** Sem `VITE_API_URL` a UI usa dados falsos e mostra um
   aviso fixo no topo. Para ligar ao backend: `cp .env.example .env`
   (`VITE_API_URL=http://127.0.0.1:8000`).
-- **Estado da UI do áudio.** O backend tem a rota e o **contrato da UI já
-  cobre o áudio** (`uploadAudio`, `uploadFile`, `censoredAudioUrl`, os 4
-  campos novos do estado e os dados de demonstração, em `src/lib/review/`),
-  mas a **parte visual ainda não existe**: a UI só mostra o envio de texto e
-  PDF. O que lhe falta está no [AUDIO.md](AUDIO.md).
+- **A UI do áudio.** Aceita mp3, m4a e wav no mesmo envio dos documentos e,
+  antes de enviar um áudio, mostra o **aviso de privacidade** (o áudio
+  original vai para o ElevenLabs) e exige marcar "I understand". Se o
+  servidor não tem o áudio ligado (`audio_enabled` falso) bloqueia o envio e
+  di-lo. Na revisão mostra o leitor com a versão censurada, a transcrição
+  mascarada, "Replaced stretches" (`audio_ranges`), "Download audio" e o
+  histórico (que guarda só o texto, "Transcript"). O contrato está em
+  `src/lib/review/` (`uploadAudio`, `uploadFile`, `censoredAudioUrl`, os 4
+  campos novos do estado e os dados de demonstração); a UI de áudio tem
+  testes próprios (`src/test/audio-ui.test.tsx`).
 - O trabalho do Lovable vem pelo branch `lovable/ui`, nunca diretamente para
   a `main`, e revê-se o diff antes de juntar.
 - Gestor de pacotes: a UI traz `bun.lock`; `npm install` funciona, mas não se
@@ -133,8 +138,8 @@ O arranque diz se o Gemini e o áudio estão ligados.
 - Rota de áudio: `tests/test_audio_route.py`, com a transcrição, o modelo e o
   `ffmpeg` falsos (26 testes). Um teste usa o `ffmpeg` a sério e só corre se
   ele estiver instalado.
-- UI: `npx tsc --noEmit`, `npx vitest run` (18 testes, incluindo o contrato
-  do áudio) e `npm run build`, na pasta da UI.
+- UI: `npx tsc --noEmit`, `npx vitest run` (24 testes: o contrato do áudio
+  e os componentes de áudio) e `npm run build`, na pasta da UI.
 - **Contrato backend-UI:** `tests/test_ui_contract.py` (7 testes) lê os tipos
   e as chamadas em `src/lib/review/` e confirma que os campos do estado, do
   histórico, as rotas chamadas, os tipos de áudio e os limites coincidem com
@@ -145,13 +150,17 @@ O arranque diz se o Gemini e o áudio estão ligados.
 Verificado:
 - O fluxo de texto de ponta a ponta, no browser, contra o backend real e o
   Gemini: enviar, rejeitar com um pedido (a tentativa 2 respeita-o), aprovar.
-- A rota de áudio com a transcrição e a censura falsas: estado, ficheiros
-  temporários, uma só transcrição, falhas que não mudam nada, tipos e
-  tamanhos.
+- A rota de áudio com a transcrição falsa: estado, ficheiros temporários,
+  uma só transcrição, falhas que não mudam nada, tipos e tamanhos.
+- A rota de áudio com o **`ffmpeg` real**: o troço da palavra censurada é
+  mesmo substituído, o resto fica igual e a duração não muda (ver
+  [AUDIO.md](AUDIO.md), "Verificação da rota").
 
 Não verificado:
-- A rota de áudio com o **ElevenLabs e o `ffmpeg` reais** (não há chave nem
-  `ffmpeg` na máquina em que foi escrita). O pipeline de linha de comandos
-  foi verificado pela equipa que o fez (ver [AUDIO.md](AUDIO.md)).
-- Nenhuma UI de áudio (só o contrato e os dados de demonstração).
+- A rota de áudio com o **ElevenLabs real** (não há chave). O pipeline de
+  linha de comandos foi verificado pela equipa que o fez (ver
+  [AUDIO.md](AUDIO.md)).
+- A **UI de áudio** só foi vista em modo demonstração (com um áudio silencioso
+  falso) e contra um backend sem a chave (a UI bloqueia o envio e di-lo).
+  Nunca com áudio real de ponta a ponta.
 - Só uma sessão de cada vez: dois separadores partilham o mesmo documento.
