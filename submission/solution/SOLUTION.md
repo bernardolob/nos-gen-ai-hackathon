@@ -126,8 +126,10 @@ a pontuação original.
   `João,Ana` dá `*,*` e `Rui/Ana` dá `*/*`. Entre dois dígitos não separam:
   `1,68m` e `12/03/1978` ficam com um único `*`.
 - Os espaços e a estrutura das linhas não mudam.
-- O item é procurado na linha indicada, depois nas vizinhas e depois no
-  documento todo; se não for encontrado, gera um aviso em vez de falhar.
+- O item é procurado como **palavra inteira** (`Ana` em `Anabela e Ana` é a
+  última palavra, não o início de `Anabela`), na linha indicada, depois nas
+  vizinhas e depois no documento todo; só sem palavra inteira se aceita um
+  pedaço de palavra. Se não for encontrado, gera um aviso em vez de falhar.
 - O mesmo valor é mascarado nas outras ocorrências (por exemplo, "Maria
   Santos" no texto corrido).
 

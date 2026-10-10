@@ -71,12 +71,22 @@ palavra**, apesar das barras. O ponto final de uma frase fica de fora:
 
 ## Onde está o valor na linha
 
-O módulo procura o `text` do item por esta ordem:
+O módulo procura o `text` do item em duas rondas. Em cada uma, a ordem das
+linhas é: a indicada em `line`, as vizinhas (anterior e seguinte) e depois o
+documento todo.
 
-1. Na linha indicada em `line` (a n-ésima ocorrência, se houver
-   `occurrence`).
-2. Nas linhas vizinhas (anterior e seguinte).
-3. No documento todo.
+1. **Primeiro, como palavra inteira.** `Ana` é a palavra em `Anabela e Ana`,
+   não o início de `Anabela`: o resultado é `Anabela e *`. Uma palavra inteira
+   numa linha mais longe ganha a um pedaço de palavra na linha indicada.
+2. **Só se não houver nenhuma palavra inteira, como pedaço de palavra.** Assim
+   o valor fica protegido, mesmo que o resto da palavra fique visível:
+   `12345` em `ID12345` dá `ID*`.
+
+Uma "palavra inteira" é uma ocorrência sem letras, dígitos ou `_` colados de
+um lado nem do outro. Se o item traz `occurrence`, conta só as ocorrências da
+primeira ronda quando as há (`7` na linha `7 e 70 e 7`, com `occurrence` 2, é
+o último `7`, não o de `70`). Se pedirem uma ocorrência que não existe, usa-se
+a primeira.
 
 Se não o encontrar, não falha: devolve um **aviso** (`line`, `text`,
 `problem`) e deixa o texto como está. Os avisos vão para o relatório e para a
@@ -104,6 +114,12 @@ mascarada uma vez.
 
 ## Limitações conhecidas
 
+- **Um pedaço de palavra ainda é mascarado, e a verificação assinala-o.** Se o
+  valor só existe dentro de outra palavra (`ID12345`), mascara-se esse
+  pedaço, e a verificação marca `unexpected_word_change` porque a palavra
+  não ficou mascarada por completo. É um aviso útil: o modelo devolveu um
+  valor que não é uma palavra do documento. O mesmo acontece com um valor
+  propagado para dentro de uma palavra ligada por símbolos (`€:Ana`).
 - **O texto do item tem de coincidir letra a letra com o do documento.** Se o
   Gemini devolver o mesmo texto com os acentos decompostos (Unicode NFD), o
   item não é encontrado e gera um aviso. Convém normalizar para NFC na

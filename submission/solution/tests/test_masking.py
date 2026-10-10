@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import masking  # noqa: E402
+import verification  # noqa: E402
 
 
 def mask(lines, items):
@@ -239,6 +240,101 @@ class LocateItemsTest(unittest.TestCase):
             [{"line": 1, "text": "7", "occurrence": 3}],
         )
         self.assertEqual(out, ["Sala *"])
+
+
+class WholeWordTest(unittest.TestCase):
+    """O valor é a palavra inteira, não o início ou o fim de outra."""
+
+    def test_prefix_of_a_longer_word_is_not_masked(self):
+        out, warnings = mask(
+            ["Anabela e Ana"],
+            [{"line": 1, "text": "Ana"}],
+        )
+        self.assertEqual(out, ["Anabela e *"])
+        self.assertEqual(warnings, [])
+
+    def test_suffix_of_a_longer_word_is_not_masked(self):
+        out, _ = mask(
+            ["Mariana e Ana"],
+            [{"line": 1, "text": "Ana"}],
+        )
+        self.assertEqual(out, ["Mariana e *"])
+
+    def test_multi_word_value_inside_a_longer_one(self):
+        out, _ = mask(
+            ["Rui Pintor e Rui Pinto"],
+            [{"line": 1, "text": "Rui Pinto"}],
+        )
+        self.assertEqual(out, ["Rui Pintor e * *"])
+
+    def test_the_first_whole_word_wins_when_there_are_several(self):
+        out, _ = mask(
+            ["Ana viu Anabela e Ana"],
+            [{"line": 1, "text": "Ana", "occurrence": 1}],
+        )
+        self.assertEqual(out, ["* viu Anabela e *"])
+
+    def test_occurrence_counts_whole_words_only(self):
+        out, _ = mask(
+            ["7 e 70 e 7"],
+            [{"line": 1, "text": "7", "occurrence": 2}],
+        )
+        self.assertEqual(out, ["7 e 70 e *"])
+
+    def test_whole_word_on_a_neighbour_beats_a_part_of_a_word(self):
+        out, warnings = mask(
+            ["Anabela", "Ana"],
+            [{"line": 1, "text": "Ana"}],
+        )
+        self.assertEqual(out, ["Anabela", "*"])
+        self.assertEqual(warnings, [])
+
+    def test_whole_word_in_the_stated_line_beats_one_next_door(self):
+        out, _ = mask(
+            ["Ana", "Ana e Rui", "Ana"],
+            [{"line": 2, "text": "Rui"}],
+        )
+        self.assertEqual(out, ["Ana", "Ana e *", "Ana"])
+
+    def test_without_a_whole_word_the_part_of_a_word_is_still_masked(self):
+        """Protege o valor, mesmo que o resto da palavra fique visível."""
+        out, warnings = mask(["ID12345"], [{"line": 1, "text": "12345"}])
+        self.assertEqual(out, ["ID*"])
+        self.assertEqual(warnings, [])
+
+    def test_text_with_symbols_at_the_edges(self):
+        out, _ = mask(
+            ["Tel: +351 912 345 678 e x+351"],
+            [{"line": 1, "text": "+351 912 345 678"}],
+        )
+        self.assertEqual(out, ["Tel: * * * * e x+351"])
+
+    def test_punctuation_around_the_word_still_counts_as_a_boundary(self):
+        out, _ = mask(
+            ["(Ana), Anabela; Ana."],
+            [{"line": 1, "text": "Ana"}],
+        )
+        self.assertEqual(out, ["(*), Anabela; *."])
+
+    def test_occurrence_beyond_the_count_uses_the_first(self):
+        out, _ = mask(
+            ["Anabela e Ana"],
+            [{"line": 1, "text": "Ana", "occurrence": 5}],
+        )
+        self.assertEqual(out, ["Anabela e *"])
+
+    def test_the_output_passes_the_verification(self):
+        cases = [
+            (["Anabela e Ana"], "Ana"),
+            (["Mariana e Ana"], "Ana"),
+            (["Rui Pintor e Rui Pinto"], "Rui Pinto"),
+            (["(Ana), Anabela; Ana."], "Ana"),
+            (["7 e 70 e 7"], "7"),
+        ]
+        for lines, text in cases:
+            out, _ = mask(lines, [{"line": 1, "text": text}])
+            self.assertEqual(
+                verification.compare_lines(lines, out), [], lines)
 
 
 class PropagationTest(unittest.TestCase):
