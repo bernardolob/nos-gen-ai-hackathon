@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nos-anonymizer"
 version = "0.1.0"
-description = "Secure, extensible sensitive-entity detection with Google Gemini"
+description = "Secure connection verification for Google Gemini"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

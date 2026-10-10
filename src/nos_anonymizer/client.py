@@ -1,14 +1,13 @@
-"""Secure Gemini client for validated sensitive-entity detection."""
+"""Secure Gemini client for connection verification."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Any, TypeVar
 
 import httpx
 from google import genai
 from google.genai import errors, types
-from pydantic import ValidationError
 
 from .config import GeminiSettings
 from .errors import (
@@ -18,21 +17,12 @@ from .errors import (
     GeminiRequestError,
     GeminiServiceError,
     GeminiTimeoutError,
-    InvalidInputError,
     ModelMismatchError,
     ModelUnavailableError,
     RateLimitError,
     ResponseValidationError,
 )
-from .models import (
-    DetectionResult,
-    ModelInfo,
-    SensitiveEntity,
-    SensitiveEntityResponse,
-    TextBlock,
-    TokenUsage,
-)
-from .prompting import SYSTEM_INSTRUCTION, build_detection_input
+from .models import ModelInfo
 
 MODEL_ID = "gemini-3.5-flash"
 RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]
@@ -41,7 +31,7 @@ T = TypeVar("T")
 
 
 class GeminiClient:
-    """Synchronous, stateless integration with the pinned Gemini model."""
+    """Synchronous client that verifies access to the pinned Gemini model."""
 
     def __init__(
         self,
@@ -49,7 +39,6 @@ class GeminiClient:
         *,
         _sdk_client: Any | None = None,
     ) -> None:
-        self._settings = settings
         self._closed = False
         self._sdk_client = _sdk_client or self._create_sdk_client(settings)
 
@@ -108,72 +97,6 @@ class GeminiClient:
             ),
         )
 
-    def count_tokens(self, blocks: Sequence[TextBlock]) -> int:
-        """Count tokens for the exact system instruction and serialized blocks."""
-
-        self._ensure_open()
-        normalized = self._normalize_blocks(blocks)
-        response = self._call(
-            lambda: self._sdk_client.models.count_tokens(
-                model=MODEL_ID,
-                contents=build_detection_input(normalized),
-                config=types.CountTokensConfig(system_instruction=SYSTEM_INSTRUCTION),
-            ),
-        )
-        return self._required_nonnegative_int(
-            getattr(response, "total_tokens", None),
-            "token count",
-        )
-
-    def detect_sensitive_entities(
-        self,
-        blocks: Sequence[TextBlock],
-    ) -> DetectionResult:
-        """Detect and locally validate sensitive spans in text blocks."""
-
-        self._ensure_open()
-        normalized = self._normalize_blocks(blocks)
-        interaction = self._call(
-            lambda: self._sdk_client.interactions.create(
-                model=MODEL_ID,
-                input=build_detection_input(normalized),
-                store=False,
-                system_instruction=SYSTEM_INSTRUCTION,
-                generation_config={"thinking_level": "medium"},
-                response_format={
-                    "type": "text",
-                    "mime_type": "application/json",
-                    "schema": SensitiveEntityResponse.model_json_schema(),
-                },
-                timeout=self._settings.timeout_seconds,
-            ),
-        )
-
-        if getattr(interaction, "status", None) != "completed":
-            raise ResponseValidationError(
-                "Gemini did not return a completed detection response."
-            )
-        returned_model = getattr(interaction, "model", None)
-        if returned_model is not None:
-            self._require_matching_model(returned_model)
-
-        output_text = getattr(interaction, "output_text", None)
-        if not isinstance(output_text, str) or not output_text:
-            raise ResponseValidationError(
-                "Gemini returned no structured detection data."
-            )
-
-        try:
-            response = SensitiveEntityResponse.model_validate_json(output_text)
-        except (ValidationError, ValueError):
-            raise ResponseValidationError(
-                "Gemini returned an invalid structured detection response."
-            ) from None
-
-        entities = self._validate_entities(response.entities, normalized)
-        usage = self._validate_usage(getattr(interaction, "usage", None))
-        return DetectionResult(model=MODEL_ID, entities=entities, usage=usage)
-
     def _call(self, operation: Callable[[], T]) -> T:
         try:
             return operation()
@@ -215,102 +138,9 @@ class GeminiClient:
             error = GeminiServiceError("Gemini failed after the configured retries.")
         else:
             error = GeminiRequestError(
-                "Gemini rejected the request; no source data was included "
-                "in this error."
+                "Gemini rejected the request; provider details were omitted."
             )
         raise error from None
-
-    @staticmethod
-    def _normalize_blocks(blocks: Sequence[TextBlock]) -> tuple[TextBlock, ...]:
-        try:
-            normalized = tuple(blocks)
-        except TypeError:
-            raise InvalidInputError(
-                "blocks must be a sequence of TextBlock values."
-            ) from None
-        if not normalized:
-            raise InvalidInputError("At least one text block is required.")
-        if any(not isinstance(block, TextBlock) for block in normalized):
-            raise InvalidInputError("Every item must be a TextBlock.")
-        block_ids = [block.block_id for block in normalized]
-        if len(block_ids) != len(set(block_ids)):
-            raise InvalidInputError("Text block IDs must be unique.")
-        return normalized
-
-    @classmethod
-    def _validate_entities(
-        cls,
-        entities: tuple[SensitiveEntity, ...],
-        blocks: tuple[TextBlock, ...],
-    ) -> tuple[SensitiveEntity, ...]:
-        block_map = {block.block_id: block for block in blocks}
-        block_order = {block.block_id: index for index, block in enumerate(blocks)}
-
-        for entity in entities:
-            block = block_map.get(entity.block_id)
-            if block is None:
-                raise ResponseValidationError(
-                    "Gemini referenced an unknown text block."
-                )
-            if entity.start_char >= entity.end_char or entity.end_char > len(
-                block.text
-            ):
-                raise ResponseValidationError("Gemini returned an invalid entity span.")
-            if block.text[entity.start_char : entity.end_char] != entity.text:
-                raise ResponseValidationError(
-                    "Gemini returned an entity that does not match its source span."
-                )
-
-        ordered = tuple(
-            sorted(
-                entities,
-                key=lambda item: (
-                    block_order[item.block_id],
-                    item.start_char,
-                    item.end_char,
-                    item.category.value,
-                ),
-            )
-        )
-        previous_by_block: dict[str, SensitiveEntity] = {}
-        for entity in ordered:
-            previous = previous_by_block.get(entity.block_id)
-            if previous is not None and entity.start_char < previous.end_char:
-                raise ResponseValidationError(
-                    "Gemini returned duplicate or overlapping entity spans."
-                )
-            previous_by_block[entity.block_id] = entity
-        return ordered
-
-    @classmethod
-    def _validate_usage(cls, usage: Any) -> TokenUsage:
-        if usage is None:
-            raise ResponseValidationError("Gemini returned no token usage metadata.")
-        return TokenUsage(
-            input_tokens=cls._required_nonnegative_int(
-                getattr(usage, "total_input_tokens", None),
-                "input token usage",
-            ),
-            output_tokens=cls._required_nonnegative_int(
-                getattr(usage, "total_output_tokens", None),
-                "output token usage",
-            ),
-            thought_tokens=cls._optional_nonnegative_int(
-                getattr(usage, "total_thought_tokens", None),
-                "thought token usage",
-            )
-            or 0,
-            total_tokens=cls._required_nonnegative_int(
-                getattr(usage, "total_tokens", None),
-                "total token usage",
-            ),
-        )
-
-    @staticmethod
-    def _required_nonnegative_int(value: Any, label: str) -> int:
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise ResponseValidationError(f"Gemini returned invalid {label} metadata.")
-        return value
 
     @staticmethod
     def _optional_nonnegative_int(value: Any, label: str) -> int | None:

@@ -56,10 +56,9 @@ For more detailed information on the submission process and what is expected, pl
 
 ## 5. Secure Gemini integration milestone
 
-The repository now includes a reusable, text-only Python integration for
-sensitive-entity detection. It uses `gemini-3.5-flash` exactly, validates
-structured responses and source offsets, does not implement client-side model
-fallback, and opts out of Interactions API storage.
+The repository now includes a small Python integration that securely connects
+to Gemini and verifies access to `gemini-3.5-flash` exactly. It only retrieves
+model metadata; it does not generate content or process documents.
 
 ### Install for development
 
@@ -91,6 +90,5 @@ pytest --cov=nos_anonymizer --cov-report=term-missing
 flake8 .
 ```
 
-See the [Gemini integration guide](docs/gemini-integration.md) for the public
-API, security controls, architecture, model-deprecation caveat, configuration,
-and future adapter boundary.
+See the [Gemini integration guide](docs/gemini-integration.md) for the connection
+API, security controls, and configuration.

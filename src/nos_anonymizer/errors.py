@@ -9,10 +9,6 @@ class ConfigurationError(GeminiIntegrationError):
     """Raised when required configuration is missing or invalid."""
 
 
-class InvalidInputError(GeminiIntegrationError):
-    """Raised when content blocks violate the public input contract."""
-
-
 class AuthenticationError(GeminiIntegrationError):
     """Raised when the configured API key is not accepted."""
 

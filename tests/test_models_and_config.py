@@ -1,13 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from nos_anonymizer import (
-    ConfigurationError,
-    EntityCategory,
-    GeminiSettings,
-    TextBlock,
-)
-from nos_anonymizer.models import SensitiveEntity
+from nos_anonymizer import ConfigurationError, GeminiSettings, ModelInfo
 
 
 def test_settings_load_from_environment(monkeypatch):
@@ -54,30 +48,17 @@ def test_settings_reject_invalid_operational_values(field, value):
         GeminiSettings(api_key="test", **{field: value})
 
 
-@pytest.mark.parametrize(
-    "values",
-    [
-        {"block_id": "", "text": "content"},
-        {"block_id": " padded ", "text": "content"},
-        {"block_id": "ok", "text": "   "},
-        {"block_id": "bad\nidentifier", "text": "content"},
-    ],
-)
-def test_text_block_rejects_invalid_values(values):
-    with pytest.raises(ValidationError):
-        TextBlock(**values)
-
-
-def test_sensitive_values_are_hidden_from_repr():
-    block = TextBlock(block_id="one", text="private", metadata={"source": "x"})
-    entity = SensitiveEntity(
-        block_id="one",
-        start_char=0,
-        end_char=7,
-        text="private",
-        category=EntityCategory.OTHER_PERSONAL_IDENTIFIER,
-        reason="Direct identifier",
+def test_model_info_is_strict_and_immutable():
+    info = ModelInfo(
+        requested_model="gemini-3.5-flash",
+        provider_name="models/gemini-3.5-flash",
     )
 
-    assert "private" not in repr(block)
-    assert "private" not in repr(entity)
+    with pytest.raises(ValidationError):
+        info.requested_model = "different"
+    with pytest.raises(ValidationError):
+        ModelInfo(
+            requested_model="gemini-3.5-flash",
+            provider_name="models/gemini-3.5-flash",
+            unexpected=True,
+        )
