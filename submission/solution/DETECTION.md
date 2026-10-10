@@ -122,6 +122,31 @@ pedaço passa a um item na sua linha, sem o marcador, com a mesma categoria,
 razão e confiança; a `occurrence` só vale para o primeiro. Um pedaço fora do
 documento gera um aviso. A prompt interna também pede um item por linha.
 
+### Etiquetas
+
+Num campo `Etiqueta: valor` o sensível é o valor. O `gemini-3.5-flash-lite`
+às vezes devolve também a etiqueta (`Telefone: +351 912 345 678` inteiro, ou
+`Impressão digital` à parte), e o texto ficaria `*: * * *` em vez de
+`Telefone: * * * *`. `src/labels.py` corrige os itens do modelo antes do
+mascaramento. Uma linha tem etiqueta se começa por texto curto (até 6
+palavras, sem dígitos) seguido de `:` e de um valor:
+
+- um item que **inclui** a etiqueta fica só com o valor;
+- um item **só na etiqueta** é descartado se outro item da mesma linha cobre
+  o valor; se ninguém marcou o valor, mantém-se (não se sabe se a etiqueta
+  era o dado sensível);
+- os itens de `identificacao` na etiqueta nunca se descartam
+  (`Ana Silva: diagnosticada com...`).
+
+O resumo da linha de comandos mostra "etiquetas deixadas visíveis: N" quando
+corrige alguma. Só se aplica aos itens do modelo, não às regras de segurança.
+
+**Verificação:** a regra tem 21 testes, incluindo o pipeline completo com um
+modelo falso. Em 8 execuções com o `flash-lite` real, uma (antes da regra)
+devolveu etiquetas mascaradas (linhas 34 e 35 do documento do desafio); nas
+4 seguintes o modelo não as devolveu, por isso a regra ainda não foi
+exercitada com uma resposta real.
+
 ## Erros e avisos
 
 | Situação | O que acontece |
