@@ -10,6 +10,7 @@ Este README é incremental: vai crescendo com a arquitetura.
 | Ficheiro | Descrição |
 |---|---|
 | `taxonomy.md` | Taxonomia de dados sensíveis: categorias, exemplos do documento, o que não ocultar e decisões em aberto. |
+| `ARCHITECTURE.md` | Componentes núcleo, fluxo e estrutura de pastas. |
 | `internal_prompt.txt` | Prompt interna enviada ao Gemini (versão 2, com linhas numeradas; ainda por testar). |
 
 ## Prompt interna
