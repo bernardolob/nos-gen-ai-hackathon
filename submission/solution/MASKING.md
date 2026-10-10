@@ -115,11 +115,30 @@ mascarada uma vez.
 - **Os caracteres de pontuação ficam na saída.** Um item como
   `Rua das Flores, 123, Apt 45` mantém as vírgulas: `* * *, *, * *`.
   A pontuação em si não é dado sensível.
+- **A verificação tem de usar a mesma definição de palavra.** A versão da
+  verificação em desenvolvimento (`feature/verification`) só aceita uma
+  palavra mascarada como um `*` com a pontuação nas pontas. Para palavras
+  coladas por vírgula, ponto e vírgula ou barra (`João,Ana` dá `*,*`,
+  `Rui/Ana` dá `*/*`) marcaria `unexpected_word_change`, apesar de o
+  mascaramento estar certo. Com espaço (`João, Ana`) ou entre dígitos
+  (`12/03/1978`) não há problema. A correção é as duas partes partilharem uma
+  só definição; ver [DECISIONS.md](DECISIONS.md).
+
+## Relação com os outros componentes
+
+- **Recebe** as linhas da extração e os itens da deteção e das regras de
+  segurança, todos com o mesmo [contrato de dados](ARCHITECTURE.md).
+- **Devolve** as linhas mascaradas e os avisos. O relatório usa os itens e os
+  avisos; a verificação confere as linhas.
+- Usa só a biblioteca padrão do Python.
 
 ## Como testar
 
-Os casos desta tabela estão em `tests/test_masking.py`:
+Os casos desta tabela estão em `tests/test_masking.py`. Não precisam de
+bibliotecas externas:
 
 ```bash
 python -m unittest discover -s submission/solution/tests -v
 ```
+
+O guia completo está em [DEVELOPMENT.md](DEVELOPMENT.md).
