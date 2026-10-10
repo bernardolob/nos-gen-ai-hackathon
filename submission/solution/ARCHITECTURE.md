@@ -100,10 +100,12 @@ e na deteção.
    conhecido. Apanham o que o modelo deixe passar e garantem um mínimo se a
    API falhar.
 5. **Mascaramento.** Localiza cada item na sua linha e troca cada palavra por
-   `*`. Ver [MASKING.md](MASKING.md).
+   `*`. A definição de palavra está em `src/words.py`. Ver
+   [MASKING.md](MASKING.md).
 6. **Verificação.** Confirma, comparando o original com o resultado, que
    o número de linhas e de palavras por linha não mudou, que não há linhas
-   vazias e que cada palavra ou ficou igual ou foi mascarada por completo.
+   vazias e que cada palavra ou ficou igual ou foi mascarada por completo,
+   com a mesma definição de palavra do mascaramento (`src/words.py`).
 7. **Relatório.** Para cada item mascarado indica linha, categoria, razão,
    confiança e origem. Por defeito **não mostra os valores originais**, para
    o relatório não revelar o que foi ocultado.
@@ -128,6 +130,7 @@ submission/
     src/
       pdf_extractor.py        1 Extração (usa o PyMuPDF)
       categories.py           categorias e confiança (partilhado)
+      words.py                o que é uma palavra (partilhado)
       detection.py            3 Deteção
       safety_rules.py         4 Regras de segurança
       masking.py              5 Mascaramento
@@ -141,13 +144,5 @@ entrada.
 
 ## Problemas conhecidos
 
-- **A verificação duplica a definição de palavra do mascaramento, em vez de
-  a partilhar.** `verification.py` tem a sua própria cópia da regra de
-  `masking.py` (vírgula, ponto e vírgula e barra separam palavras coladas,
-  exceto entre dois dígitos; endereços web são uma só palavra), por isso já
-  não marca `João,Ana` ou `Rui/Ana` como `unexpected_word_change`. Mas, como
-  é uma cópia e não um módulo partilhado, uma mudança futura na regra de
-  `masking.py` tem de ser repetida à mão em `verification.py` — ver a
-  decisão em aberto nº 1 em [DECISIONS.md](DECISIONS.md).
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.

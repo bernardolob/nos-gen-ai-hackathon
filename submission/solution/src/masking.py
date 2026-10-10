@@ -12,28 +12,27 @@ Regras:
 - A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem espaço:
   ``João,Ana`` passa a ``*,*`` e ``Rui/Ana`` a ``*/*``. Entre dois dígitos
   não separam (``1,68m``, ``2.350,50`` e ``12/03/1978`` passam a um único
-  ``*``). O hífen não separa e os endereços web são uma só palavra.
+  ``*``). O hífen não separa, e os endereços web e as datas com o mês
+  escrito (``12/mar/1978``) são uma só palavra. A definição está em
+  ``words.py``, partilhada com a verificação.
 - Os espaços e a estrutura das linhas não mudam.
-- Cada item é procurado na sua linha; se não estiver lá, nas linhas vizinhas
-  e depois no documento todo. Se não for encontrado, gera um aviso.
+- Cada item é procurado primeiro como palavra inteira, na sua linha, nas
+  linhas vizinhas e depois no documento todo; só sem nenhuma palavra inteira
+  se aceita um pedaço de palavra. Se não for encontrado, gera um aviso.
 - Os valores são também mascarados nas outras ocorrências, quando aparecem
-  como palavra inteira: os que têm letras com pelo menos
-  ``MIN_PROPAGATION_LETTERS`` caracteres e os só com números com pelo menos
-  ``MIN_PROPAGATION_LENGTH``.
+  como palavra inteira (``Ana`` não se mascara dentro de ``Ana-Maria``): os
+  que têm letras com pelo menos ``MIN_PROPAGATION_LETTERS`` caracteres e os
+  só com números com pelo menos ``MIN_PROPAGATION_LENGTH``.
 - Um símbolo isolado, sem letras nem números (como ``-``), não é uma palavra
   e mantém-se.
 """
 
 import re
 
-MASK = "*"
-EDGE_PUNCTUATION = ",;:.!?()[]{}\"'"
+from words import mask_token, whole_word_pattern
+
 MIN_PROPAGATION_LENGTH = 4
 MIN_PROPAGATION_LETTERS = 3
-# Vírgula, ponto e vírgula ou barra que não está entre dois dígitos.
-LIST_SEPARATOR = re.compile(r"((?<!\d)[,;/]|[,;/](?!\d))")
-# Endereços web são sempre uma só palavra, apesar das barras.
-WEB_ADDRESS = re.compile(r"^\W*(?:https?://|www\.)", re.IGNORECASE)
 
 
 def mask_lines(lines, items):
@@ -128,7 +127,7 @@ def _find(line, text, occurrence, whole_word):
 def _starts(line, text, whole_word):
     """Posições onde ``text`` aparece na linha."""
     if whole_word:
-        pattern = re.compile(r"(?<!\w)" + re.escape(text) + r"(?!\w)")
+        pattern = whole_word_pattern(text)
         return [match.start() for match in pattern.finditer(line)]
     starts = []
     start = line.find(text)
@@ -152,7 +151,7 @@ def _should_propagate(text):
 
 def _add_other_occurrences(lines, text, spans):
     """Acrescenta as ocorrências de ``text`` como palavra inteira."""
-    pattern = re.compile(r"(?<!\w)" + re.escape(text) + r"(?!\w)")
+    pattern = whole_word_pattern(text)
     for index, line in enumerate(lines):
         for match in pattern.finditer(line):
             spans[index].append(match.span())
@@ -180,31 +179,5 @@ def _mask_span(segment):
     """Troca cada palavra do segmento por um asterisco."""
     parts = re.split(r"(\s+)", segment)
     return "".join(
-        part if part.isspace() else _mask_token(part) for part in parts
+        part if part.isspace() else mask_token(part) for part in parts
     )
-
-
-def _mask_token(token):
-    """Mascara uma sequência sem espaços, separando as palavras coladas.
-
-    A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem
-    espaço (``João,Ana`` passa a ``*,*`` e ``Rui/Ana`` a ``*/*``), exceto
-    entre dois dígitos (``1,68m``, ``12/03/1978``). Os endereços web contam
-    como uma só palavra.
-    """
-    if WEB_ADDRESS.match(token):
-        return _mask_word(token)
-    parts = LIST_SEPARATOR.split(token)
-    return "".join(
-        part if index % 2 else _mask_word(part)
-        for index, part in enumerate(parts)
-    )
-
-
-def _mask_word(word):
-    """Troca a palavra por ``*``, mantendo a pontuação nas pontas."""
-    if not any(char.isalnum() for char in word):
-        return word
-    lead = len(word) - len(word.lstrip(EDGE_PUNCTUATION))
-    trail = len(word) - len(word.rstrip(EDGE_PUNCTUATION))
-    return word[:lead] + MASK + word[len(word) - trail:]

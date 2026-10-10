@@ -124,7 +124,9 @@ a pontuação original.
 - A pontuação nas pontas de cada palavra mantém-se: `Santos,` passa a `*,`.
 - A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem espaço:
   `João,Ana` dá `*,*` e `Rui/Ana` dá `*/*`. Entre dois dígitos não separam:
-  `1,68m` e `12/03/1978` ficam com um único `*`.
+  `1,68m` e `12/03/1978` ficam com um único `*`. Uma data com o mês
+  escrito (`12/mar/1978`) é uma só palavra, e um hífen liga duas palavras
+  (`Ana-Maria`).
 - Os espaços e a estrutura das linhas não mudam.
 - O item é procurado como **palavra inteira** (`Ana` em `Anabela e Ana` é a
   última palavra, não o início de `Anabela`), na linha indicada, depois nas
@@ -162,10 +164,6 @@ duas origens e a maior confiança.
 
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.
-- **A verificação duplica a definição de palavra do mascaramento**, em vez
-  de a partilhar num módulo comum. Já não marca `João,Ana` como erro, mas
-  uma mudança futura na regra de `masking.py` tem de ser repetida à mão em
-  `verification.py`. Ver [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pontos em aberto
 

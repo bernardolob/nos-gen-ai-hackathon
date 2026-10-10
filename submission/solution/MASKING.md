@@ -23,7 +23,20 @@ de separadores:
    estão entre dois dígitos**, porque aí fazem parte de um número ou de uma
    data.
 
-Tudo o resto (ponto, hífen, `@`, `+`, `€`, `:`) **não** separa palavras.
+Tudo o resto (ponto, hífen, `@`, `+`, `€`, `:`) **não** separa palavras. Há
+duas exceções à regra das barras, que são **uma só palavra** apesar delas:
+
+- os **endereços web** (`https://...`, `www....`);
+- as **datas com o mês escrito**: `12/mar/1978`, `12/março`, `mar/1978`. Só
+  contam meses verdadeiros, em português ou em inglês (`jan`, `fev`, `março`,
+  `sept`...). Uma palavra qualquer entre barras continua a separar:
+  `12/xyz/1978` dá `*/*/*` e `Rui/2` dá `*/*`.
+
+Um **hífen entre duas palavras** liga-as: `Ana-Maria` é uma só. Isto conta
+também quando se procura o valor no resto do documento (ver "Outras
+ocorrências").
+
+A definição vive em `src/words.py`, partilhada com a verificação.
 
 ## Tabela de casos
 
@@ -44,7 +57,7 @@ execução do código.
 | Milhares e decimais | `Salário: 2.350,50` | `Salário: *` |
 | Data com barras | `Data: 12/03/1978` | `Data: *` |
 | Tensão arterial | `Pressão: 145/90 mmHg` | `Pressão: * *` |
-| Data com mês escrito | `Data: 12/mar/1978` | `Data: */*/*` |
+| Data com mês escrito | `Data: 12/mar/1978` | `Data: *` |
 | Nome composto com hífen | `Nome: Ana-Maria Silva` | `Nome: * *` |
 | Email | `Email: ana.silva@x.pt` | `Email: *` |
 | Endereço web | `Site: https://www.x.pt/perfil/ana.` | `Site: *.` |
@@ -106,6 +119,14 @@ do mesmo valor no documento, se:
 
 Para valores curtos só com números, usa-se `occurrence` para escolher qual.
 
+### Nomes compostos com hífen
+
+Um valor não se propaga para dentro de um nome ligado por hífen: com o item
+`Ana`, a linha `Nome: Ana-Maria Silva` mantém-se e só `Mãe: Ana` é mascarada.
+Mascarar só `Ana` deixaria `Maria` visível (`*-Maria`). Se o valor é o nome
+composto inteiro (`Ana-Maria Silva`), mascara-se por completo (`* *`). Pela
+mesma razão, `1234` não se propaga para dentro de `1234-05-06`.
+
 ## Itens sobrepostos
 
 Se dois itens se sobrepõem na mesma linha (por exemplo `Maria Conceição` e
@@ -124,20 +145,16 @@ mascarada uma vez.
   Gemini devolver o mesmo texto com os acentos decompostos (Unicode NFD), o
   item não é encontrado e gera um aviso. Convém normalizar para NFC na
   extração e na deteção.
-- **A barra entre letras e dígitos separa.** Datas com o mês escrito
-  (`12/mar/1978`) dão `*/*/*`, e não um só `*`.
+- **Só os meses conhecidos tornam uma data numa palavra.** `12/mar/1978` dá um
+  só `*`, mas uma abreviatura que não esteja na lista (`12/sep./1978` está,
+  `12/mrç/1978` não) continua a dar três.
 - **O hífen nunca separa.** `Ana-Maria` é uma palavra, mas um intervalo como
-  `Lisboa-Porto` também.
+  `Lisboa-Porto` também. Se o item é só `Ana` e a única ocorrência é
+  `Ana-Maria`, mascara-se esse pedaço (`*-Maria`), para o valor ficar
+  protegido, e a verificação assinala-o.
 - **Os caracteres de pontuação ficam na saída.** Um item como
   `Rua das Flores, 123, Apt 45` mantém as vírgulas: `* * *, *, * *`.
   A pontuação em si não é dado sensível.
-- **A verificação duplica esta regra em vez de a partilhar.**
-  `src/verification.py` tem a sua própria cópia (vírgula, ponto e vírgula e
-  barra separam palavras coladas, exceto entre dois dígitos; endereços web
-  são uma só palavra), por isso `João,Ana` e `Rui/Ana` já não são marcados
-  como `unexpected_word_change`. Mas, por ser uma cópia e não um módulo
-  partilhado, uma mudança futura nesta regra tem de ser repetida à mão em
-  `verification.py`; ver [DECISIONS.md](DECISIONS.md).
 
 ## Relação com os outros componentes
 
@@ -145,6 +162,8 @@ mascarada uma vez.
   segurança, todos com o mesmo [contrato de dados](ARCHITECTURE.md).
 - **Devolve** as linhas mascaradas e os avisos. O relatório usa os itens e os
   avisos; a verificação confere as linhas.
+- A definição de palavra está em `src/words.py`, partilhada com a
+  verificação: as duas não podem discordar.
 - Usa só a biblioteca padrão do Python.
 
 ## Como testar
