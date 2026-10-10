@@ -31,6 +31,7 @@ import masking
 import report
 import safety_rules
 import verification
+import visibility
 
 EXIT_OK = 0
 EXIT_VERIFICATION = 1
@@ -84,7 +85,9 @@ def run(lines, generate=None, user_instructions=None, include_values=False):
     Com ``generate=None`` só se usam as regras de segurança. Chaves:
     ``masked`` (linhas), ``items``, ``warnings``, ``issues`` (da
     verificação), ``label_changes`` (itens do modelo corrigidos para deixar a
-    etiqueta visível, ver ``labels.py``) e ``report`` (Markdown).
+    etiqueta visível, ver ``labels.py``), ``kept_visible`` (itens que o
+    utilizador pediu para deixar visíveis, ver ``visibility.py``) e
+    ``report`` (Markdown).
 
     Levanta ``detection.DetectionError`` se a resposta do modelo não se
     puder usar.
@@ -96,6 +99,20 @@ def run(lines, generate=None, user_instructions=None, include_values=False):
             lines, generate, user_instructions=user_instructions)
         warnings = warnings + detection.empty_answer_warnings(
             model_items, rule_items)
+    model_items, visible = visibility.split_visible(model_items)
+    if visible and not user_instructions:
+        warnings = warnings + [{
+            "index": None, "line": None, "text": None,
+            "problem": "o modelo pediu para deixar valores visíveis sem "
+                       "instruções do utilizador; foi ignorado"}]
+        visible = []
+    kept_visible = 0
+    if visible:
+        model_items, dropped = visibility.drop_overlapping(
+            lines, model_items, visible)
+        rule_items, dropped_rules = visibility.drop_overlapping(
+            lines, rule_items, visible)
+        kept_visible = dropped + dropped_rules
     model_items, label_changes = labels.keep_labels(lines, model_items)
     items = model_items + rule_items
     masked, mask_warnings = masking.mask_lines(lines, items)
@@ -105,6 +122,7 @@ def run(lines, generate=None, user_instructions=None, include_values=False):
         "items": items,
         "warnings": warnings,
         "label_changes": label_changes,
+        "kept_visible": kept_visible,
         "issues": verification.compare_lines(lines, masked),
         "report": report.build_report(items, warnings, include_values),
     }
@@ -128,6 +146,10 @@ def summary(result):
         "avisos: %d" % len(result["warnings"]),
         "problemas na verificação: %d" % len(result["issues"]),
     ]
+    if result["kept_visible"]:
+        rows.append(
+            "deixados visíveis a pedido do utilizador: %d"
+            % result["kept_visible"])
     if result["label_changes"]:
         rows.append(
             "etiquetas deixadas visíveis: %d" % result["label_changes"])
