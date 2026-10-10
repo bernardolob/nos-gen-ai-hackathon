@@ -36,9 +36,10 @@ Avaliação própria: compara a saída com eval/ground_truth.txt
    repositório.
 4. **Regras de segurança.** Padrões fixos que apanham o que o modelo deixe
    passar. Também asseguram um mínimo se a API falhar.
-5. **Mascaramento.** Localiza cada item na sua linha (ver o README), troca
-   cada palavra por `*` e mascara as outras ocorrências do mesmo valor. Os
-   números de linha nunca chegam ao documento final.
+5. **Mascaramento.** Localiza cada item na sua linha (ver `SOLUTION.md`), troca
+   cada palavra por `*` mantendo a pontuação nas pontas, e mascara as outras
+   ocorrências do mesmo valor. Os itens não encontrados geram avisos em vez
+   de erros. Os números de linha nunca chegam ao documento final.
 6. **Verificação.** Confirma que:
    - cada linha tem o mesmo número de palavras que o original;
    - as palavras não mascaradas são idênticas às originais;
@@ -53,7 +54,7 @@ Avaliação própria: compara a saída com eval/ground_truth.txt
 
 ```
 submission/solution/
-  README.md
+  SOLUTION.md
   ARCHITECTURE.md
   taxonomy.md
   internal_prompt.txt
@@ -64,14 +65,18 @@ submission/solution/
     masking.py
     verification.py
     report.py
+  tests/
+    test_safety_rules.py
+    test_masking.py
   eval/
     evaluate.py
 ```
 
 ## Estado
 
-Por agora existe apenas esta documentação. Os ficheiros de código ainda não
-foram criados e serão adicionados componente a componente.
+Implementados: regras de segurança (`src/safety_rules.py`) e mascaramento
+(`src/masking.py`). Os restantes ficheiros de código ainda não foram criados
+e serão adicionados componente a componente.
 
 Todo o código Python tem de passar o `flake8` (o workflow `lint.yml` corre-o
 em cada push).
