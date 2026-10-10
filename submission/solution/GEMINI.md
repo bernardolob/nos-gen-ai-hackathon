@@ -73,7 +73,11 @@ com o Gemini. A tabela de códigos HTTP está em `STATUS_ERRORS` (`client.py`).
 ## Limitações atuais
 
 - `generate_text(prompt)` só envia texto. A deteção vai precisar de enviar a
-  prompt interna como instrução de sistema, `temperature=0` e pedir resposta
-  em JSON, o que o cliente ainda não suporta.
-- Confirmar que a chave do hackathon aceita o modelo `gemini-3.5-flash`. O nome
-  está fixo no código.
+  prompt interna como instrução de sistema e pedir resposta em JSON, o que o
+  cliente ainda não suporta (o pipeline usa o gateway, ver
+  [GATEWAY.md](GATEWAY.md)). `temperature` está obsoleta no
+  `gemini-3.5-flash-lite`, por isso já não é preciso fixá-la.
+- O modelo é o `gemini-3.5-flash-lite` (pensamento mínimo por defeito, mais
+  rápido e barato). O nome está fixo no código e no `wrangler.jsonc`
+  (`GEMINI_MODEL`); mudar só um dos dois faz o cliente direto recusar a
+  resposta. O Worker tem de ser publicado de novo para a mudança valer.

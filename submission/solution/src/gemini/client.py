@@ -25,7 +25,7 @@ from .errors import (
 )
 from .models import GenerationResult, ModelInfo
 
-MODEL_ID = "gemini-3.5-flash"
+MODEL_ID = "gemini-3.5-flash-lite"
 RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]
 
 TIMEOUT_MESSAGE = "The Gemini request timed out after the configured retries."

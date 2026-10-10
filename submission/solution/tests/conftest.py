@@ -18,7 +18,7 @@ sys.path.insert(0, str(SOLUTION))
 class FakeModels:
     def __init__(self):
         self.get_result = SimpleNamespace(
-            name="models/gemini-3.5-flash",
+            name="models/gemini-3.5-flash-lite",
             input_token_limit=1_048_576,
             output_token_limit=65_536,
         )
@@ -26,7 +26,7 @@ class FakeModels:
         self.get_calls = []
         self.generate_result = SimpleNamespace(
             text="Hi from Gemini!",
-            model_version="gemini-3.5-flash",
+            model_version="gemini-3.5-flash-lite",
         )
         self.generate_error = None
         self.generate_calls = []
