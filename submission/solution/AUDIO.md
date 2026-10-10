@@ -14,17 +14,21 @@ de alcance").
 
 | Componente | Ficheiro | Estado |
 |---|---|---|
-| Transcrição (parser) | `src/audio/transcriber.py` | feito, testado com um `call_scribe` falso |
-| Cliente real do Scribe | `src/audio/elevenlabs_client.py` | feito, **por testar com a chave real** (ver nota abaixo) |
+| Transcrição (parser) | `src/audio/transcriber.py` | feito, testado com um `call_scribe` falso **e** com a API real |
+| Cliente real do Scribe | `src/audio/elevenlabs_client.py` | feito e **confirmado com a API real** |
 | Alinhamento | `src/audio/alignment.py` | feito e testado |
 | Redação do áudio | `src/audio/redactor.py` | feito, testado com `ffmpeg` a sério |
-| Ponto de entrada | `src/audio_pipeline.py` | feito e testado |
+| Ponto de entrada | `src/audio_pipeline.py` | feito e testado, de ponta a ponta com a API real |
 
-**Por testar com a chave real do ElevenLabs:** não foi possível alcançar
-`api.elevenlabs.io` nem `elevenlabs.io` desde o ambiente onde isto foi
-escrito (rede bloqueada), por isso o esquema da resposta do Scribe
-(`elevenlabs_client.py`, `transcriber.py`) está por confirmar contra um
-pedido real — ver a nota no topo de `transcriber.py`.
+**Confirmado com a API real do ElevenLabs** (depois de a rede deste
+ambiente passar a permitir `api.elevenlabs.io`): o esquema da resposta é o
+documentado no topo de `transcriber.py`, com um exemplo real. Teste de
+ponta a ponta: transcrição real de um dos sons de censura ("Pew pew, pew
+pew, pew pew"), mascaramento de duas ocorrências a fingir serem
+sensíveis, e substituição real por outro som via `ffmpeg` — a duração
+final do áudio ficou **idêntica à original ao milissegundo** (1.812000s).
+Os três valores de `type` da resposta (`word`, `spacing`, `audio_event`)
+foram todos observados em exemplos reais.
 
 ## Porquê reaproveitar o pipeline de texto
 
@@ -123,8 +127,9 @@ porquê não o `pydub`.
 
 ## Decisões em aberto
 
-Nenhuma, por agora — ver "Por testar com a chave real" em "Estado" e
-"A confirmar" em "Custo", abaixo.
+Nenhuma sobre o funcionamento (ver "Estado": esquema da API já confirmado
+com pedidos reais). Falta só confirmar o valor exato dos créditos por
+minuto — "A confirmar" em "Custo", abaixo.
 
 ## Custo (créditos ElevenLabs)
 
@@ -138,10 +143,13 @@ gastar créditos a sério:
 - O plano Creator do cupão da JunctionX dá **131 000 créditos/mês**. A este
   preço, 55 créditos por teste é menos de 0,05% do orçamento mensal — dá para
   mais de 2000 testes de 10 segundos.
-- **A confirmar:** estes números vêm de agregadores de preços, não da página
-  oficial da ElevenLabs (não consultável deste ambiente). Confirmar em
-  [elevenlabs.io/pricing](https://elevenlabs.io/pricing) antes de assumir
-  este valor para áudios mais longos.
+- **A confirmar:** estes números vêm de agregadores de preços, não da
+  página oficial da ElevenLabs. A rede deste ambiente já permite
+  `elevenlabs.io/pricing` (não permitia antes), mas a página carrega os
+  valores concretos por JavaScript depois de carregar — o HTML estático
+  não os tem, só as strings fixas da calculadora de preços. Confirmar os
+  valores na própria página, no browser, antes de assumir este valor para
+  áudios mais longos.
 
 ## Fora de alcance (por agora)
 

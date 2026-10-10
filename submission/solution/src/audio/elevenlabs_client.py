@@ -6,11 +6,11 @@ dependência só para um único pedido. A chave vem de
 ``ELEVENLABS_API_KEY`` (variável de ambiente, nunca no repositório, como
 ``GEMINI_API_KEY`` em ``DEVELOPMENT.md``).
 
-**Por testar com a chave real.** Não foi possível alcançar
-``api.elevenlabs.io`` desde o ambiente onde isto foi escrito (rede
-bloqueada), por isso nem o endereço, nem ``MODEL_ID``, nem os nomes dos
-parâmetros do pedido foram confirmados contra um pedido real. Ver a nota
-em ``transcriber.py``.
+**Confirmado contra a API real** (depois de a rede deste ambiente passar
+a permitir ``api.elevenlabs.io``): o endereço, ``MODEL_ID`` e os
+parâmetros do pedido (``model_id``, ``timestamps_granularity=word``,
+ficheiro) devolvem 200 e uma resposta no esquema que ``transcriber.py``
+espera. Ver a nota lá, com um exemplo real.
 """
 
 import os
@@ -18,7 +18,7 @@ import os
 import httpx
 
 API_URL = "https://api.elevenlabs.io/v1/speech-to-text"
-MODEL_ID = "scribe_v2"  # por confirmar: nome exato do modelo
+MODEL_ID = "scribe_v2"
 DEFAULT_TIMEOUT = 60
 
 

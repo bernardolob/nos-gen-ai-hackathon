@@ -9,13 +9,21 @@ precisa para voltar a encontrar o tempo de cada palavra ocultada.
 de ``detection.detect(lines, generate)``): aqui testa-se com um cliente
 falso, sem rede nem chave.
 
-**Por confirmar com a chave real:** o esquema de resposta abaixo (uma
-lista ``words``, cada palavra com ``text``, ``start``, ``end`` e ``type``,
-em que ``type`` pode ser ``"word"``, ``"spacing"`` ou ``"audio_event"``)
-vem de exemplos de terceiros, não foi possível consultar a referência
-oficial da API desde este ambiente (rede bloqueada para
-``elevenlabs.io``/``api.elevenlabs.io``). Confirmar antes de depender
-disto com áudio real.
+**Esquema confirmado com a API real** (``POST /v1/speech-to-text``,
+``model_id=scribe_v2``, ``timestamps_granularity=word``): uma lista
+``words``, cada palavra com ``text``, ``start``, ``end`` e ``type``.
+Exemplo real, com os três valores de ``type`` observados::
+
+    {"words": [
+        {"text": "Pew", "start": 0.04, "end": 0.14, "type": "word"},
+        {"text": " ", "start": 0.14, "end": 0.2, "type": "spacing"},
+        {"text": "[making noises]", "start": 0.74, "end": 2.78,
+         "type": "audio_event"}
+    ]}
+
+``type == "spacing"`` é o espaço entre palavras (ignorado aqui: as linhas
+juntam as palavras com um espaço simples); ``type == "audio_event"`` é som
+não falado (ignorado: não é uma palavra a mascarar).
 """
 
 import unicodedata
