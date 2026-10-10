@@ -38,7 +38,10 @@ Regra do enunciado: um `*` por cada palavra anonimizada. Concretizamos assim
 - a vírgula, o ponto e vírgula e a barra também separam, mesmo sem espaço
   (`João,Ana` dá `*,*`), exceto entre dois dígitos (`1,68m`, `12/03/1978`);
 - a pontuação nas pontas mantém-se (`Santos,` dá `*,`);
-- o hífen e os endereços web não separam;
+- uma data com o mês escrito (`12/mar/1978`) e um endereço web são uma só
+  palavra;
+- um hífen entre duas palavras liga-as (`Ana-Maria` é uma só), e um valor não
+  se propaga para dentro de um nome composto;
 - um símbolo isolado (`-`) não é uma palavra.
 
 - **Porquê:** `João,Ana` e `João, Ana` são o mesmo conteúdo e devem dar o
@@ -158,25 +161,31 @@ mascaramento oculta-a também (`*: * *`), o que conta como mascarar a mais.
   que só tira a etiqueta quando o texto começa no início da linha e tem a
   forma `<etiqueta>: <valor>`.
 
+### 13. Uma só definição de "palavra", em `src/words.py`
+
+O mascaramento e a verificação tinham cada um a sua cópia da regra de o que é
+uma palavra. Estavam de acordo, mas qualquer mudança numa tinha de ser
+repetida à mão na outra, e ao mudar a regra das datas a verificação passava a
+marcar como erro o que o mascaramento fez bem.
+
+- **Decisão:** a regra vive num só módulo (`mask_word`, `mask_token`,
+  `whole_word_pattern`), que os dois usam. Há um teste que garante que o que o
+  mascaramento produz passa sempre na verificação.
+- **Porquê agora:** a correção das datas com o mês escrito e dos nomes
+  compostos tocava na regra, e fazê-lo em duas cópias seria repetir o erro.
+
 ## Decisões em aberto
 
-1. **Uma só definição de "palavra" para o mascaramento e a verificação.**
-   `verification.py` entrou com a sua própria cópia da regra atualizada
-   (já não discorda do mascaramento em palavras coladas como `João,Ana`),
-   em vez do módulo partilhado proposto (`src/words.py`), para não editar
-   `masking.py` fora do seu branch. A duplicação fica registada como
-   dívida técnica: continua a ser a correção ideal, para a regra não poder
-   divergir outra vez sem ninguém notar.
-2. **Normalização Unicode.** Se o Gemini devolver `ç` decomposto (NFD), o
+1. **Normalização Unicode.** Se o Gemini devolver `ç` decomposto (NFD), o
    item não é encontrado. Normalizar para NFC na extração e na deteção.
-3. **Revisão manual.** Está prevista (os itens `incerto` iriam a um humano
+2. **Revisão manual.** Está prevista (os itens `incerto` iriam a um humano
    antes do mascaramento) mas não implementada. É um requisito opcional do
    enunciado.
-4. **Etiquetas incluídas no valor.** Medir com o Gemini quantas vezes
+3. **Etiquetas incluídas no valor.** Medir com o Gemini quantas vezes
    acontece, mesmo com o exemplo na prompt (decisão 12). Só então decidir se
    a salvaguarda no código vale a pena.
-5. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
+4. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
    Ver o fim de [taxonomy.md](taxonomy.md).
-6. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
+5. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
    sanitizados e a API opcional serão acrescentadas quando o branch
    `feature/api` entrar na `main`.
