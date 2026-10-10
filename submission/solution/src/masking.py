@@ -34,8 +34,10 @@ import re
 import unicodedata
 
 from words import (
+    EDGE_PUNCTUATION,
     expand_compound,
     has_letters,
+    is_word_char,
     mask_token,
     whole_word_pattern,
 )
@@ -229,9 +231,45 @@ def _cover(line, start, text):
     são uma só e mascaram-se por inteiro. Um número cobre só o que é.
     """
     end = start + len(text)
+    if not _is_whole_word(line, start, end):
+        return start, end
+    start, end = _extend_to_word(line, start, end)
     if has_letters(text):
         return expand_compound(line, start, end)
     return start, end
+
+
+def _is_whole_word(line, start, end):
+    """Diz se não há letras, dígitos ou ``_`` colados ao intervalo."""
+    return not (
+        (start > 0 and re.match(r"\w", line[start - 1]))
+        or (end < len(line) and re.match(r"\w", line[end]))
+    )
+
+
+def _extend_to_word(line, start, end):
+    """Alarga o intervalo aos símbolos colados: ``@ana`` e ``Ana's``.
+
+    A palavra é tudo o que está entre espaços, tal como ``€62.500``; só os
+    separadores ``, ; /`` a cortam. A pontuação das pontas mantém-se depois,
+    em ``mask_word``: um sinal de pontuação só entra se tiver uma letra ou um
+    dígito do outro lado (``Ana's``), não em ``(Ana)`` nem em ``Filhos:(Ana``.
+    """
+    while start > 0 and _crosses(line, start - 1, start - 2):
+        start -= 1
+    while end < len(line) and _crosses(line, end, end + 1):
+        end += 1
+    return start, end
+
+
+def _crosses(line, index, beyond):
+    """Diz se o extremo da palavra pode avançar para ``line[index]``."""
+    char = line[index]
+    if char.isspace() or char in ",;/":
+        return False
+    if char not in EDGE_PUNCTUATION:
+        return True
+    return 0 <= beyond < len(line) and is_word_char(line[beyond])
 
 
 def _add_other_occurrences(lines, text, spans):

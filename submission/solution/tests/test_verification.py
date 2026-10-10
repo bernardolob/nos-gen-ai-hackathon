@@ -113,6 +113,25 @@ class JoinedWordsTest(unittest.TestCase):
         self.assertEqual(issues[0]["type"], "unexpected_word_change")
 
 
+class PartlyMaskedGluedWordsTest(unittest.TestCase):
+    def check(self, original, masked):
+        return verification.compare_lines([original], [masked])
+
+    def test_only_one_of_the_glued_words_masked(self):
+        self.assertEqual(self.check("Rui,Ana", "Rui,*"), [])
+        self.assertEqual(self.check("Rui;Ana;Rita", "*;Ana;*"), [])
+        self.assertEqual(self.check("Rui/Ana", "*/Ana"), [])
+
+    def test_a_part_changed_in_any_other_way_is_still_an_issue(self):
+        self.assertEqual(len(self.check("Rui,Ana", "Ru*,*")), 1)
+        self.assertEqual(len(self.check("Rui,Ana", "Rui;*")), 1)
+        self.assertEqual(len(self.check("Rui,Ana", "*")), 1)
+
+    def test_numbers_and_web_addresses_are_not_split(self):
+        self.assertEqual(len(self.check("1,68m", "1,*")), 1)
+        self.assertEqual(len(self.check("https://x.pt/a", "https://*")), 1)
+
+
 class CompareFilesTest(unittest.TestCase):
     def test_reads_and_compares_files(self):
         with tempfile.TemporaryDirectory() as tmp:

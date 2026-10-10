@@ -444,9 +444,11 @@ class CompoundNameTest(unittest.TestCase):
         out, _ = mask(["Ana - Maria", "- Ana"], [{"line": 1, "text": "Ana"}])
         self.assertEqual(out, ["* - Maria", "- *"])
 
-    def test_a_trailing_or_leading_hyphen_does_not_expand(self):
+    def test_a_trailing_or_leading_hyphen_is_part_of_the_word(self):
+        """``Ana-`` é uma palavra: mascara-se por inteiro, como a verificação
+        espera."""
         out, _ = mask(["Ana- e -Ana"], [{"line": 1, "text": "Ana"}])
-        self.assertEqual(out, ["*- e -*"])
+        self.assertEqual(out, ["* e *"])
 
     def test_numbers_are_not_propagated_into_dates(self):
         lines = ["Idade: 1234", "Data: 1234-05-06"]
@@ -503,6 +505,29 @@ class PropagationTest(unittest.TestCase):
             [{"line": 1, "text": "Li"}],
         )
         self.assertEqual(out, ["Filho: *", "Falou com o * ontem."])
+
+
+class GluedSymbolTest(unittest.TestCase):
+    """Um símbolo colado à palavra faz parte dela: ``@ana`` é uma palavra."""
+
+    def test_a_value_inside_a_handle_or_possessive_masks_the_word(self):
+        out, _ = mask(
+            ["Nome: Ana", "@Ana e #Ana e Ana's e «Ana»"],
+            [{"line": 1, "text": "Ana"}],
+        )
+        self.assertEqual(out, ["Nome: *", "* e * e * e «*»"])
+
+    def test_the_stated_occurrence_is_extended_too(self):
+        out, _ = mask(["Perfil: @ana"], [{"line": 1, "text": "ana"}])
+        self.assertEqual(out, ["Perfil: *"])
+
+    def test_a_fragment_of_a_word_is_still_only_the_fragment(self):
+        out, _ = mask(["ID12345"], [{"line": 1, "text": "12345"}])
+        self.assertEqual(out, ["ID*"])
+
+    def test_list_separators_still_split(self):
+        out, _ = mask(["Rui,Ana"], [{"line": 1, "text": "Ana"}])
+        self.assertEqual(out, ["Rui,*"])
 
 
 class OrganisationNameTest(unittest.TestCase):

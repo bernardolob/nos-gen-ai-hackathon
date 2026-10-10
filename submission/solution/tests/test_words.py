@@ -24,6 +24,11 @@ class MaskWordTest(unittest.TestCase):
         self.assertEqual(words.mask_word("(João,"), "(*,")
         self.assertEqual(words.mask_word("Mendes."), "*.")
 
+    def test_typographic_quotes_and_ellipsis_are_kept(self):
+        self.assertEqual(words.mask_word("«Rui»"), "«*»")
+        self.assertEqual(words.mask_word("“Ana”,"), "“*”,")
+        self.assertEqual(words.mask_word("Rui…"), "*…")
+
     def test_symbols_are_part_of_the_word(self):
         self.assertEqual(words.mask_word("+351"), "*")
         self.assertEqual(words.mask_word("€62.500"), "*")
