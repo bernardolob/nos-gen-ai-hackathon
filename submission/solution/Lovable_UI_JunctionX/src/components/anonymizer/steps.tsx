@@ -5,11 +5,16 @@ import {
   FileText,
   Loader2,
   LockKeyhole,
+  Music,
   Plus,
   Upload,
 } from "lucide-react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { ACCEPT_AUDIO, ACCEPT_DOCUMENTS, isAudioFile } from "@/lib/review/api";
 
 /* ---------------- UploadStep ---------------- */
 
@@ -20,7 +25,9 @@ export function UploadStep({
   loading,
   status,
   error,
+  errorTitle,
   onRetry,
+  audioEnabled = false,
 }: {
   file: File | null;
   onFile: (f: File | null) => void;
@@ -28,14 +35,28 @@ export function UploadStep({
   loading: boolean;
   status: string;
   error: string | null;
+  errorTitle?: string;
   onRetry: () => void;
+  audioEnabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [prevFile, setPrevFile] = useState<File | null>(file);
+
+  if (file !== prevFile) {
+    setPrevFile(file);
+    setConfirmed(false);
+  }
 
   const accept = (f: File | undefined) => {
-    if (f) onFile(f);
+    if (f) {
+      onFile(f);
+    }
   };
+
+  const isAudio = Boolean(file && isAudioFile(file));
+  const canAnalyze = Boolean(file && (!isAudio || (audioEnabled && confirmed)));
 
   if (loading) {
     return (
@@ -50,10 +71,11 @@ export function UploadStep({
   }
 
   if (error) {
+    const title = errorTitle ?? (file ? "The document could not be analyzed" : "Could not load the current review");
     return (
       <div className="flex flex-col items-center gap-4 rounded-lg border border-destructive/40 bg-card p-16 text-center">
         <AlertTriangle className="h-10 w-10 text-destructive" aria-hidden />
-        <p className="text-lg font-medium text-foreground">The document could not be analyzed</p>
+        <p className="text-lg font-medium text-foreground">{title}</p>
         <p className="text-sm text-muted-foreground">{error}</p>
         <Button
           variant="ghost"
@@ -71,7 +93,7 @@ export function UploadStep({
       <section className="min-w-0">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h3 className="text-base font-bold text-foreground">Upload document</h3>
-          <span className="font-mono text-xs text-muted-foreground">PDF / TXT / MD</span>
+          <span className="font-mono text-xs text-muted-foreground">PDF / TXT / MD / AUDIO</span>
         </div>
         <div
           onDragOver={(e) => {
@@ -87,7 +109,11 @@ export function UploadStep({
           className={`flex min-h-[300px] flex-col items-center justify-center gap-5 rounded-lg border border-dashed px-5 py-10 text-center transition-colors ${dragOver ? "border-primary bg-accent" : "border-input bg-card"}`}
         >
           <div className="relative grid h-16 w-16 place-items-center rounded-lg border border-border bg-background text-primary">
-            <FileText className="h-7 w-7" strokeWidth={1.5} aria-hidden />
+            {isAudio ? (
+              <Music className="h-7 w-7" strokeWidth={1.5} aria-hidden />
+            ) : (
+              <FileText className="h-7 w-7" strokeWidth={1.5} aria-hidden />
+            )}
             <span className="absolute -bottom-2 -right-2 grid h-6 w-6 place-items-center rounded-full border-2 border-card bg-primary text-primary-foreground">
               <Plus className="h-3 w-3" aria-hidden />
             </span>
@@ -98,19 +124,27 @@ export function UploadStep({
               <p className="mt-1 text-xs text-muted-foreground">
                 {(file.size / 1024).toFixed(1)} KB · Ready to analyze
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                10 MB documents, 25 MB audio
+              </p>
             </div>
           ) : (
             <div>
               <p className="text-base font-semibold text-foreground">
                 Drag and drop your document here
               </p>
-              <p className="mt-2 text-sm text-muted-foreground">PDF, text or Markdown</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                PDF, text, Markdown or audio (mp3, m4a, wav)
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                10 MB documents, 25 MB audio
+              </p>
             </div>
           )}
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.txt,.md"
+            accept={`${ACCEPT_DOCUMENTS},${ACCEPT_AUDIO}`}
             className="sr-only"
             onChange={(e) => accept(e.target.files?.[0])}
           />
@@ -119,13 +153,45 @@ export function UploadStep({
             {file ? "Choose another file" : "Choose file"}
           </Button>
         </div>
+
+        {isAudio && (
+          <div className="mt-4 space-y-3">
+            <Alert className="border-border bg-card">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-xs sm:text-sm text-foreground">
+                The original audio, still containing the sensitive data, is sent to a third-party service (ElevenLabs) to be transcribed before it is censored. Only upload audio that is fictional or that you are allowed to process.
+              </AlertDescription>
+            </Alert>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="audio-privacy-consent"
+                checked={confirmed}
+                onCheckedChange={(checked) => setConfirmed(checked === true)}
+              />
+              <Label
+                htmlFor="audio-privacy-consent"
+                className="cursor-pointer text-sm font-medium leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                I understand
+              </Label>
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             <LockKeyhole className="h-3.5 w-3.5" aria-hidden /> Personal and sensitive data · GDPR
           </span>
-          <Button onClick={onAnalyze} disabled={!file} className="h-11 px-5">
-            Analyze document <ArrowRight aria-hidden />
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            {isAudio && !audioEnabled && (
+              <span className="text-sm font-medium text-destructive">
+                Audio censoring is not available on this server.
+              </span>
+            )}
+            <Button onClick={onAnalyze} disabled={!canAnalyze} className="h-11 px-5">
+              Analyze document <ArrowRight aria-hidden />
+            </Button>
+          </div>
         </div>
       </section>
       <aside className="min-w-0 border-t border-border pt-6 lg:border-t-0 lg:pt-0">

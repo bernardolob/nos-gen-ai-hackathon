@@ -128,7 +128,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {isMockMode && (
-        <aside aria-label="Demo mode notice" className="sticky top-0 z-50 w-full border-b border-border bg-muted/40 px-4 py-2">
+        <aside aria-label="Demo mode notice" className="w-full border-b border-border bg-muted/40 px-4 py-2">
           <Alert className="mx-auto max-w-5xl border-border bg-background py-2 text-center">
             <AlertDescription className="text-xs sm:text-sm font-medium text-foreground">
               Demo mode: no document is processed and the data is fake. Set VITE_API_URL to connect to the real backend.

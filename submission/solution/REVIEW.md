@@ -101,9 +101,16 @@ interface está **em inglês** (decisão da equipa).
 - **Modo demonstração.** Sem `VITE_API_URL` a UI usa dados falsos e mostra um
   aviso fixo no topo. Para ligar ao backend: `cp .env.example .env`
   (`VITE_API_URL=http://127.0.0.1:8000`).
-- **Estado da UI do áudio.** O backend já tem a rota; a **UI de áudio ainda
-  não existe** (a UI só envia texto e PDF). O que lhe falta está no
-  [AUDIO.md](AUDIO.md).
+- **A UI do áudio.** Aceita mp3, m4a e wav no mesmo envio dos documentos e,
+  antes de enviar um áudio, mostra o **aviso de privacidade** (o áudio
+  original vai para o ElevenLabs) e exige marcar "I understand". Se o
+  servidor não tem o áudio ligado (`audio_enabled` falso) bloqueia o envio e
+  di-lo. Na revisão mostra o leitor com a versão censurada, a transcrição
+  mascarada, "Replaced stretches" (`audio_ranges`), "Download audio" e o
+  histórico (que guarda só o texto, "Transcript"). O contrato está em
+  `src/lib/review/` (`uploadAudio`, `uploadFile`, `censoredAudioUrl`, os 4
+  campos novos do estado e os dados de demonstração); a UI de áudio tem
+  testes próprios (`src/test/audio-ui.test.tsx`).
 - O trabalho do Lovable vem pelo branch `lovable/ui`, nunca diretamente para
   a `main`, e revê-se o diff antes de juntar.
 - Gestor de pacotes: a UI traz `bun.lock`; `npm install` funciona, mas não se
@@ -131,7 +138,12 @@ O arranque diz se o Gemini e o áudio estão ligados.
 - Rota de áudio: `tests/test_audio_route.py`, com a transcrição, o modelo e o
   `ffmpeg` falsos (26 testes). Um teste usa o `ffmpeg` a sério e só corre se
   ele estiver instalado.
-- UI: `npx tsc --noEmit`, `npx vitest run` e `npm run build`, na pasta da UI.
+- UI: `npx tsc --noEmit`, `npx vitest run` (24 testes: o contrato do áudio
+  e os componentes de áudio) e `npm run build`, na pasta da UI.
+- **Contrato backend-UI:** `tests/test_ui_contract.py` (7 testes) lê os tipos
+  e as chamadas em `src/lib/review/` e confirma que os campos do estado, do
+  histórico, as rotas chamadas, os tipos de áudio e os limites coincidem com
+  o backend. Se um lado mudar sem o outro, falha aqui.
 
 ## Verificado e não verificado
 
@@ -148,5 +160,7 @@ Não verificado:
 - A rota de áudio com o **ElevenLabs real** (não há chave). O pipeline de
   linha de comandos foi verificado pela equipa que o fez (ver
   [AUDIO.md](AUDIO.md)).
-- Nenhuma UI de áudio.
+- A **UI de áudio** só foi vista em modo demonstração (com um áudio silencioso
+  falso) e contra um backend sem a chave (a UI bloqueia o envio e di-lo).
+  Nunca com áudio real de ponta a ponta.
 - Só uma sessão de cada vez: dois separadores partilham o mesmo documento.

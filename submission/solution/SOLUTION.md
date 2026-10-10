@@ -186,8 +186,11 @@ O backend da revisão manual tem também a **rota de áudio** (`POST
 /api/audio` e `GET /api/audio/current`, ver [REVIEW.md](REVIEW.md)): envia-se
 um áudio, ouve-se a versão censurada e rejeita-se com observações, como no
 texto, sem voltar a enviar o áudio ao ElevenLabs. Testada com a transcrição e
-a censura falsas; **a UI de áudio ainda não existe**. Nota de privacidade: o
-áudio original, ainda com os dados sensíveis, vai para o ElevenLabs.
+a censura falsas e com o `ffmpeg` real. A **UI de áudio** existe (envio com
+aviso de privacidade, leitor, rejeição e histórico) e foi vista em modo
+demonstração; nunca correu com áudio real de ponta a ponta. Nota de
+privacidade: o áudio original, ainda com os dados sensíveis, vai para o
+ElevenLabs.
 Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
 
 ## Como a solução responde aos critérios
