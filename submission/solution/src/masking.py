@@ -71,34 +71,71 @@ def _warning(item, problem):
 
 
 def _locate(lines, item):
-    """Procura o item e devolve ``(índice_da_linha, posição)`` ou None."""
+    """Procura o item e devolve ``(índice_da_linha, posição)`` ou None.
+
+    Uma palavra inteira ganha sempre a um pedaço de outra palavra (``Ana`` é
+    a palavra em ``Anabela e Ana``, não o início de ``Anabela``) e uma linha
+    mais perto da indicada ganha a uma mais longe. Só se o valor não existir
+    como palavra inteira em lado nenhum é que se aceita um pedaço de palavra,
+    para o valor ficar protegido (``12345`` em ``ID12345``).
+    """
     text = item["text"]
-    number = item.get("line")
-    near = []
-    if isinstance(number, int) and 1 <= number <= len(lines):
-        index = number - 1
-        start = _find(lines[index], text, item.get("occurrence"))
-        if start is not None:
-            return index, start
-        near = [index - 1, index + 1]
-    for index in near + list(range(len(lines))):
-        if 0 <= index < len(lines):
-            start = _find(lines[index], text, 1)
+    order = _search_order(len(lines), item.get("line"))
+    has_line = _is_line_number(item.get("line"), len(lines))
+    stated = order[0] if has_line else None
+    for whole_word in (True, False):
+        for index in order:
+            occurrence = item.get("occurrence") if index == stated else 1
+            start = _find(lines[index], text, occurrence, whole_word)
             if start is not None:
                 return index, start
     return None
 
 
-def _find(line, text, occurrence):
-    """Posição da n-ésima ocorrência de ``text`` na linha, ou None."""
-    if not isinstance(occurrence, int) or occurrence < 1:
+def _is_line_number(number, line_count):
+    """Diz se ``number`` é um número de linha válido (a contar de 1)."""
+    return isinstance(number, int) and 1 <= number <= line_count
+
+
+def _search_order(line_count, number):
+    """Índices das linhas pela ordem de procura.
+
+    A linha indicada, as vizinhas e depois as restantes, por ordem. Sem uma
+    linha válida, o documento todo por ordem.
+    """
+    if not _is_line_number(number, line_count):
+        return list(range(line_count))
+    stated = number - 1
+    near = [i for i in (stated - 1, stated + 1) if 0 <= i < line_count]
+    rest = [i for i in range(line_count) if i != stated and i not in near]
+    return [stated] + near + rest
+
+
+def _find(line, text, occurrence, whole_word):
+    """Posição da n-ésima ocorrência de ``text`` na linha, ou None.
+
+    Com ``whole_word`` só contam as ocorrências que são palavras inteiras.
+    Se pedirem uma ocorrência que não existe, usa-se a primeira.
+    """
+    starts = _starts(line, text, whole_word)
+    if not starts:
+        return None
+    if not isinstance(occurrence, int) or not 1 <= occurrence <= len(starts):
         occurrence = 1
-    start = -1
-    for _ in range(occurrence):
+    return starts[occurrence - 1]
+
+
+def _starts(line, text, whole_word):
+    """Posições onde ``text`` aparece na linha."""
+    if whole_word:
+        pattern = re.compile(r"(?<!\w)" + re.escape(text) + r"(?!\w)")
+        return [match.start() for match in pattern.finditer(line)]
+    starts = []
+    start = line.find(text)
+    while start != -1:
+        starts.append(start)
         start = line.find(text, start + 1)
-        if start == -1:
-            return None
-    return start
+    return starts
 
 
 def _should_propagate(text):
