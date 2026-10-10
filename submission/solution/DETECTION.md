@@ -46,6 +46,35 @@ Mascara também as datas.
 </user_instructions>
 ```
 
+## Prompt do utilizador
+
+É o texto livre em que o utilizador diz **diretamente o que quer mascarar**,
+ao contrário da prompt interna (as nossas regras). Dá-se por
+`--instructions "..."` ou `--instructions-file ficheiro.txt` (UTF-8), nunca
+as duas. Exemplos:
+
+- `Mascara também o nome do centro médico e as datas do relatório.`
+- `Neste documento, "Orion" é o nome de um doente.`
+- `Trata as referências internas (ADM-...) como identificadores.`
+
+Regras:
+
+- **Só acrescentam.** A prompt interna diz ao modelo que as instruções não
+  podem mandar ignorar as regras, deixar de marcar uma categoria nem mudar o
+  formato da resposta. Pedir para **não** mascarar algo não tem efeito.
+- **Dependem do modelo.** Não há garantia de que o Gemini as cumpra à letra;
+  o relatório mostra o que foi mascarado e a origem.
+- **Máximo de 2000 caracteres** (`pipeline.MAX_INSTRUCTIONS`); mais do que
+  isso é recusado antes de qualquer envio, sem repetir o texto.
+- **Não fecham o bloco.** `</user_instructions>` ou `<document>` escritos nas
+  instruções (ou `</document>` no documento) ficam com um espaço
+  (`< /document>`), para não trocarem o papel de cada bloco.
+- **Gastam o orçamento do gateway.** O Worker aceita 10 000 caracteres no
+  total e a prompt interna mais o documento do desafio já usam cerca de
+  9 500: ali cabem só umas 500 letras de instruções. Se o pedido passar do
+  limite, o gateway recusa-o antes de enviar e diz quantos caracteres tem.
+  Subir `MAX_PROMPT_LENGTH` no `wrangler.jsonc` resolve.
+
 ## O que valida na resposta
 
 A resposta tem de ser uma lista JSON. Tolera um bloco de código à volta e
