@@ -15,14 +15,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class RejectedVersion(BaseModel):
     attempt: int
     text: str
     reason: str
 
+
 # In-memory storage for the session
 history: List[RejectedVersion] = []
 current_attempt = 1
+
 
 def get_masked_text(attempt_num: int) -> str:
     """
@@ -35,13 +38,15 @@ Date of Birth: */*/*
 NIF: *
 Medical History: The patient * * attended the consultation..."""
 
+
 @app.get("/api/current")
 def get_current():
     return {
         "attempt": current_attempt,
         "text": get_masked_text(current_attempt),
-        "history": history
+        "history": history,
     }
+
 
 @app.post("/api/reject")
 def reject_version(version: RejectedVersion):
@@ -51,12 +56,14 @@ def reject_version(version: RejectedVersion):
     return {
         "attempt": current_attempt,
         "text": get_masked_text(current_attempt),
-        "history": history
+        "history": history,
     }
+
 
 @app.post("/api/approve")
 def approve_version():
     return {"status": "approved"}
+
 
 if __name__ == "__main__":
     print("Starting API server on http://localhost:8000")
