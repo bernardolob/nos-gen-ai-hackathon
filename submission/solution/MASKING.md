@@ -101,6 +101,13 @@ primeira ronda quando as há (`7` na linha `7 e 70 e 7`, com `occurrence` 2, é
 o último `7`, não o de `70`). Se pedirem uma ocorrência que não existe, usa-se
 a primeira.
 
+Se não encontra o valor tal como está, tenta ainda:
+
+- **sem acentos:** `Conceicao` encontra `Conceição` (o Gemini às vezes tira
+  os acentos). A palavra com os acentos certos ganha sempre à sem acentos;
+- **partido por uma mudança de linha:** `Rua das Flores` com `Rua das` no fim
+  de uma linha e `Flores` no início da seguinte mascara as duas partes.
+
 Se não o encontrar, não falha: devolve um **aviso** (`line`, `text`,
 `problem`) e deixa o texto como está. Os avisos vão para o relatório e para a
 verificação.
@@ -113,9 +120,15 @@ Depois de localizar um item, o módulo mascara também as **outras ocorrências*
 do mesmo valor no documento, se:
 
 - aparecem como **palavra inteira** (`Ana` não apanha `Anabela`);
-- o valor tem pelo menos **3 caracteres**, quando contém letras, ou pelo menos
+- o valor tem pelo menos **2 caracteres**, quando contém letras, ou pelo menos
   **4**, quando só tem dígitos. Assim um `2` isolado não mascara outros `2`
-  sem relação.
+  sem relação;
+- **não é uma palavra isolada a seguir a `Centro`, `Hospital`, `Clínica`,
+  `Instituto`, `Universidade`...** (até 3 palavras antes). `Lisboa` marcada na
+  morada não mascara o título `Centro Médico Lisboa`. Fica um aviso por cada
+  ocorrência deixada de fora, para a revisão humana a ver. Os valores com
+  várias palavras ou números propagam-se sempre, e a ocorrência indicada pelo
+  modelo é sempre mascarada.
 
 Para valores curtos só com números, usa-se `occurrence` para escolher qual.
 
@@ -158,10 +171,11 @@ mascarada uma vez.
   não ficou mascarada por completo. É um aviso útil: o modelo devolveu um
   valor que não é uma palavra do documento. O mesmo acontece com um valor
   propagado para dentro de uma palavra ligada por símbolos (`€:Ana`).
-- **O texto do item tem de coincidir letra a letra com o do documento.** Se o
-  Gemini devolver o mesmo texto com os acentos decompostos (Unicode NFD), o
-  item não é encontrado e gera um aviso. Convém normalizar para NFC na
-  extração e na deteção.
+- **Só se tiram acentos às letras latinas.** Um valor com outro tipo de
+  diferença (uma letra trocada) não é encontrado e gera aviso.
+- **A lista de palavras de instituição é curta** (`ORGANISATION_WORDS` em
+  `masking.py`, português e inglês). Uma instituição sem uma dessas palavras
+  (`Lusíadas Lisboa`) ainda propaga o valor.
 - **Só os meses conhecidos tornam uma data numa palavra.** `12/mar/1978` dá um
   só `*`, mas uma abreviatura que não esteja na lista (`12/sep./1978` está,
   `12/mrç/1978` não) continua a dar três.

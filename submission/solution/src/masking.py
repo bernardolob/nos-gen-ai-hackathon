@@ -15,20 +15,23 @@ Regras:
   ``*``). O hífen não separa, e os endereços web e as datas com o mês
   escrito (``12/mar/1978``) são uma só palavra. A definição está em
   ``words.py``, partilhada com a verificação.
+- O valor escrito sem acentos (``Conceicao``) encontra ``Conceição``.
 - Os espaços e a estrutura das linhas não mudam.
 - Cada item é procurado primeiro como palavra inteira, na sua linha, nas
   linhas vizinhas e depois no documento todo; só sem nenhuma palavra inteira
   se aceita um pedaço de palavra. Se não for encontrado, gera um aviso.
 - Os valores são também mascarados nas outras ocorrências, quando aparecem
   como palavra inteira (``Ana`` dentro de ``Ana-Maria`` mascara o nome
-  composto todo): os
-  que têm letras com pelo menos ``MIN_PROPAGATION_LETTERS`` caracteres e os
-  só com números com pelo menos ``MIN_PROPAGATION_LENGTH``.
+  composto todo): os que têm letras com pelo menos
+  ``MIN_PROPAGATION_LETTERS`` caracteres e os só com números com pelo menos
+  ``MIN_PROPAGATION_LENGTH``. Uma palavra isolada não se propaga depois de
+  ``Centro``, ``Hospital``... (``Centro Médico Lisboa``): fica um aviso.
 - Um símbolo isolado, sem letras nem números (como ``-``), não é uma palavra
   e mantém-se.
 """
 
 import re
+import unicodedata
 
 from words import (
     expand_compound,
@@ -38,7 +41,18 @@ from words import (
 )
 
 MIN_PROPAGATION_LENGTH = 4
-MIN_PROPAGATION_LETTERS = 3
+MIN_PROPAGATION_LETTERS = 2
+# Palavras que, antes de um valor isolado, indicam o nome de uma instituição
+# (``Centro Médico Lisboa``): aí o valor não se propaga.
+ORGANISATION_WORDS = frozenset({
+    "centro", "hospital", "clínica", "clinica", "instituto", "universidade",
+    "faculdade", "escola", "farmácia", "farmacia", "laboratório",
+    "laboratorio", "câmara", "camara", "junta", "ministério", "ministerio",
+    "fundação", "fundacao", "associação", "associacao", "misericórdia",
+    "misericordia", "centre", "clinic", "university", "institute", "school",
+    "pharmacy", "laboratory", "foundation", "association",
+})
+CONTEXT_WORDS = 3
 
 
 def mask_lines(lines, items):
@@ -56,12 +70,22 @@ def mask_lines(lines, items):
             continue
         found = _locate(lines, item)
         if found is None:
+            across = _locate_across_lines(lines, item)
+            if across is not None:
+                for index, start, end in across:
+                    spans[index].append((start, end))
+                continue
             warnings.append(_warning(item, "não encontrado no documento"))
             continue
         index, start = found
+        text = lines[index][start:start + len(text)]
         spans[index].append(_cover(lines[index], start, text))
         if _should_propagate(text):
-            _add_other_occurrences(lines, text, spans)
+            for skipped in _add_other_occurrences(lines, text, spans):
+                warnings.append(_warning(
+                    {"line": skipped + 1, "text": text},
+                    "não propagado: parece fazer parte do nome de uma "
+                    "instituição"))
     masked = [_apply(line, spans[i]) for i, line in enumerate(lines)]
     return masked, warnings
 
@@ -84,6 +108,27 @@ def _locate(lines, item):
     como palavra inteira em lado nenhum é que se aceita um pedaço de palavra,
     para o valor ficar protegido (``12345`` em ``ID12345``).
     """
+    found = _locate_exact(lines, item)
+    if found is not None:
+        return found
+    # O modelo escreveu o valor sem acentos (ou com outros): o texto
+    # sem acentos tem o mesmo comprimento, por isso as posições servem.
+    folded = [_fold(line) for line in lines]
+    return _locate_exact(folded, dict(item, text=_fold(item["text"])))
+
+
+def _fold(text):
+    """Tira os acentos letra a letra, mantendo o comprimento do texto."""
+    out = []
+    for char in unicodedata.normalize("NFC", text):
+        plain = unicodedata.normalize("NFKD", char)[:1]
+        out.append(plain if len(unicodedata.normalize("NFKD", char)) > 1
+                   and plain.isalpha() else char)
+    return "".join(out)
+
+
+def _locate_exact(lines, item):
+    """Procura o texto tal como está, sem alterar acentos."""
     text = item["text"]
     order = _search_order(len(lines), item.get("line"))
     has_line = _is_line_number(item.get("line"), len(lines))
@@ -94,6 +139,27 @@ def _locate(lines, item):
             start = _find(lines[index], text, occurrence, whole_word)
             if start is not None:
                 return index, start
+    return None
+
+
+def _locate_across_lines(lines, item):
+    """Procura um valor partido por uma mudança de linha.
+
+    ``Rua das Flores`` com ``Rua das`` no fim de uma linha e ``Flores`` no
+    início da seguinte. Devolve ``[(linha, início, fim), ...]`` com o pedaço
+    de cada linha, ou None.
+    """
+    words = item["text"].split()
+    for first in _search_order(len(lines) - 1, item.get("line")):
+        for cut in range(1, len(words)):
+            head = " ".join(words[:cut])
+            tail = " ".join(words[cut:])
+            line, following = lines[first], lines[first + 1]
+            if (line.endswith(head) and following.startswith(tail)
+                    and whole_word_pattern(head).search(line[-len(head) - 1:])
+                    and not following[len(tail):][:1].isalnum()):
+                return [(first, len(line) - len(head), len(line)),
+                        (first + 1, 0, len(tail))]
     return None
 
 
@@ -169,11 +235,33 @@ def _cover(line, start, text):
 
 
 def _add_other_occurrences(lines, text, spans):
-    """Acrescenta as ocorrências de ``text`` como palavra inteira."""
+    """Acrescenta as ocorrências de ``text`` como palavra inteira.
+
+    Devolve os índices das linhas onde uma ocorrência ficou de fora por fazer
+    parte do nome de uma instituição.
+    """
     pattern = whole_word_pattern(text)
+    skipped = []
     for index, line in enumerate(lines):
         for match in pattern.finditer(line):
+            if _in_organisation_name(line, match.start(), text):
+                skipped.append(index)
+                continue
             spans[index].append(_cover(line, match.start(), text))
+    return skipped
+
+
+def _in_organisation_name(line, start, text):
+    """Diz se uma palavra isolada vem depois de ``Centro``, ``Hospital``...
+
+    Só vale para uma palavra com letras: ``Lisboa`` em ``Centro Médico
+    Lisboa`` não é a morada de ninguém. Os valores com várias palavras ou
+    números propagam-se sempre.
+    """
+    if not has_letters(text) or len(text.split()) > 1:
+        return False
+    before = re.findall(r"\w+", line[:start])[-CONTEXT_WORDS:]
+    return any(word.lower() in ORGANISATION_WORDS for word in before)
 
 
 def _merge(spans):
