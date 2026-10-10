@@ -3,7 +3,9 @@
 Sistema que deteta e oculta dados pessoais e sensíveis num documento
 (RGPD), trocando cada palavra sensível por `*`.
 
-Este README é incremental: vai crescendo com a arquitetura.
+Este documento é incremental: vai crescendo com a arquitetura. O
+`submission/README.md` é o guia de submissão da organização e não deve ser
+alterado.
 
 ## Ficheiros
 
@@ -12,7 +14,7 @@ Este README é incremental: vai crescendo com a arquitetura.
 | `taxonomy.md` | Taxonomia de dados sensíveis: categorias, exemplos do documento, o que não ocultar e decisões em aberto. |
 | `ARCHITECTURE.md` | Componentes núcleo, fluxo e estrutura de pastas. |
 | `MASKING.md` | Como o mascaramento trata cada caso (separadores, pontuação, números, endereços web). |
-| `internal_prompt.txt` | Prompt interna enviada ao Gemini (versão 2, com linhas numeradas; ainda por testar). |
+| `internal_prompt.txt` | Prompt interna enviada ao Gemini (versão 3, genérica para qualquer tipo de documento; ainda por testar). |
 
 ## Prompt interna
 
@@ -128,13 +130,14 @@ A fazer: instruções de execução, depois de existir o ponto de entrada.
 
 ## Estado
 
-- [x] Taxonomia (rascunho)
-- [x] Prompt interna (versão 2, por testar)
+- [x] Extração do PDF (`submission/src/pdf_extractor.py`)
+- [x] Taxonomia (versão 3, genérica)
+- [x] Prompt interna (versão 3, por testar)
 - [x] Regras de segurança (regex)
-- [x] Mascaramento (em revisão no branch `feature/masking`)
+- [x] Mascaramento
 - [x] Testes das regras de segurança e do mascaramento
 - [ ] Testar a prompt no documento real
-- [ ] Extração, deteção, verificação, relatório
+- [ ] Deteção, verificação, relatório
 - [ ] Avaliação própria
 
 ## Pontos em aberto

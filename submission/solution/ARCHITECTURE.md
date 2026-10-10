@@ -36,7 +36,7 @@ Avaliação própria: compara a saída com eval/ground_truth.txt
    repositório.
 4. **Regras de segurança.** Padrões fixos que apanham o que o modelo deixe
    passar. Também asseguram um mínimo se a API falhar.
-5. **Mascaramento.** Localiza cada item na sua linha (ver o README), troca
+5. **Mascaramento.** Localiza cada item na sua linha (ver `SOLUTION.md`), troca
    cada palavra por `*` mantendo a pontuação nas pontas, e mascara as outras
    ocorrências do mesmo valor. Os itens não encontrados geram avisos em vez
    de erros. Os números de linha nunca chegam ao documento final.
@@ -54,7 +54,7 @@ Avaliação própria: compara a saída com eval/ground_truth.txt
 
 ```
 submission/solution/
-  README.md
+  SOLUTION.md
   ARCHITECTURE.md
   taxonomy.md
   internal_prompt.txt
