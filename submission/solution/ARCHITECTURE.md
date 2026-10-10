@@ -145,6 +145,7 @@ submission/
       labels.py               deixa as etiquetas visíveis (itens do modelo)
       visibility.py           valores que o utilizador pediu para ficarem visíveis
       user_validation.py      backend da revisão manual (FastAPI)
+      mcp_server.py           servidor MCP só de leitura para o Lovable
       gemini/                 cliente direto do Gemini (alternativa)
     api/                      API HTTP opcional
     Lovable_UI_JunctionX/     UI da revisão manual (React)
