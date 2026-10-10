@@ -183,3 +183,37 @@ __pypackages__/
 # Pipfile.lock
 # poetry.lock
 # pdm.lock
+
+# ----------------------------------------
+# Frontend / UI Specific
+# ----------------------------------------
+# Logs
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+.output
+.vinxi
+.tanstack/**
+.nitro
+*.local
+
+# Wrangler / Cloudflare
+.dev.vars
+
+# Editor directories and files
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# A regra "lib/" acima ignorava o src/lib da UI, que os componentes importam.
+!submission/solution/Lovable_UI_JunctionX/src/lib/

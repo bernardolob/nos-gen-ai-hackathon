@@ -52,6 +52,7 @@ Gemini.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, contrato de dados e estrutura de pastas |
 | [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
+| [REVIEW.md](REVIEW.md) | Revisão manual: UI, backend e rejeição com observações |
 | [GATEWAY.md](GATEWAY.md) | Como o pipeline chama o Gemini pelo Worker Cloudflare |
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
