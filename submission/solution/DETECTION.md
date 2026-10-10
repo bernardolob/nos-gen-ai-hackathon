@@ -21,7 +21,7 @@ items, warnings = detection.detect(lines, generate)
 |---|---|
 | `lines` | Linhas do documento, em NFC |
 | `generate` | `generate(instrução_de_sistema, conteúdo) -> texto` |
-| `user_instructions` | Instruções opcionais do utilizador (só acrescentam regras) |
+| `user_instructions` | Instruções opcionais do utilizador (têm a palavra final sobre o que se mascara) |
 | `system_prompt` | Prompt a usar; por defeito a `internal_prompt.txt` |
 | `attempts` | Tentativas se a resposta não for utilizável (por defeito 2) |
 
@@ -59,9 +59,15 @@ as duas. Exemplos:
 
 Regras:
 
-- **Só acrescentam.** A prompt interna diz ao modelo que as instruções não
-  podem mandar ignorar as regras, deixar de marcar uma categoria nem mudar o
-  formato da resposta. Pedir para **não** mascarar algo não tem efeito.
+- **O utilizador tem a palavra final sobre o que se mascara.** Pode pedir
+  mais (`Mascara também o nome do centro`) ou menos (`Não mascares a
+  informação médica`); se pedir para não mascarar algo, o modelo não devolve
+  itens para isso. Se dois pedidos se contradizem, vale o mais recente. As
+  instruções nunca mudam o formato da resposta nem fazem do conteúdo do
+  documento instruções.
+- **As regras de segurança (regex) não passam pelo modelo.** Os
+  identificadores que apanham (NIF, email, telefone, cartão...) continuam
+  mascarados mesmo que o utilizador peça o contrário. Ver "Por decidir".
 - **Dependem do modelo.** Não há garantia de que o Gemini as cumpra à letra;
   o relatório mostra o que foi mascarado e a origem.
 - **Máximo de 2000 caracteres** (`pipeline.MAX_INSTRUCTIONS`); mais do que
@@ -172,6 +178,14 @@ segurança apanham identificadores quase de certeza que o modelo falhou
 `empty_answer_warnings(itens_do_modelo, itens_das_regras)` devolve um aviso
 nesse caso, sem repetir valores. Quem liga os componentes (o ponto de entrada)
 deve chamá-la e juntar o aviso aos outros.
+
+## Por decidir
+
+Se o utilizador pedir para não mascarar, por exemplo, os emails, o modelo
+obedece mas as regras de segurança continuam a mascará-los, porque correm
+sem o modelo. É a escolha mais segura, mas contradiz a palavra final do
+utilizador. Para a cumprir seria preciso o modelo devolver também uma lista
+"deixar visível" que se aplicasse às regras.
 
 ## Limitações
 
