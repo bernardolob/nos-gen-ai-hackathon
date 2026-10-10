@@ -80,6 +80,25 @@ devolver o mesmo texto com os acentos decompostos (Unicode NFD), o item não é
 encontrado e gera um aviso. Convém normalizar o texto para NFC na extração e
 na deteção.
 
+## Relatório (`src/report.py`)
+
+`build_report(items, warnings=None, include_values=False)` devolve o relatório
+explicativo em Markdown, a partir dos itens da deteção e das regras de
+segurança e dos avisos do mascaramento:
+
+- um **resumo** (itens ocultados, palavras e contagens por categoria, origem e
+  confiança);
+- uma **tabela** com um item por linha: linha, categoria, razão, confiança,
+  origem e número de palavras;
+- uma secção de **avisos**, se o mascaramento não conseguiu aplicar algum item.
+
+Por defeito o relatório **não mostra os valores originais**: um relatório que
+lista o nome ocultado deixava de ser anónimo. Para uso interno (por exemplo,
+na revisão manual) `include_values=True` mostra-os.
+
+Se o mesmo valor foi apanhado na mesma linha pelo Gemini e pelas regras de
+segurança, aparece uma só vez, com as duas origens e a maior confiança.
+
 ## Como correr o projeto
 
 Esta secção cresce à medida que os componentes ficam prontos.
@@ -137,7 +156,8 @@ A fazer: instruções de execução, depois de existir o ponto de entrada.
 - [x] Mascaramento
 - [x] Testes das regras de segurança e do mascaramento
 - [ ] Testar a prompt no documento real
-- [ ] Deteção, verificação, relatório
+- [x] Relatório
+- [ ] Deteção, verificação
 - [ ] Avaliação própria
 
 ## Pontos em aberto
