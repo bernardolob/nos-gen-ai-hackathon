@@ -59,11 +59,12 @@ de substituição não repetir várias vezes seguidas sem necessidade.
 
 ### Redação do áudio
 
-Para cada intervalo, corta esse troço do áudio original e substitui-o pelo
-som personalizado, cortado ou repetido para ocupar exatamente a duração do
-intervalo (a duração total do áudio não muda). Usa `ffmpeg` ou `pydub`
-(biblioteca externa, à parte do núcleo do resto do pipeline, tal como o
-PyMuPDF é só da extração).
+Para cada intervalo, corta esse troço do áudio original e substitui-o por um
+dos sons em `assets/censor_sounds/` (`censor_1.m4a` a `censor_4.m4a`, em
+rotação — ver "Decisões tomadas"), cortado ou repetido para ocupar
+exatamente a duração do intervalo (a duração total do áudio não muda). Usa
+`ffmpeg` ou `pydub` (biblioteca externa, à parte do núcleo do resto do
+pipeline, tal como o PyMuPDF é só da extração).
 
 ## Decisões tomadas
 
@@ -75,18 +76,23 @@ PyMuPDF é só da extração).
 2. **O pipeline de texto não muda.** A deteção, as regras de segurança, o
    mascaramento, a verificação e o relatório são os mesmos para PDF e para
    áudio; só a transcrição e a redação do áudio são novas.
+3. **O som personalizado é gravação própria da equipa.** Quatro variantes
+   curtas (~2-3s cada), em `assets/censor_sounds/censor_1.m4a` a
+   `censor_4.m4a`. Sendo gravação própria, não há questão de licença para
+   um repositório open-source.
+4. **Os quatro sons alternam em sequência (round-robin).** A primeira
+   palavra ocultada num áudio usa `censor_1.m4a`, a segunda `censor_2.m4a`,
+   e assim até `censor_4.m4a`, voltando depois a `censor_1.m4a`. Mais
+   variado do que repetir sempre o mesmo som, sem a complexidade de uma
+   escolha aleatória ou por categoria.
 
 ## Decisões em aberto
 
-1. **De onde vem o som personalizado.** Tem de ser um ficheiro cuja licença
-   permita incluí-lo num repositório público open-source (regra do
-   enunciado); a equipa grava o próprio som ou escolhe um efeito com
-   licença livre (CC0 ou equivalente) e documenta a fonte aqui.
-2. **Como agrupar as palavras da transcrição em linhas.** Por frase (pontuação
+1. **Como agrupar as palavras da transcrição em linhas.** Por frase (pontuação
    do Scribe) ou por um número fixo de palavras; decide-se ao implementar o
    `transcriber.py`, conforme o que o Scribe devolver para os primeiros
    áudios de teste.
-3. **Nome exato da variável de ambiente e onde documentar o `.env.example`**
+2. **Nome exato da variável de ambiente e onde documentar o `.env.example`**
    — seguir o padrão de `GEMINI_API_KEY`.
 
 ## Custo (créditos ElevenLabs)

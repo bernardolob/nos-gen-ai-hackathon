@@ -156,6 +156,8 @@ submission/
       gemini/                 cliente direto do Gemini (alternativa)
       audio/                  extra: transcrição, alinhamento e redação (planeado)
       audio_pipeline.py       extra: ponto de entrada da censura de áudio (planeado)
+    assets/
+      censor_sounds/          extra: sons de substituição (censor_1 a 4.m4a)
     api/                      API HTTP opcional
     Lovable_UI_JunctionX/     UI da revisão manual (React)
     tests/                    testes de tudo o que está acima
