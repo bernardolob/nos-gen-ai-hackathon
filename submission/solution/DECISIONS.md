@@ -155,12 +155,13 @@ mascaramento oculta-a também (`*: * *`), o que conta como mascarar a mais.
 
 ## Decisões em aberto
 
-1. **Uma só definição de "palavra" para o mascaramento e a verificação.** A
-   verificação (em desenvolvimento) tem a sua cópia da regra e discorda do
-   mascaramento em palavras coladas (`João,Ana`). Proposta: um módulo
-   partilhado (por exemplo `src/words.py`) com a lista de separadores e a
-   função que mascara uma palavra, usado pelos dois. Tem de estar resolvido
-   antes de juntar a verificação.
+1. **Uma só definição de "palavra" para o mascaramento e a verificação.**
+   `verification.py` entrou com a sua própria cópia da regra atualizada
+   (já não discorda do mascaramento em palavras coladas como `João,Ana`),
+   em vez do módulo partilhado proposto (`src/words.py`), para não editar
+   `masking.py` fora do seu branch. A duplicação fica registada como
+   dívida técnica: continua a ser a correção ideal, para a regra não poder
+   divergir outra vez sem ninguém notar.
 2. **Onde fica a extração.** Está em `submission/src/pdf_extractor.py` e o
    resto em `submission/solution/src/`. Mover para o mesmo sítio simplifica
    as importações.

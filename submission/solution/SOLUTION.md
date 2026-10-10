@@ -34,7 +34,7 @@ Pontos do pipeline, pela ordem do fluxo:
 | 3 | Deteção | feita, **falta ligar o cliente real do Gemini** (em desenvolvimento) |
 | 4 | Regras de segurança | feito |
 | 5 | Mascaramento | feito |
-| 6 | Verificação | em desenvolvimento |
+| 6 | Verificação | feito |
 | 7 | Relatório | feito |
 | 8 | Avaliação própria | **por fazer** |
 | | Ponto de entrada que liga tudo | **por fazer** |
@@ -160,9 +160,10 @@ duas origens e a maior confiança.
 
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.
-- **A verificação e o mascaramento têm de partilhar a definição de palavra**
-  antes de a verificação entrar: palavras coladas como `João,Ana` seriam
-  marcadas como erro. Ver [ARCHITECTURE.md](ARCHITECTURE.md).
+- **A verificação duplica a definição de palavra do mascaramento**, em vez
+  de a partilhar num módulo comum. Já não marca `João,Ana` como erro, mas
+  uma mudança futura na regra de `masking.py` tem de ser repetida à mão em
+  `verification.py`. Ver [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pontos em aberto
 

@@ -115,14 +115,13 @@ mascarada uma vez.
 - **Os caracteres de pontuação ficam na saída.** Um item como
   `Rua das Flores, 123, Apt 45` mantém as vírgulas: `* * *, *, * *`.
   A pontuação em si não é dado sensível.
-- **A verificação tem de usar a mesma definição de palavra.** A versão da
-  verificação em desenvolvimento (`feature/verification`) só aceita uma
-  palavra mascarada como um `*` com a pontuação nas pontas. Para palavras
-  coladas por vírgula, ponto e vírgula ou barra (`João,Ana` dá `*,*`,
-  `Rui/Ana` dá `*/*`) marcaria `unexpected_word_change`, apesar de o
-  mascaramento estar certo. Com espaço (`João, Ana`) ou entre dígitos
-  (`12/03/1978`) não há problema. A correção é as duas partes partilharem uma
-  só definição; ver [DECISIONS.md](DECISIONS.md).
+- **A verificação duplica esta regra em vez de a partilhar.**
+  `src/verification.py` tem a sua própria cópia (vírgula, ponto e vírgula e
+  barra separam palavras coladas, exceto entre dois dígitos; endereços web
+  são uma só palavra), por isso `João,Ana` e `Rui/Ana` já não são marcados
+  como `unexpected_word_change`. Mas, por ser uma cópia e não um módulo
+  partilhado, uma mudança futura nesta regra tem de ser repetida à mão em
+  `verification.py`; ver [DECISIONS.md](DECISIONS.md).
 
 ## Relação com os outros componentes
 
