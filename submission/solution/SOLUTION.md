@@ -29,7 +29,7 @@ Pontos do pipeline, pela ordem do fluxo:
 
 | # | Componente | Estado |
 |---|---|---|
-| 1 | Extração do PDF | feito (`submission/src/pdf_extractor.py`) |
+| 1 | Extração do PDF | feito (`src/pdf_extractor.py`) |
 | 2 | Prompt interna e taxonomia | feitas, **por testar com o Gemini** |
 | 3 | Deteção | feita, **falta ligar o cliente real do Gemini** (em desenvolvimento) |
 | 4 | Regras de segurança | feito |
@@ -65,7 +65,7 @@ que existe, sem o Gemini:
 ```python
 import sys
 
-sys.path[:0] = ["submission/src", "submission/solution/src"]
+sys.path[:0] = ["submission/solution/src"]
 
 import masking
 import pdf_extractor

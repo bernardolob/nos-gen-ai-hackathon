@@ -93,10 +93,15 @@ As regras (regex) correm sempre, mesmo com o Gemini.
 
 ### 8. Tudo em `submission/solution/`
 
-O guia de submissão pede o código em `submission/`. O núcleo (regras de
-segurança, mascaramento, relatório) só usa a biblioteca padrão. A extração
-está à parte, em `submission/src/`, por ser a única parte que precisa de uma
-biblioteca externa (o PyMuPDF).
+O guia de submissão pede o código em `submission/`, e todo o nosso fica em
+`submission/solution/` (código em `src/`, testes em `tests/`). **Não há código
+fora desta pasta**: dois sítios (`submission/src/` e `submission/solution/src/`)
+obrigavam a pôr dois caminhos no `sys.path` e deixavam o repositório com duas
+convenções.
+
+O núcleo (regras de segurança, mascaramento, relatório) só usa a biblioteca
+padrão; a extração é a única parte que precisa de uma biblioteca externa (o
+PyMuPDF), e fica na mesma pasta.
 
 ### 9. 79 colunas
 
@@ -162,19 +167,16 @@ mascaramento oculta-a também (`*: * *`), o que conta como mascarar a mais.
    `masking.py` fora do seu branch. A duplicação fica registada como
    dívida técnica: continua a ser a correção ideal, para a regra não poder
    divergir outra vez sem ninguém notar.
-2. **Onde fica a extração.** Está em `submission/src/pdf_extractor.py` e o
-   resto em `submission/solution/src/`. Mover para o mesmo sítio simplifica
-   as importações.
-3. **Normalização Unicode.** Se o Gemini devolver `ç` decomposto (NFD), o
+2. **Normalização Unicode.** Se o Gemini devolver `ç` decomposto (NFD), o
    item não é encontrado. Normalizar para NFC na extração e na deteção.
-4. **Revisão manual.** Está prevista (os itens `incerto` iriam a um humano
+3. **Revisão manual.** Está prevista (os itens `incerto` iriam a um humano
    antes do mascaramento) mas não implementada. É um requisito opcional do
    enunciado.
-5. **Etiquetas incluídas no valor.** Medir com o Gemini quantas vezes
+4. **Etiquetas incluídas no valor.** Medir com o Gemini quantas vezes
    acontece, mesmo com o exemplo na prompt (decisão 12). Só então decidir se
    a salvaguarda no código vale a pena.
-6. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
+5. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
    Ver o fim de [taxonomy.md](taxonomy.md).
-7. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
+6. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
    sanitizados e a API opcional serão acrescentadas quando o branch
    `feature/api` entrar na `main`.

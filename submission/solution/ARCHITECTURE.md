@@ -40,7 +40,7 @@ mascaramento. Se os dois apanham o mesmo valor, o relatório junta-os num só.
 
 | # | Componente | Ficheiro | Entrada | Saída | Estado |
 |---|---|---|---|---|---|
-| 1 | Extração | `submission/src/pdf_extractor.py` | caminho do PDF | texto, sem linhas vazias nem espaços no fim, com pontuação e acentos originais | feito |
+| 1 | Extração | `src/pdf_extractor.py` | caminho do PDF | texto, sem linhas vazias nem espaços no fim, com pontuação e acentos originais | feito |
 | 2 | Prompt interna | `internal_prompt.txt` | | instruções enviadas ao Gemini | feita, por testar |
 | 3 | Deteção | `src/detection.py` | linhas numeradas e um cliente | itens e avisos | feito, falta ligar o cliente real do Gemini |
 | 4 | Regras de segurança | `src/safety_rules.py` | linhas | itens | feito |
@@ -116,8 +116,6 @@ e na deteção.
 submission/
   prompt.txt                  (a preencher: a prompt usada)
   submission.txt              (a preencher: a saída do sistema)
-  src/
-    pdf_extractor.py          1 Extração
   solution/
     SOLUTION.md               ponto de entrada da documentação
     ARCHITECTURE.md           este documento
@@ -128,6 +126,7 @@ submission/
     taxonomy.md               categorias de dados sensíveis
     internal_prompt.txt       2 Prompt interna
     src/
+      pdf_extractor.py        1 Extração (usa o PyMuPDF)
       categories.py           categorias e confiança (partilhado)
       detection.py            3 Deteção
       safety_rules.py         4 Regras de segurança

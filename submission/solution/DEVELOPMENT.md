@@ -67,7 +67,7 @@ Os módulos importam-se pelo nome (`import masking`), por isso é preciso pôr
 ```python
 import sys
 
-sys.path[:0] = ["submission/src", "submission/solution/src"]
+sys.path[:0] = ["submission/solution/src"]
 ```
 
 Em linha de comandos, o `PYTHONPATH` separa-se com `:` em Linux e macOS e com
@@ -75,6 +75,8 @@ Em linha de comandos, o `PYTHONPATH` separa-se com `:` em Linux e macOS e com
 
 ## Fluxo de trabalho com Git
 
+- **Todo o código fica em `submission/solution/`** (código em `src/`, testes em
+  `tests/`). Não crees `submission/src/` nem pastas de código fora desta.
 - **Um branch por componente**, criado a partir da `main`:
   `feature/<componente>` (por exemplo `feature/masking`).
 - **Nada vai direto para a `main`.** Cada branch entra por pull request, com
