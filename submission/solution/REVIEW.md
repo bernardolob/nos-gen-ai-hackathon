@@ -101,9 +101,11 @@ interface está **em inglês** (decisão da equipa).
 - **Modo demonstração.** Sem `VITE_API_URL` a UI usa dados falsos e mostra um
   aviso fixo no topo. Para ligar ao backend: `cp .env.example .env`
   (`VITE_API_URL=http://127.0.0.1:8000`).
-- **Estado da UI do áudio.** O backend já tem a rota; a **UI de áudio ainda
-  não existe** (a UI só envia texto e PDF). O que lhe falta está no
-  [AUDIO.md](AUDIO.md).
+- **Estado da UI do áudio.** O backend tem a rota e o **contrato da UI já
+  cobre o áudio** (`uploadAudio`, `uploadFile`, `censoredAudioUrl`, os 4
+  campos novos do estado e os dados de demonstração, em `src/lib/review/`),
+  mas a **parte visual ainda não existe**: a UI só mostra o envio de texto e
+  PDF. O que lhe falta está no [AUDIO.md](AUDIO.md).
 - O trabalho do Lovable vem pelo branch `lovable/ui`, nunca diretamente para
   a `main`, e revê-se o diff antes de juntar.
 - Gestor de pacotes: a UI traz `bun.lock`; `npm install` funciona, mas não se
@@ -131,7 +133,12 @@ O arranque diz se o Gemini e o áudio estão ligados.
 - Rota de áudio: `tests/test_audio_route.py`, com a transcrição, o modelo e o
   `ffmpeg` falsos (26 testes). Um teste usa o `ffmpeg` a sério e só corre se
   ele estiver instalado.
-- UI: `npx tsc --noEmit`, `npx vitest run` e `npm run build`, na pasta da UI.
+- UI: `npx tsc --noEmit`, `npx vitest run` (18 testes, incluindo o contrato
+  do áudio) e `npm run build`, na pasta da UI.
+- **Contrato backend-UI:** `tests/test_ui_contract.py` (7 testes) lê os tipos
+  e as chamadas em `src/lib/review/` e confirma que os campos do estado, do
+  histórico, as rotas chamadas, os tipos de áudio e os limites coincidem com
+  o backend. Se um lado mudar sem o outro, falha aqui.
 
 ## Verificado e não verificado
 
@@ -146,5 +153,5 @@ Não verificado:
 - A rota de áudio com o **ElevenLabs e o `ffmpeg` reais** (não há chave nem
   `ffmpeg` na máquina em que foi escrita). O pipeline de linha de comandos
   foi verificado pela equipa que o fez (ver [AUDIO.md](AUDIO.md)).
-- Nenhuma UI de áudio.
+- Nenhuma UI de áudio (só o contrato e os dados de demonstração).
 - Só uma sessão de cada vez: dois separadores partilham o mesmo documento.

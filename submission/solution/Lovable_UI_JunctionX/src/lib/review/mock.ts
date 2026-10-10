@@ -13,6 +13,11 @@ Reports a previous diagnosis of type 2 diabetes and hypertension.
 
 Signed: Dr. João Pedro Almeida, licence 45678.`;
 
+/** What the mock audio "says": the transcript the backend would produce. */
+export const SAMPLE_TRANSCRIPT = `Good morning, my name is Maria Santos.
+My tax ID is 245789123 and my phone is 912345678.
+I was diagnosed with diabetes and hypertension last year.`;
+
 /** Replaces each sensitive word with a single '*'. Strict mode also masks clinical terms. */
 export function maskWords(text: string, strict: boolean): string {
   const clinical = /^(diabetes|hypertension)$/i;
@@ -31,11 +36,46 @@ export function maskWords(text: string, strict: boolean): string {
     .join("\n");
 }
 
-let state: Snapshot = { ...EMPTY_SNAPSHOT };
+/** How many masked stretches the text has (runs of '*'). */
+export const countMasks = (text: string): number => (text.match(/\*+/g) ?? []).length;
+
+/** A short silent WAV as a data URI, so the audio player works in demo mode. */
+function silentWavUri(seconds = 2, sampleRate = 8000): string {
+  const samples = seconds * sampleRate;
+  const buffer = new ArrayBuffer(44 + samples);
+  const view = new DataView(buffer);
+  const write = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  write(0, "RIFF");
+  view.setUint32(4, 36 + samples, true);
+  write(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true); // 8 bits
+  write(36, "data");
+  view.setUint32(40, samples, true);
+  new Uint8Array(buffer, 44).fill(128); // 8-bit silence
+  let binary = "";
+  new Uint8Array(buffer).forEach((byte) => (binary += String.fromCharCode(byte)));
+  return `data:audio/wav;base64,${btoa(binary)}`;
+}
+
+export const MOCK_AUDIO_URL = silentWavUri();
+
+const AUDIO_PATH = "/api/audio/current";
+
+const emptyState = (): Snapshot => ({ ...EMPTY_SNAPSHOT, audio_enabled: true });
+
+let state: Snapshot = emptyState();
 let source = "";
 
 export function resetMock() {
-  state = { ...EMPTY_SNAPSHOT };
+  state = emptyState();
   source = "";
 }
 
@@ -43,14 +83,28 @@ export async function mockUpload(text: string): Promise<Snapshot> {
   if (!text.trim()) throw new ApiError(422, "The document has no text.");
   source = text;
   state = {
+    ...emptyState(),
     has_document: true,
+    kind: "text",
     attempt: 1,
     text: maskWords(source, false),
-    approved: false,
-    history: [],
-    mode: "model",
     warnings: 1,
-    issues: 0,
+  };
+  return structuredClone(state);
+}
+
+/** The mock audio is always the same sample: it "says" SAMPLE_TRANSCRIPT. */
+export async function mockUploadAudio(): Promise<Snapshot> {
+  source = SAMPLE_TRANSCRIPT;
+  const text = maskWords(source, false);
+  state = {
+    ...emptyState(),
+    has_document: true,
+    kind: "audio",
+    attempt: 1,
+    text,
+    audio_url: AUDIO_PATH,
+    audio_ranges: countMasks(text),
   };
   return structuredClone(state);
 }
@@ -64,13 +118,15 @@ export async function mockReject(attempt: number, reason: string): Promise<Snaps
   if (attempt !== state.attempt) throw new ApiError(409, "The version under review has already changed.");
   if (reason.length > MAX_REASON_CHARS)
     throw new ApiError(422, "The feedback is longer than 2000 characters.");
+  const text = maskWords(source, state.attempt % 2 === 1);
   state = {
     ...state,
     history: [...state.history, { attempt: state.attempt, text: state.text, reason }],
     attempt: state.attempt + 1,
-    text: maskWords(source, state.attempt % 2 === 1),
+    text,
     approved: false,
     warnings: 0,
+    audio_ranges: state.kind === "audio" ? countMasks(text) : 0,
   };
   return structuredClone(state);
 }

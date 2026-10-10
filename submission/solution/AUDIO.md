@@ -175,7 +175,10 @@ Requisitos: `ELEVENLABS_API_KEY` e `ffmpeg`/`ffprobe`; sem eles
 
 ### O que falta da UI de áudio
 
-A UI (Lovable) só envia texto e PDF. Para o áudio precisa de:
+A UI (Lovable) só envia texto e PDF. O contrato já está feito (em
+`Lovable_UI_JunctionX/src/lib/review/`: `uploadAudio`, `uploadFile`,
+`censoredAudioUrl`, os campos novos do estado e dados de demonstração com um
+áudio silencioso); falta a parte visual. Precisa de:
 
 - esconder ou desativar o envio quando `audio_enabled` é falso;
 - **avisar antes de enviar** que o áudio original vai para o ElevenLabs;
