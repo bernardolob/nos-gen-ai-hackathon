@@ -146,7 +146,7 @@ function Index() {
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               {showUpload
-                ? "Upload a PDF or text file (up to 10 MB)."
+                ? "Upload a PDF, a text file or an audio file (mp3, m4a, wav)."
                 : "Approve the version or reject it with feedback to generate another."}
             </p>
           </div>
@@ -178,6 +178,7 @@ function Index() {
                   : "Analyzing the document... (about 8 s)"
               }
               error={error}
+              errorTitle={file ? "The document could not be analyzed" : "Could not load the current review"}
               onRetry={() => (file ? void upload() : void load())}
               audioEnabled={snapshot?.audio_enabled ?? false}
             />

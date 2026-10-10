@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -25,6 +25,7 @@ export function UploadStep({
   loading,
   status,
   error,
+  errorTitle,
   onRetry,
   audioEnabled = false,
 }: {
@@ -34,6 +35,7 @@ export function UploadStep({
   loading: boolean;
   status: string;
   error: string | null;
+  errorTitle?: string;
   onRetry: () => void;
   audioEnabled?: boolean;
 }) {
@@ -47,13 +49,8 @@ export function UploadStep({
     setConfirmed(false);
   }
 
-  useEffect(() => {
-    setConfirmed(false);
-  }, [file]);
-
   const accept = (f: File | undefined) => {
     if (f) {
-      setConfirmed(false);
       onFile(f);
     }
   };
@@ -61,20 +58,12 @@ export function UploadStep({
   const isAudio = Boolean(file && isAudioFile(file));
   const canAnalyze = Boolean(file && (!isAudio || (audioEnabled && confirmed)));
 
-  const activeStatus =
-    isAudio && status === "Analyzing the document... (about 8 s)"
-      ? "Transcribing and censoring the audio... this can take several seconds."
-      : status ||
-        (isAudio
-          ? "Transcribing and censoring the audio... this can take several seconds."
-          : "Analyzing the document... (about 8 s)");
-
   if (loading) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-16 text-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
         <p className="text-lg font-medium text-foreground" role="status">
-          {activeStatus}
+          {status}
         </p>
         <p className="text-sm text-muted-foreground">This may take a few seconds.</p>
       </div>
@@ -82,10 +71,11 @@ export function UploadStep({
   }
 
   if (error) {
+    const title = errorTitle ?? (file ? "The document could not be analyzed" : "Could not load the current review");
     return (
       <div className="flex flex-col items-center gap-4 rounded-lg border border-destructive/40 bg-card p-16 text-center">
         <AlertTriangle className="h-10 w-10 text-destructive" aria-hidden />
-        <p className="text-lg font-medium text-foreground">The document could not be analyzed</p>
+        <p className="text-lg font-medium text-foreground">{title}</p>
         <p className="text-sm text-muted-foreground">{error}</p>
         <Button
           variant="ghost"
@@ -103,7 +93,7 @@ export function UploadStep({
       <section className="min-w-0">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h3 className="text-base font-bold text-foreground">Upload document</h3>
-          <span className="font-mono text-xs text-muted-foreground">PDF / TXT / MD</span>
+          <span className="font-mono text-xs text-muted-foreground">PDF / TXT / MD / AUDIO</span>
         </div>
         <div
           onDragOver={(e) => {
