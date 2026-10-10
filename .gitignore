@@ -1,5 +1,9 @@
 # TODO: Review this file and add or remove entries as needed
 
+# Cloudflare / Node build state
+node_modules/
+.wrangler/
+
 # ----------------------------------------
 # Visual Studio Code Configuration
 # ----------------------------------------

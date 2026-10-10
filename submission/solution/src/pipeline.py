@@ -11,9 +11,10 @@ Sem ``--out`` nada é escrito: mostra só o resumo (ensaio). Com ``--out DIR``
 escreve ``DIR/submission.txt`` (o documento mascarado) e ``DIR/report.md``.
 
 O modelo entra como a função ``generate(instrução_de_sistema, conteúdo)`` do
-``detection.detect``. Enquanto o cliente do Gemini não estiver ligado, o
-pipeline só corre com ``--no-model`` (só as regras de segurança); em código,
-passa-se o ``generate`` a ``run``.
+``detection.detect``. Pela linha de comandos vem do gateway Cloudflare
+(``gateway.from_env``, variáveis ``GEMINI_GATEWAY_URL`` e
+``GEMINI_GATEWAY_ORIGIN``); com ``--no-model`` só correm as regras de
+segurança. Em código, passa-se o ``generate`` a ``run``.
 
 Códigos de saída: 0 sem problemas, 1 a verificação encontrou problemas,
 2 erro (ficheiro, argumentos ou deteção).
@@ -24,6 +25,7 @@ import sys
 from pathlib import Path
 
 import detection
+import gateway
 import masking
 import report
 import safety_rules
@@ -126,18 +128,22 @@ def build_parser():
 def main(argv=None, generate=None):
     """Corre o pipeline pela linha de comandos e devolve o código de saída."""
     args = build_parser().parse_args(argv)
-    if generate is None and not args.no_model:
-        print("Erro: o cliente do Gemini ainda não está ligado. "
-              "Use --no-model para correr só as regras de segurança.",
-              file=sys.stderr)
-        return EXIT_ERROR
-    if args.no_model:
-        generate = None
     try:
+        if args.no_model:
+            generate = None
+        elif generate is None:
+            generate = gateway.from_env()
+            if generate is None:
+                print("Erro: falta ligar ao Gemini. Defina "
+                      "GEMINI_GATEWAY_URL e GEMINI_GATEWAY_ORIGIN, ou use "
+                      "--no-model para correr só as regras de segurança.",
+                      file=sys.stderr)
+                return EXIT_ERROR
         lines = read_lines(args.document)
         result = run(lines, generate, args.instructions,
                      args.include_values)
-    except (OSError, RuntimeError, detection.DetectionError) as error:
+    except (OSError, RuntimeError, detection.DetectionError,
+            gateway.GatewayError) as error:
         print("Erro: %s" % error, file=sys.stderr)
         return EXIT_ERROR
     if args.out:

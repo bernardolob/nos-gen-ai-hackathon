@@ -3,13 +3,17 @@
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SOLUTION = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOLUTION / "src"))
+
+from test_gateway import ORIGIN, FakeWorker  # noqa: E402
 
 try:
     import pipeline  # noqa: E402
@@ -117,10 +121,42 @@ class MainTest(unittest.TestCase):
         masked = (self.out / pipeline.SUBMISSION_FILE).read_text("utf-8")
         self.assertEqual(masked, "Nome: Ana\nNIF: *")
 
-    def test_without_a_client_and_without_no_model_it_refuses(self):
-        code, _, err = self.run_main(str(self.document))
+    def test_without_a_gateway_and_without_no_model_it_refuses(self):
+        with mock.patch.dict(os.environ, clear=True):
+            code, _, err = self.run_main(str(self.document))
         self.assertEqual(code, pipeline.EXIT_ERROR)
+        self.assertIn("GEMINI_GATEWAY_URL", err)
         self.assertIn("--no-model", err)
+
+    def test_the_gateway_from_the_environment_is_used(self):
+        worker = FakeWorker()
+        self.addCleanup(worker.stop)
+        worker.reply = {
+            "model": "m", "text": json.dumps([item(1, "Ana Silva")])}
+        env = {"GEMINI_GATEWAY_URL": worker.url,
+               "GEMINI_GATEWAY_ORIGIN": ORIGIN}
+        with mock.patch.dict(os.environ, env, clear=True):
+            code, _, _ = self.run_main(
+                str(self.document), "--out", str(self.out))
+        self.assertEqual(code, pipeline.EXIT_OK)
+        masked = (self.out / pipeline.SUBMISSION_FILE).read_text("utf-8")
+        self.assertEqual(masked.split("\n")[0], "Nome: * *")
+        prompt = worker.requests[0]["body"]["prompt"]
+        self.assertIn("<document>", prompt)
+        self.assertIn("[1] Nome: Ana Silva", prompt)
+
+    def test_a_gateway_failure_is_an_error_and_writes_nothing(self):
+        worker = FakeWorker()
+        self.addCleanup(worker.stop)
+        worker.script = [422]
+        env = {"GEMINI_GATEWAY_URL": worker.url,
+               "GEMINI_GATEWAY_ORIGIN": ORIGIN}
+        with mock.patch.dict(os.environ, env, clear=True):
+            code, _, err = self.run_main(
+                str(self.document), "--out", str(self.out))
+        self.assertEqual(code, pipeline.EXIT_ERROR)
+        self.assertIn("recusou", err)
+        self.assertFalse(self.out.exists())
 
     def test_an_injected_model_is_used(self):
         code, _, _ = self.run_main(
