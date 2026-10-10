@@ -115,6 +115,16 @@ e na deteção.
 8. **Avaliação própria.** Mede o efeito de cada alteração à prompt contra um
    documento anonimizado à mão.
 
+## Extras
+
+Fora da numeração 1-8 acima (essa numeração segue os critérios dos
+organizadores). Um extra pode reaproveitar o pipeline de texto sem lhe
+tocar.
+
+| Extra | Ficheiros previstos | Estado |
+|---|---|---|
+| Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | planeado, ver [AUDIO.md](AUDIO.md) |
+
 ## Estrutura de pastas
 
 ```
@@ -128,6 +138,7 @@ submission/
     DEVELOPMENT.md            como trabalhar no projeto
     DETECTION.md              deteção e validação da resposta
     MASKING.md                regras do mascaramento
+    AUDIO.md                  extra: censura de áudio (planeado)
     taxonomy.md               categorias de dados sensíveis
     internal_prompt.txt       2 Prompt interna
     src/
@@ -143,6 +154,8 @@ submission/
       gateway.py              liga o pipeline ao Gemini pelo Worker
       user_validation.py      backend da revisão manual (FastAPI)
       gemini/                 cliente direto do Gemini (alternativa)
+      audio/                  extra: transcrição, alinhamento e redação (planeado)
+      audio_pipeline.py       extra: ponto de entrada da censura de áudio (planeado)
     api/                      API HTTP opcional
     Lovable_UI_JunctionX/     UI da revisão manual (React)
     tests/                    testes de tudo o que está acima

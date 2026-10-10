@@ -53,6 +53,7 @@ Gemini.
 | [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
 | [REVIEW.md](REVIEW.md) | Revisão manual: UI, backend e rejeição com observações |
+| [AUDIO.md](AUDIO.md) | Extra: censura de áudio (planeado) |
 | [GATEWAY.md](GATEWAY.md) | Como o pipeline chama o Gemini pelo Worker Cloudflare |
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
@@ -171,6 +172,15 @@ interno, `include_values=True` mostra-os. Se o Gemini e as regras de
 segurança apanham o mesmo valor na mesma linha, aparece uma só vez, com as
 duas origens e a maior confiança.
 
+## Extra: censura de áudio
+
+Planeado, ainda por implementar. Aceita um mp3, transcreve-o com a
+ElevenLabs Scribe (timestamps por palavra), corre o mesmo `pipeline.run`
+sobre a transcrição, e substitui cada palavra ocultada por um som
+personalizado (não silêncio) no áudio. Reaproveita o pipeline de texto sem
+alterações — só a transcrição e a redação do áudio são novas. Detalhes,
+decisões e custo estimado em [AUDIO.md](AUDIO.md).
+
 ## Como a solução responde aos critérios
 
 | Critério (peso) | Onde está | Estado |
@@ -182,7 +192,7 @@ duas origens e a maior confiança.
 | Eficiência (5%) | Uma chamada ao modelo; o resto é código | por medir |
 | GitHub (5%) e Colaboração (30%) | Um branch por componente, pull requests com merge commit, testes | ver [DEVELOPMENT.md](DEVELOPMENT.md) |
 | Documentação (10%) | Esta pasta | em curso |
-| Pitch (20%) | | por preparar |
+| Pitch (20%) | Extra: censura de áudio (planeado, [AUDIO.md](AUDIO.md)) | por preparar |
 
 ## Problemas conhecidos
 
