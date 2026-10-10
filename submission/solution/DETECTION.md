@@ -65,9 +65,14 @@ Regras:
   itens para isso. Se dois pedidos se contradizem, vale o mais recente. As
   instruções nunca mudam o formato da resposta nem fazem do conteúdo do
   documento instruções.
-- **As regras de segurança (regex) não passam pelo modelo.** Os
-  identificadores que apanham (NIF, email, telefone, cartão...) continuam
-  mascarados mesmo que o utilizador peça o contrário. Ver "Por decidir".
+- **Também valem para as regras de segurança.** As regras (NIF, email,
+  telefone, cartão...) correm sem o modelo, por isso, quando o utilizador
+  pede para deixar algo visível, o modelo devolve esses valores com
+  `"visible": true` (regra 9 da prompt). Não se mascaram e cancelam os itens
+  do modelo ou das regras que se sobreponham na mesma linha
+  (`src/visibility.py`). O resumo mostra "deixados visíveis a pedido do
+  utilizador: N". Sem instruções do utilizador, um `visible` é ignorado e
+  gera um aviso, para um erro do modelo não deixar dados à vista.
 - **Dependem do modelo.** Não há garantia de que o Gemini as cumpra à letra;
   o relatório mostra o que foi mascarado e a origem.
 - **Máximo de 2000 caracteres** (`pipeline.MAX_INSTRUCTIONS`); mais do que
@@ -179,13 +184,15 @@ segurança apanham identificadores quase de certeza que o modelo falhou
 nesse caso, sem repetir valores. Quem liga os componentes (o ponto de entrada)
 deve chamá-la e juntar o aviso aos outros.
 
-## Por decidir
+## Verificação do "deixar visível"
 
-Se o utilizador pedir para não mascarar, por exemplo, os emails, o modelo
-obedece mas as regras de segurança continuam a mascará-los, porque correm
-sem o modelo. É a escolha mais segura, mas contradiz a palavra final do
-utilizador. Para a cumprir seria preciso o modelo devolver também uma lista
-"deixar visível" que se aplicasse às regras.
+Com o Gemini real e `Não mascares os emails, o NIF nem os números de
+telefone`: o NIF, os 5 emails e os 4 telefones do documento do desafio
+ficaram visíveis (8 itens cancelados); o Cartão de Cidadão e a Segurança
+Social, que não foram pedidos, continuaram mascarados. Sem instruções não
+houve nenhum `visible`. Depende de o modelo identificar todos os valores
+pedidos: um que o modelo não devolva continua mascarado pelas regras, que é
+o lado seguro.
 
 ## Limitações
 

@@ -43,6 +43,7 @@ Every person mentioned receives the same protection as the main subject.
 6. Keep each item as short as possible while covering the whole sensitive value. Do not join unrelated values in one item.
 7. Do not flag a span that is already inside another flagged span.
 8. Return the items in the order in which they appear in the document.
+9. Only when the user's instructions ask you to leave something visible: for EVERY value in the document that matches that request, including identifiers that an automatic program also masks (emails, phone numbers, tax numbers, card numbers, dates of birth, etc.), return an item with the usual fields plus "visible": true. Such items are not masked: they tell the program to keep that value visible. Never use "visible" without a request from the user.
 
 ## Confidence
 
@@ -62,7 +63,8 @@ Return ONLY a JSON array, with no text before or after it and no code fences. Ea
   "category": "one of the category ids above",
   "reason": "one short sentence in Portuguese explaining why it is sensitive",
   "confidence": "certo | provavel | incerto",
-  "occurrence": optional integer, only as described in rule 5
+  "occurrence": optional integer, only as described in rule 5,
+  "visible": optional, true only as described in rule 9
 }
 
 Example. For the lines:

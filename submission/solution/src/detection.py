@@ -147,7 +147,8 @@ def parse_response(answer, lines):
             continue
         for piece in pieces:
             piece["text"] = _reconcile(piece["text"], lines[piece["line"] - 1])
-            key = (piece["line"], piece["text"], piece.get("occurrence"))
+            key = (piece["line"], piece["text"], piece.get("occurrence"),
+                   piece.get("visible", False))
             if key not in seen:
                 seen.add(key)
                 items.append(piece)
@@ -278,6 +279,8 @@ def _validate(raw, line_count):
     }
     if occurrence is not None:
         item["occurrence"] = occurrence
+    if raw.get("visible") is True:
+        item["visible"] = True
     return item, None
 
 

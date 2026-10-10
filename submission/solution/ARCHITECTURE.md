@@ -142,6 +142,7 @@ submission/
       pipeline.py             ponto de entrada que liga tudo
       gateway.py              liga o pipeline ao Gemini pelo Worker
       labels.py               deixa as etiquetas visíveis (itens do modelo)
+      visibility.py           valores que o utilizador pediu para ficarem visíveis
       user_validation.py      backend da revisão manual (FastAPI)
       gemini/                 cliente direto do Gemini (alternativa)
     api/                      API HTTP opcional
