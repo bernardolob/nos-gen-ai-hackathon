@@ -30,7 +30,7 @@ GENERATE_PATH = "/api/v1/generate"
 DEFAULT_MAX_PROMPT = 10000
 DEFAULT_TIMEOUT = 90.0
 DEFAULT_ATTEMPTS = 3
-DEFAULT_DELAY = 2.0
+DEFAULT_DELAY = 5.0
 USER_AGENT = "nos-anonymizer/1.0"
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
 # Estados em que vale a pena repetir: tempo esgotado, limite de pedidos e

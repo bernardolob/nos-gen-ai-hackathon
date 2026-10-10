@@ -47,7 +47,7 @@ Fora de `localhost`, o endereço tem de ser `https`.
 | Erro | Quando | Repete? |
 |---|---|---|
 | `GatewayConfigError` | URL ou origem inválidas, prompt acima do limite | não |
-| `GatewayUnavailable` | sem ligação, tempo esgotado, HTTP 408/429/5xx | até 3 vezes, com pausa crescente |
+| `GatewayUnavailable` | sem ligação, tempo esgotado, HTTP 408/429/5xx | até 3 vezes, com pausa crescente (5 s, 10 s) |
 | `GatewayRejected` | 403, 415, 422, resposta que não é `{"text": ...}` | não |
 
 As mensagens são fixas: não incluem o documento, a resposta nem o corpo do
