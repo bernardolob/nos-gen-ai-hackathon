@@ -19,7 +19,7 @@ de alcance").
 | Alinhamento | `src/audio/alignment.py` | feito e testado |
 | Redação do áudio | `src/audio/redactor.py` | feito, testado com `ffmpeg` a sério |
 | Ponto de entrada | `src/audio_pipeline.py` | feito e testado, de ponta a ponta com a API real |
-| Rota do backend de revisão | `src/user_validation.py` | feita e testada com a transcrição e a censura falsas; **falta verificá-la com o ElevenLabs e o `ffmpeg` reais**. A UI de áudio não existe |
+| Rota do backend de revisão | `src/user_validation.py` | feita e verificada com o `ffmpeg` a sério e uma transcrição falsa (o troço certo é substituído e a duração fica igual, ver "Verificação da rota"); **falta verificá-la com o ElevenLabs real** |
 
 **Confirmado com a API real do ElevenLabs** (depois de a rede deste
 ambiente passar a permitir `api.elevenlabs.io`): o esquema da resposta é o
@@ -184,6 +184,25 @@ A UI (Lovable) só envia texto e PDF. Para o áudio precisa de:
   navegador não reutilizar a versão anterior) e a transcrição mascarada por
   baixo, com `audio_ranges`;
 - o mesmo fluxo de rejeição com observações e o histórico.
+
+### Verificação da rota
+
+Com o `ffmpeg` 9.0.2 instalado e uma transcrição falsa (sem chave do
+ElevenLabs), pela rota real (`POST /api/audio`): um tom de 440 Hz de 6 s,
+com a palavra "sensível" nos 2 a 3 s.
+
+| Troço | Diferença média para o original |
+|---|---|
+| 0,2 a 1,8 s (antes) | 56 (ruído do codec) |
+| **2,1 a 2,9 s (a palavra censurada)** | **4631** |
+| 3,2 a 4,3 s e 4,7 a 5,8 s (depois) | 53 e 50 |
+
+A duração ficou igual (6,000 s), `audio_ranges` foi 1, o texto saiu
+`Contacto * para marcar.` e rejeitar fez a tentativa 2 com **uma só
+transcrição**. Os 55 testes de áudio passam sem nenhum saltado.
+
+O que continua por verificar é a transcrição real: a rota nunca correu com o
+ElevenLabs, só o pipeline de linha de comandos (acima).
 
 ## Custo (créditos ElevenLabs)
 

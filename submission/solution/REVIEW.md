@@ -138,13 +138,15 @@ O arranque diz se o Gemini e o áudio estão ligados.
 Verificado:
 - O fluxo de texto de ponta a ponta, no browser, contra o backend real e o
   Gemini: enviar, rejeitar com um pedido (a tentativa 2 respeita-o), aprovar.
-- A rota de áudio com a transcrição e a censura falsas: estado, ficheiros
-  temporários, uma só transcrição, falhas que não mudam nada, tipos e
-  tamanhos.
+- A rota de áudio com a transcrição falsa: estado, ficheiros temporários,
+  uma só transcrição, falhas que não mudam nada, tipos e tamanhos.
+- A rota de áudio com o **`ffmpeg` real**: o troço da palavra censurada é
+  mesmo substituído, o resto fica igual e a duração não muda (ver
+  [AUDIO.md](AUDIO.md), "Verificação da rota").
 
 Não verificado:
-- A rota de áudio com o **ElevenLabs e o `ffmpeg` reais** (não há chave nem
-  `ffmpeg` na máquina em que foi escrita). O pipeline de linha de comandos
-  foi verificado pela equipa que o fez (ver [AUDIO.md](AUDIO.md)).
+- A rota de áudio com o **ElevenLabs real** (não há chave). O pipeline de
+  linha de comandos foi verificado pela equipa que o fez (ver
+  [AUDIO.md](AUDIO.md)).
 - Nenhuma UI de áudio.
 - Só uma sessão de cada vez: dois separadores partilham o mesmo documento.
