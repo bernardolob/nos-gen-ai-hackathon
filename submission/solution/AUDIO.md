@@ -131,6 +131,21 @@ Nenhuma sobre o funcionamento (ver "Estado": esquema da API já confirmado
 com pedidos reais). Falta só confirmar o valor exato dos créditos por
 minuto — "A confirmar" em "Custo", abaixo.
 
+## Privacidade
+
+- **O áudio original vai para um serviço de terceiros.** A transcrição é
+  feita pelo ElevenLabs Scribe, por isso o áudio **com os dados sensíveis
+  ainda por censurar** sai da máquina antes de qualquer censura. Isto
+  acontece sempre, também com `--no-model`: essa opção só evita o Gemini.
+- Depois, o **texto** da transcrição segue o caminho do pipeline de texto:
+  passa pelo Worker e pelo Gemini (ver [GATEWAY.md](GATEWAY.md)), a menos
+  que se use `--no-model`.
+- Não verificámos as condições do ElevenLabs sobre retenção e treino com
+  os dados enviados. Até as confirmarmos, **só se devem usar áudios
+  fictícios ou com consentimento**, como os da demonstração.
+- A chave (`ELEVENLABS_API_KEY`) só vem do ambiente; os erros do cliente
+  nunca incluem a chave nem o áudio.
+
 ## Custo (créditos ElevenLabs)
 
 Os testes previstos são para áudios **até 10 segundos** (ou o espaço

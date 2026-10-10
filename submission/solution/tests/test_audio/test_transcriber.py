@@ -27,11 +27,13 @@ def fake_scribe(response):
 
 class TranscribeTest(unittest.TestCase):
     def _run(self, response):
-        with tempfile.NamedTemporaryFile(suffix=".m4a") as handle:
-            handle.write(b"conteudo de audio qualquer")
-            handle.flush()
+        # Um ficheiro numa pasta temporária: um NamedTemporaryFile aberto
+        # não se pode reabrir por nome no Windows.
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "audio.m4a"
+            path.write_bytes(b"conteudo de audio qualquer")
             return transcriber.transcribe(
-                handle.name, fake_scribe(response))
+                str(path), fake_scribe(response))
 
     def test_single_sentence_becomes_one_line(self):
         lines, times = self._run({"words": [
