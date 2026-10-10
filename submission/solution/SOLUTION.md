@@ -37,7 +37,7 @@ Pontos do pipeline, pela ordem do fluxo:
 | 6 | Verificação | feito |
 | 7 | Relatório | feito |
 | 8 | Avaliação própria | **por fazer** |
-| | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), falta o cliente do Gemini |
+| | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), ligado ao Gemini pelo gateway (`src/gateway.py`), por testar com a chave real |
 | | `submission/prompt.txt` e `submission/submission.txt` | **por preencher** |
 
 Sem a deteção, o pipeline já corre no documento do desafio e mascara o que as
@@ -52,6 +52,7 @@ Gemini.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, contrato de dados e estrutura de pastas |
 | [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
+| [GATEWAY.md](GATEWAY.md) | Como o pipeline chama o Gemini pelo Worker Cloudflare |
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
 | [taxonomy.md](taxonomy.md) | Categorias de dados sensíveis |
@@ -71,8 +72,9 @@ Sem `--out` é um ensaio: só mostra o resumo (linhas, itens, avisos e
 problemas da verificação, nunca valores). Com `--out DIR` escreve
 `submission.txt` e `report.md`. `--instructions "..."` junta instruções do
 utilizador e `--include-values` mostra os valores no relatório. Saída 0 sem
-problemas, 1 se a verificação encontrou problemas, 2 em erro. Enquanto o
-cliente do Gemini não estiver ligado, falta `--no-model` dá erro.
+problemas, 1 se a verificação encontrou problemas, 2 em erro. Sem `--no-model`, o
+Gemini é chamado pelo gateway Cloudflare: defina `GEMINI_GATEWAY_URL` e
+`GEMINI_GATEWAY_ORIGIN` (ver [GATEWAY.md](GATEWAY.md)); sem elas dá erro.
 
 Em código, o `pipeline.run(lines, generate)` faz o mesmo e devolve as linhas
 mascaradas, os itens, os avisos, os problemas e o relatório. Passo a passo,
