@@ -212,6 +212,186 @@ class InvalidItemsTest(unittest.TestCase):
         self.assertNotIn("Rui Pinto", warnings[0]["problem"])
 
 
+class NormalizationTest(unittest.TestCase):
+    """Diferenças cosméticas não podem deixar um valor por mascarar."""
+
+    def parse_one(self, element):
+        items, warnings = detection.parse_response(answer(element), LINES)
+        return items, warnings
+
+    def test_text_is_trimmed(self):
+        items, _ = self.parse_one(dict(NAME, text="  Rui Pinto \n"))
+        self.assertEqual(items[0]["text"], "Rui Pinto")
+
+    def test_category_ignores_case_and_spaces(self):
+        for value in ("IDENTIFICACAO", " Identificacao ", "identificação"):
+            items, warnings = self.parse_one(dict(NAME, category=value))
+            self.assertEqual(warnings, [], value)
+            self.assertEqual(items[0]["category"], "identificacao")
+
+    def test_confidence_ignores_case_and_accents(self):
+        for value, expected in (
+            ("provável", "provavel"),
+            ("Provavel", "provavel"),
+            ("CERTO", "certo"),
+            (" incerto ", "incerto"),
+        ):
+            items, warnings = self.parse_one(dict(NAME, confidence=value))
+            self.assertEqual(warnings, [], value)
+            self.assertEqual(items[0]["confidence"], expected)
+
+    def test_unknown_values_are_still_rejected(self):
+        self.assertEqual(
+            len(self.parse_one(dict(NAME, category="outra"))[1]), 1)
+        self.assertEqual(
+            len(self.parse_one(dict(NAME, confidence="talvez"))[1]), 1)
+        self.assertEqual(
+            len(self.parse_one(dict(NAME, category=3))[1]), 1)
+
+    def test_whole_numbers_written_as_decimals_are_accepted(self):
+        items, warnings = self.parse_one(dict(NAME, line=1.0, occurrence=2.0))
+        self.assertEqual(warnings, [])
+        self.assertEqual(items[0]["line"], 1)
+        self.assertIsInstance(items[0]["line"], int)
+        self.assertEqual(items[0]["occurrence"], 2)
+        self.assertIsInstance(items[0]["occurrence"], int)
+
+    def test_fractions_and_strings_are_still_rejected(self):
+        self.assertEqual(len(self.parse_one(dict(NAME, line=1.5))[1]), 1)
+        self.assertEqual(len(self.parse_one(dict(NAME, line="1"))[1]), 1)
+        self.assertEqual(
+            len(self.parse_one(dict(NAME, occurrence=1.5))[1]), 1)
+
+
+class ReconcileTest(unittest.TestCase):
+    """O texto devolvido passa a ser o que está mesmo na linha."""
+
+    def reconcile(self, lines, text, **extra):
+        element = dict(NAME, text=text, **extra)
+        items, warnings = detection.parse_response(answer(element), lines)
+        return items, warnings
+
+    def masked(self, lines, text, **extra):
+        items, _ = self.reconcile(lines, text, **extra)
+        return masking.mask_lines(lines, items)
+
+    def test_exact_text_is_left_alone(self):
+        items, _ = self.reconcile(LINES, "Rui Pinto")
+        self.assertEqual(items[0]["text"], "Rui Pinto")
+
+    def test_other_case_gets_the_text_of_the_document(self):
+        for wrong in ("rui pinto", "RUI PINTO", "rUi PiNtO"):
+            items, _ = self.reconcile(LINES, wrong)
+            self.assertEqual(items[0]["text"], "Rui Pinto", wrong)
+
+    def test_other_case_is_masked(self):
+        masked, warnings = self.masked(LINES, "rui pinto")
+        self.assertEqual(masked[0], "Nome: * *")
+        self.assertEqual(warnings, [])
+
+    def test_trailing_space_is_masked(self):
+        masked, warnings = self.masked(LINES, "Rui Pinto ")
+        self.assertEqual(masked[0], "Nome: * *")
+        self.assertEqual(warnings, [])
+
+    def test_repeated_spaces_in_the_document(self):
+        lines = ["Nome:  Rui   Pinto"]
+        items, _ = self.reconcile(lines, "Rui Pinto")
+        self.assertEqual(items[0]["text"], "Rui   Pinto")
+        masked, warnings = masking.mask_lines(lines, items)
+        self.assertEqual(masked, ["Nome:  *   *"])
+        self.assertEqual(warnings, [])
+
+    def test_accents_must_still_match(self):
+        lines = ["Nome: João Silva"]
+        items, _ = self.reconcile(lines, "Joao Silva")
+        self.assertEqual(items[0]["text"], "Joao Silva")
+
+    def test_special_characters_are_not_read_as_a_pattern(self):
+        lines = ["Valor (a+b)? [x]"]
+        items, _ = self.reconcile(lines, "(A+B)?")
+        self.assertEqual(items[0]["text"], "(a+b)?")
+
+    def test_text_not_in_the_line_is_left_for_the_masking(self):
+        lines = ["a", "Rui Pinto", "c"]
+        items, _ = self.reconcile(lines, "Rui Pinto", line=1)
+        self.assertEqual(items[0]["text"], "Rui Pinto")
+        masked, warnings = masking.mask_lines(lines, items)
+        self.assertEqual(masked, ["a", "* *", "c"])
+        self.assertEqual(warnings, [])
+
+    def test_text_that_exists_nowhere_gives_a_masking_warning(self):
+        masked, warnings = self.masked(LINES, "Ana Silva")
+        self.assertEqual(masked, LINES)
+        self.assertEqual(len(warnings), 1)
+
+    def test_label_included_by_the_model_masks_the_label_too(self):
+        """Limitação conhecida: a deteção não adivinha a etiqueta."""
+        masked, warnings = self.masked(LINES, "Nome: Rui Pinto")
+        self.assertEqual(masked[0], "*: * *")
+        self.assertEqual(warnings, [])
+
+    def test_the_detect_function_reconciles_too(self):
+        model = FakeModel(answer(dict(NAME, text="rui pinto ")))
+        items, _ = detection.detect(LINES, model)
+        self.assertEqual(items[0]["text"], "Rui Pinto")
+
+
+class EmptyAnswerTest(unittest.TestCase):
+    RULES = [{"line": 2, "text": "123456789", "source": "regex"}]
+
+    def test_warns_when_the_model_found_nothing_but_the_rules_did(self):
+        warnings = detection.empty_answer_warnings([], self.RULES)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("nenhum item", warnings[0]["problem"])
+        self.assertIsNone(warnings[0]["line"])
+
+    def test_no_warning_when_the_model_found_something(self):
+        self.assertEqual(
+            detection.empty_answer_warnings([NAME], self.RULES), [])
+
+    def test_no_warning_when_nobody_found_anything(self):
+        self.assertEqual(detection.empty_answer_warnings([], []), [])
+
+    def test_the_warning_does_not_repeat_any_value(self):
+        warning = detection.empty_answer_warnings([], self.RULES)[0]
+        self.assertNotIn("123456789", str(warning))
+
+
+class KnownLimitsTest(unittest.TestCase):
+    """Respostas que a deteção não recupera; falham de forma visível."""
+
+    def test_truncated_json_raises(self):
+        truncated = answer(NAME, NIF)[:-15]
+        with self.assertRaises(detection.DetectionError):
+            detection.parse_response(truncated, LINES)
+
+    def test_list_wrapped_in_an_object_raises(self):
+        with self.assertRaises(detection.DetectionError):
+            detection.parse_response(json.dumps({"items": [NAME]}), LINES)
+
+    def test_trailing_comma_raises(self):
+        with self.assertRaises(detection.DetectionError):
+            detection.parse_response(answer(NAME)[:-1] + ",]", LINES)
+
+    def test_single_quotes_raise(self):
+        with self.assertRaises(detection.DetectionError):
+            detection.parse_response(answer(NAME).replace('"', "'"), LINES)
+
+    def test_a_refusal_raises(self):
+        with self.assertRaises(detection.DetectionError):
+            detection.parse_response("Não posso processar isto.", LINES)
+
+    def test_empty_list_followed_by_text_is_an_empty_answer(self):
+        self.assertEqual(
+            detection.parse_response("[]\nDesculpa.", LINES), ([], []))
+
+    def test_big_answers_are_fast_enough(self):
+        elements = [dict(NAME, text="t%d" % i) for i in range(20000)]
+        items, _ = detection.parse_response(answer(*elements), LINES)
+        self.assertEqual(len(items), 20000)
+
+
 class DetectTest(unittest.TestCase):
     def test_sends_prompt_and_numbered_document(self):
         model = FakeModel(answer(NAME))

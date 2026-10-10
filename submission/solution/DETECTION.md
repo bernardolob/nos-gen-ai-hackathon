@@ -64,6 +64,24 @@ Cada elemento tem de ter:
 
 Os itens repetidos (mesma linha, texto e ocorrência) contam uma só vez.
 
+### Tolerância a diferenças de forma
+
+Um valor não pode ficar por mascarar (nem ser rejeitado) por uma diferença que
+não muda o sentido. Por isso:
+
+| O modelo devolve | A deteção faz |
+|---|---|
+| `"Rui Pinto "` ou `" Rui Pinto"` | tira os espaços das pontas do `text` |
+| `"rui pinto"` ou `"RUI PINTO"` | usa o texto que está **na linha** (`Rui Pinto`) |
+| `"Rui Pinto"` quando o documento tem `Rui   Pinto` | idem: usa `Rui   Pinto` |
+| `category: "IDENTIFICACAO"`, `confidence: "provável"` | ignora maiúsculas, acentos e espaços; guarda o id canónico |
+| `line: 1.0`, `occurrence: 2.0` | aceita decimais sem parte fracionária; guarda inteiros |
+
+**Os acentos do `text` têm de coincidir** com os do documento (`Joao` não
+reconcilia com `João`), e `line` ou `occurrence` em texto (`"1"`) continuam a
+ser rejeitados. Se o valor não está na linha indicada, fica como veio: o
+mascaramento procura nas linhas vizinhas e no documento todo.
+
 ## Erros e avisos
 
 | Situação | O que acontece |
@@ -81,6 +99,15 @@ mostra os dois juntos.
 pode conter os dados sensíveis. O texto do elemento rejeitado só aparece no
 campo `text` do aviso, e o relatório só o mostra com `include_values=True`.
 
+### Lista vazia
+
+Uma lista vazia é uma resposta válida, mas num documento em que as regras de
+segurança apanham identificadores quase de certeza que o modelo falhou
+(recusou, perdeu o fio, foi cortado). A função
+`empty_answer_warnings(itens_do_modelo, itens_das_regras)` devolve um aviso
+nesse caso, sem repetir valores. Quem liga os componentes (o ponto de entrada)
+deve chamá-la e juntar o aviso aos outros.
+
 ## Limitações
 
 - **Um só pedido por documento.** Documentos longos que não caibam no pedido
@@ -89,19 +116,41 @@ campo `text` do aviso, e o relatório só o mostra com `include_values=True`.
   desafio (cerca de 3 000) somam cerca de 9 200.
 - **Itens mal formados perdem proteção.** Um elemento rejeitado deixa o valor
   por mascarar; o aviso é a única pista. Convém mostrá-los a quem executa.
-- **Não confirma que o texto está na linha.** Se o modelo devolver um valor
-  que não está lá, o mascaramento procura-o nas linhas vizinhas e no
-  documento todo, e gera um aviso se não o encontrar.
+- **Etiqueta incluída no valor.** Se o modelo devolve `Nome: Rui Pinto` em vez
+  de `Rui Pinto`, o mascaramento oculta também a etiqueta (`*: * *`). A
+  deteção não a adivinha; a correção é na prompt, que já o proíbe.
+- **Resposta cortada.** Um JSON truncado (limite de tokens de saída) dá
+  `DetectionError` e a repetição provavelmente trunca de novo. A solução é no
+  cliente: pedir resposta em JSON e um limite de saída adequado.
+- **Formatos que não aceitamos:** vírgula a mais antes do `]`, aspas simples e
+  a lista dentro de um objeto (`{"items": [...]}`). Falham de forma visível e
+  a repetição pode resolver.
+- **Custo da reconciliação:** cerca de 1,3 s para 50 000 elementos. Para as
+  dezenas de itens de uma resposta real é irrelevante.
+- **Não adivinha valores.** Se o texto não está na linha, nem sem distinguir
+  maiúsculas, fica como veio e o mascaramento procura-o nas linhas vizinhas e
+  no documento todo, e gera um aviso se não o encontrar.
 - **Ainda não foi testada com o Gemini.** Os testes usam um cliente falso. O
-  cliente real, e o adaptador para ele, estão por fazer.
+  cliente real, e o adaptador para ele, estão por fazer. Isto quer dizer que
+  **a qualidade da deteção em si (o que o modelo apanha) ainda não está
+  medida**: o que se testa aqui é o que fazemos com a resposta.
 
 ## Testes
 
-`tests/test_detection.py`, só com a biblioteca padrão:
+`tests/test_detection.py` (65 testes), só com a biblioteca padrão:
 
 ```bash
 python -m unittest discover -s submission/solution/tests -p "test_detection.py" -v
 ```
 
-Inclui um teste que liga a deteção ao mascaramento e ao relatório com o mesmo
-contrato.
+| Grupo | O que verifica |
+|---|---|
+| Pedido | Numeração das linhas, blocos `<document>` e `<user_instructions>`, a prompt interna |
+| Resposta válida | Itens, bloco de código, texto à volta, NFC, ocorrências, duplicados |
+| Elementos inválidos | Linha, texto, categoria, confiança, razão e ocorrência inválidos; avisos |
+| Normalização | Espaços, maiúsculas, acentos e decimais (`1.0`) |
+| Reconciliação | Outras maiúsculas e espaços, valor mascarado de ponta a ponta |
+| Lista vazia | Aviso quando as regras apanharam algo e o modelo não |
+| Limites conhecidos | JSON truncado, lista dentro de objeto, vírgula a mais, recusa |
+| `detect` | Repetição, falha após as tentativas, erros do cliente, mensagens sem a resposta |
+| Ponta a ponta | Deteção, mascaramento e relatório com o mesmo contrato |

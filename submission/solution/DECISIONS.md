@@ -124,6 +124,15 @@ função `generate(instrução_de_sistema, conteúdo) -> texto`.
   aviso; só uma resposta que não seja uma lista JSON é repetida. Deitar fora
   tudo por causa de um elemento perderia proteção; aceitar o elemento
   estragado quebraria o mascaramento.
+- **Tolerante na forma, exigente no conteúdo.** Maiúsculas, espaços nas
+  pontas, acentos nos ids e `1.0` por `1` não deitam um valor fora: um
+  anonimizador que falha em silêncio por uma diferença cosmética é pior do
+  que um que a absorve. O `text` passa a ser o que está na linha, para o
+  mascaramento o encontrar. O que muda o sentido (categoria desconhecida,
+  linha fora do documento, acentos diferentes no valor) continua a ser
+  rejeitado, com aviso.
+- **Uma lista vazia levanta suspeita.** É válida, mas se as regras de
+  segurança apanharam algo, `empty_answer_warnings` avisa.
 - **As mensagens nunca repetem a resposta do modelo**, porque pode conter os
   dados sensíveis.
 - **Categorias e níveis de confiança numa só definição** (`src/categories.py`),

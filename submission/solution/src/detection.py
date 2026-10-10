@@ -13,6 +13,7 @@ a resposta pode conter os dados sensíveis.
 """
 
 import json
+import re
 import unicodedata
 from pathlib import Path
 
@@ -110,6 +111,12 @@ def parse_response(answer, lines):
     elemento inválido gera um aviso ``{"index", "line", "text", "problem"}``
     e fica de fora; os repetidos (mesma linha, texto e ocorrência) contam uma
     só vez.
+
+    Diferenças só de forma não deitam um valor fora nem o deixam por
+    mascarar: o ``text`` perde os espaços das pontas, ``category`` e
+    ``confidence`` ignoram maiúsculas e acentos, ``line`` e ``occurrence``
+    aceitam inteiros escritos como ``1.0``, e o ``text`` passa a ser o que
+    está na linha (ver ``_reconcile``).
     """
     data = _load_json(answer)
     if not isinstance(data, list):
@@ -121,6 +128,7 @@ def parse_response(answer, lines):
         if problem:
             warnings.append(_warning(index, raw, problem))
             continue
+        item["text"] = _reconcile(item["text"], lines[item["line"] - 1])
         key = (item["line"], item["text"], item.get("occurrence"))
         if key not in seen:
             seen.add(key)
@@ -157,38 +165,61 @@ def _strip_code_fence(text):
     return body.strip()
 
 
-def _is_int(value):
-    """Inteiro verdadeiro (``True`` e ``False`` não contam)."""
-    return isinstance(value, int) and not isinstance(value, bool)
+def _as_int(value):
+    """Devolve o inteiro, ou ``None``.
+
+    Aceita um inteiro e um decimal sem parte fracionária (``1.0``). Um
+    booleano ou um texto não contam.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _fold(value):
+    """Texto sem acentos, em minúsculas e sem espaços nas pontas."""
+    decomposed = unicodedata.normalize("NFKD", value)
+    plain = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return plain.strip().lower()
 
 
 def _validate(raw, line_count):
     """Valida um elemento. Devolve ``(item, None)`` ou ``(None, problema)``."""
     if not isinstance(raw, dict):
         return None, "o elemento não é um objeto"
-    line = raw.get("line")
-    if not _is_int(line) or not 1 <= line <= line_count:
+    line = _as_int(raw.get("line"))
+    if line is None or not 1 <= line <= line_count:
         return None, "número de linha inválido"
     text = raw.get("text")
     if not isinstance(text, str) or not text.strip():
         return None, "texto em falta ou vazio"
-    if raw.get("category") not in CATEGORY_NAMES:
+    category = raw.get("category")
+    category = _fold(category) if isinstance(category, str) else None
+    if category not in CATEGORY_NAMES:
         return None, "categoria desconhecida"
-    if raw.get("confidence") not in CONFIDENCE_LEVELS:
+    confidence = raw.get("confidence")
+    confidence = _fold(confidence) if isinstance(confidence, str) else None
+    if confidence not in CONFIDENCE_LEVELS:
         return None, "confiança desconhecida"
     reason = raw.get("reason")
     if reason is not None and not isinstance(reason, str):
         return None, "razão inválida"
     occurrence = raw.get("occurrence")
-    if occurrence is not None and (not _is_int(occurrence) or occurrence < 1):
-        return None, "ocorrência inválida"
+    if occurrence is not None:
+        occurrence = _as_int(occurrence)
+        if occurrence is None or occurrence < 1:
+            return None, "ocorrência inválida"
 
     item = {
         "line": line,
-        "text": unicodedata.normalize("NFC", text),
-        "category": raw["category"],
+        "text": unicodedata.normalize("NFC", text.strip()),
+        "category": category,
         "reason": (reason or "").strip(),
-        "confidence": raw["confidence"],
+        "confidence": confidence,
         "source": SOURCE,
     }
     if occurrence is not None:
@@ -196,14 +227,52 @@ def _validate(raw, line_count):
     return item, None
 
 
+def _reconcile(text, line):
+    """Devolve o texto tal como está na linha, se só difere na forma.
+
+    O modelo pode trocar as maiúsculas ou os espaços (``rui pinto`` por
+    ``Rui Pinto``) e o mascaramento procura o texto letra a letra, por isso o
+    valor ficaria por mascarar. Se o texto não está na linha, procura-o sem
+    distinguir maiúsculas e com os espaços normalizados, e devolve o que lá
+    está. Se não o encontra, devolve-o sem alteração: o mascaramento tenta as
+    linhas vizinhas e avisa se falhar. Os acentos têm de coincidir.
+    """
+    if text in line:
+        return text
+    pattern = r"\s+".join(re.escape(word) for word in text.split())
+    match = re.search(pattern, line, re.IGNORECASE)
+    return match.group(0) if match else text
+
+
+def empty_answer_warnings(items, rule_items):
+    """Avisa se o modelo não devolveu nada mas as regras de segurança sim.
+
+    Uma lista vazia é uma resposta válida, mas, num documento em que as regras
+    apanham identificadores, quase de certeza que o modelo falhou (recusou,
+    perdeu o fio, foi cortado). Devolve uma lista com zero ou um aviso, no
+    formato dos outros; o texto do aviso nunca inclui valores.
+    """
+    if items or not rule_items:
+        return []
+    return [{
+        "index": None,
+        "line": None,
+        "text": None,
+        "problem": (
+            "o modelo não devolveu nenhum item, mas as regras de segurança "
+            "apanharam %d" % len(rule_items)
+        ),
+    }]
+
+
 def _warning(index, raw, problem):
     """Aviso sobre um elemento rejeitado, no formato dos avisos do resto."""
     fields = raw if isinstance(raw, dict) else {}
-    line = fields.get("line")
+    line = _as_int(fields.get("line"))
     text = fields.get("text")
     return {
         "index": index,
-        "line": line if _is_int(line) else None,
+        "line": line,
         "text": text if isinstance(text, str) else None,
         "problem": problem,
     }
