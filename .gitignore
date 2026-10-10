@@ -162,6 +162,10 @@ dmypy.json
 cython_debug/
 .ruff_cache/
 
+# Node tooling used by the Cloudflare Worker
+node_modules/
+.wrangler/
+
 # ----------------------------------------
 # PDM Specific Files
 # ----------------------------------------

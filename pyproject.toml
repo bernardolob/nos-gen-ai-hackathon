@@ -11,14 +11,17 @@ requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
+  "fastapi>=0.120,<1",
   "google-genai>=2.28,<3",
   "httpx>=0.28,<1",
   "pydantic>=2.12,<3",
   "pydantic-settings>=2.11,<3",
+  "uvicorn>=0.38,<1",
 ]
 
 [project.optional-dependencies]
 test = [
+  "build>=1.3,<2",
   "flake8>=7.3,<8",
   "pytest>=8.4,<9",
   "pytest-cov>=7,<8",
@@ -26,6 +29,7 @@ test = [
 
 [project.scripts]
 nos-gemini-check = "nos_anonymizer.cli:main"
+nos-anonymizer-api = "nos_anonymizer.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
