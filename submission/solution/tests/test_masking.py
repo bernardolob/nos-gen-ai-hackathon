@@ -349,53 +349,88 @@ class WholeWordTest(unittest.TestCase):
 
 
 class CompoundNameTest(unittest.TestCase):
-    """Um nome ligado por hífen é uma palavra: não se mascara só uma parte."""
+    """Um nome ligado por hífen é uma palavra: mascara-se por inteiro."""
 
     LINES = ["Nome: Ana-Maria Silva", "Mãe: Ana"]
 
-    def test_a_value_is_not_propagated_into_a_compound_name(self):
+    def test_a_value_inside_a_compound_name_masks_the_whole_compound(self):
         out, warnings = mask(self.LINES, [{"line": 2, "text": "Ana"}])
-        self.assertEqual(out, ["Nome: Ana-Maria Silva", "Mãe: *"])
+        self.assertEqual(out, ["Nome: * Silva", "Mãe: *"])
         self.assertEqual(warnings, [])
         self.assertEqual(verification.compare_lines(self.LINES, out), [])
 
-    def test_the_compound_name_itself_is_masked_whole(self):
+    def test_the_full_name_as_one_item_masks_the_surname_too(self):
         out, _ = mask(self.LINES, [{"line": 1, "text": "Ana-Maria Silva"}])
         self.assertEqual(out, ["Nome: * *", "Mãe: Ana"])
 
-    def test_the_compound_name_and_the_short_one_together(self):
+    def test_the_full_name_and_the_short_one_together(self):
         out, _ = mask(self.LINES, [
             {"line": 1, "text": "Ana-Maria Silva"},
             {"line": 2, "text": "Ana"},
         ])
         self.assertEqual(out, ["Nome: * *", "Mãe: *"])
 
-    def test_the_end_of_a_compound_name_is_not_masked_either(self):
+    def test_the_surname_as_its_own_item_is_masked(self):
+        out, _ = mask(self.LINES, [
+            {"line": 2, "text": "Ana"},
+            {"line": 1, "text": "Silva"},
+        ])
+        self.assertEqual(out, ["Nome: * *", "Mãe: *"])
+
+    def test_the_surname_is_only_masked_if_the_model_flags_it(self):
+        """Com o item só `Ana`, o código não sabe que `Silva` é do nome."""
+        out, _ = mask(self.LINES, [{"line": 2, "text": "Ana"}])
+        self.assertEqual(out[0], "Nome: * Silva")
+
+    def test_the_end_of_a_compound_name_is_masked_whole_too(self):
         out, _ = mask(["João-Ana e Ana"], [{"line": 1, "text": "Ana"}])
-        self.assertEqual(out, ["João-Ana e *"])
+        self.assertEqual(out, ["* e *"])
 
-    def test_the_whole_word_in_another_line_beats_the_compound(self):
-        out, _ = mask(["Ana-Maria", "Ana"], [{"line": 1, "text": "Ana"}])
-        self.assertEqual(out, ["Ana-Maria", "*"])
+    def test_a_compound_with_three_parts(self):
+        out, _ = mask(["Ana-Maria-José Silva"], [{"line": 1, "text": "Ana"}])
+        self.assertEqual(out, ["* Silva"])
 
-    def test_only_inside_a_compound_the_part_is_still_masked(self):
-        """Protege o valor; a verificação assinala a palavra incompleta."""
+    def test_the_only_occurrence_is_inside_a_compound(self):
         lines = ["Nome: Ana-Maria"]
         out, warnings = mask(lines, [{"line": 1, "text": "Ana"}])
-        self.assertEqual(out, ["Nome: *-Maria"])
+        self.assertEqual(out, ["Nome: *"])
         self.assertEqual(warnings, [])
-        issues = verification.compare_lines(lines, out)
-        self.assertEqual([i["type"] for i in issues],
-                         ["unexpected_word_change"])
+        self.assertEqual(verification.compare_lines(lines, out), [])
 
-    def test_a_hyphen_that_is_not_a_compound_does_not_block(self):
+    def test_a_short_value_without_propagation_also_expands(self):
+        out, _ = mask(["Zé-Maria"], [{"line": 1, "text": "Zé"}])
+        self.assertEqual(out, ["*"])
+
+    def test_punctuation_around_the_compound_is_kept(self):
+        out, _ = mask(
+            ["Filha (Ana-Maria), 12 anos"],
+            [{"line": 1, "text": "Ana"}],
+        )
+        self.assertEqual(out, ["Filha (*), 12 anos"])
+
+    def test_unicode_hyphens_join_words_too(self):
+        out, _ = mask(["Ana‑Maria Silva"], [{"line": 1, "text": "Ana"}])
+        self.assertEqual(out, ["* Silva"])
+
+    def test_a_hyphen_that_does_not_join_two_words_does_not_expand(self):
         out, _ = mask(["Ana - Maria", "- Ana"], [{"line": 1, "text": "Ana"}])
         self.assertEqual(out, ["* - Maria", "- *"])
+
+    def test_a_trailing_or_leading_hyphen_does_not_expand(self):
+        out, _ = mask(["Ana- e -Ana"], [{"line": 1, "text": "Ana"}])
+        self.assertEqual(out, ["*- e -*"])
 
     def test_numbers_are_not_propagated_into_dates(self):
         lines = ["Idade: 1234", "Data: 1234-05-06"]
         out, _ = mask(lines, [{"line": 1, "text": "1234"}])
         self.assertEqual(out, ["Idade: *", "Data: 1234-05-06"])
+
+    def test_a_number_inside_a_hyphenated_code_is_not_expanded(self):
+        out, _ = mask(
+            ["ID-BIO-12345 e 12345"],
+            [{"line": 1, "text": "12345"}],
+        )
+        self.assertEqual(out, ["ID-BIO-12345 e *"])
 
 
 class PropagationTest(unittest.TestCase):

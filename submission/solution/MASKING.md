@@ -32,9 +32,9 @@ duas exceções à regra das barras, que são **uma só palavra** apesar delas:
   `sept`...). Uma palavra qualquer entre barras continua a separar:
   `12/xyz/1978` dá `*/*/*` e `Rui/2` dá `*/*`.
 
-Um **hífen entre duas palavras** liga-as: `Ana-Maria` é uma só. Isto conta
-também quando se procura o valor no resto do documento (ver "Outras
-ocorrências").
+Um **hífen entre duas palavras** liga-as: `Ana-Maria` é uma só. Por isso, se
+o valor sensível é `Ana` e aparece dentro de `Ana-Maria`, mascara-se o nome
+composto **inteiro** (ver "Nomes compostos com hífen").
 
 A definição vive em `src/words.py`, partilhada com a verificação.
 
@@ -121,11 +121,28 @@ Para valores curtos só com números, usa-se `occurrence` para escolher qual.
 
 ### Nomes compostos com hífen
 
-Um valor não se propaga para dentro de um nome ligado por hífen: com o item
-`Ana`, a linha `Nome: Ana-Maria Silva` mantém-se e só `Mãe: Ana` é mascarada.
-Mascarar só `Ana` deixaria `Maria` visível (`*-Maria`). Se o valor é o nome
-composto inteiro (`Ana-Maria Silva`), mascara-se por completo (`* *`). Pela
-mesma razão, `1234` não se propaga para dentro de `1234-05-06`.
+Um nome ligado por hífen é **uma palavra**, e uma palavra mascara-se por
+inteiro. Quando o valor sensível (com letras) aparece dentro de um nome
+composto, o mascaramento cobre o nome composto todo, e não só o pedaço:
+
+| Itens | `Nome: Ana-Maria Silva` e `Mãe: Ana` |
+|---|---|
+| só `Ana` | `Nome: * Silva` e `Mãe: *` |
+| `Ana-Maria Silva` (o nome completo) | `Nome: * *` e `Mãe: Ana` |
+| `Ana-Maria Silva` e `Ana` | `Nome: * *` e `Mãe: *` |
+| `Ana` e `Silva` | `Nome: * *` e `Mãe: *` |
+
+Valem as mesmas regras para o fim do composto (`João-Ana`), para compostos
+com mais partes (`Ana-Maria-José`) e para os hífens Unicode. Um hífen que
+não liga duas palavras (`Ana - Maria`, `- Ana`, `Ana-`) não alarga nada.
+
+**A `Silva` só é mascarada se for apontada.** O código não sabe que `Silva`
+faz parte do nome da `Ana`; quem o sabe é o modelo, que deve devolver o nome
+completo como um só item. Com o item só `Ana`, fica `Nome: * Silva`.
+
+**Os números são diferentes:** `1234` não se propaga para dentro de
+`1234-05-06` nem de um código `ID-1234`, porque um número dentro de uma data
+ou de um código é, quase sempre, outra coisa.
 
 ## Itens sobrepostos
 
@@ -149,9 +166,8 @@ mascarada uma vez.
   só `*`, mas uma abreviatura que não esteja na lista (`12/sep./1978` está,
   `12/mrç/1978` não) continua a dar três.
 - **O hífen nunca separa.** `Ana-Maria` é uma palavra, mas um intervalo como
-  `Lisboa-Porto` também. Se o item é só `Ana` e a única ocorrência é
-  `Ana-Maria`, mascara-se esse pedaço (`*-Maria`), para o valor ficar
-  protegido, e a verificação assinala-o.
+  `Lisboa-Porto` também. Se o item é `Lisboa`, mascara-se `Lisboa-Porto`
+  inteiro, e `Porto` fica mascarada mesmo que não seja sensível.
 - **Os caracteres de pontuação ficam na saída.** Um item como
   `Rua das Flores, 123, Apt 45` mantém as vírgulas: `* * *, *, * *`.
   A pontuação em si não é dado sensível.

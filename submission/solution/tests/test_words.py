@@ -95,13 +95,17 @@ class WholeWordPatternTest(unittest.TestCase):
     def test_punctuation_is_a_boundary(self):
         self.assertEqual(self.starts("Ana", "(Ana), Ana; Ana."), [1, 7, 12])
 
-    def test_a_hyphen_between_word_characters_joins_words(self):
-        for line in ("Ana-Maria", "Maria-Ana", "Ana-1", "x-Ana-y"):
-            self.assertEqual(self.starts("Ana", line), [], line)
+    def test_a_name_is_found_inside_a_hyphenated_compound(self):
+        for line in ("Ana-Maria", "Maria-Ana", "x-Ana-y"):
+            self.assertEqual(len(self.starts("Ana", line)), 1, line)
 
-    def test_unicode_hyphens_join_words_too(self):
-        self.assertEqual(self.starts("Ana", "Ana‑Maria"), [])
-        self.assertEqual(self.starts("Ana", "Ana‐Maria"), [])
+    def test_a_number_is_not_found_inside_a_hyphenated_code(self):
+        for line in ("1234-05-06", "ID-1234", "1234-A"):
+            self.assertEqual(self.starts("1234", line), [], line)
+
+    def test_a_number_next_to_a_hyphen_that_joins_nothing(self):
+        for line in ("1234 - x", "- 1234", "1234-", " -1234"):
+            self.assertEqual(len(self.starts("1234", line)), 1, line)
 
     def test_a_hyphen_that_does_not_join_two_words(self):
         for line in ("Ana - Maria", "- Ana", " -Ana", "Ana-", "Ana – Maria"):
@@ -113,6 +117,50 @@ class WholeWordPatternTest(unittest.TestCase):
     def test_multi_word_text(self):
         self.assertEqual(
             self.starts("Rui Pinto", "Rui Pintor e Rui Pinto"), [13])
+
+
+class ExpandCompoundTest(unittest.TestCase):
+    """Um valor dentro de um nome ligado por hífen cobre o nome todo."""
+
+    def expand(self, line, text):
+        start = line.index(text)
+        begin, end = words.expand_compound(line, start, start + len(text))
+        return line[begin:end]
+
+    def test_to_the_right(self):
+        self.assertEqual(
+            self.expand("Nome: Ana-Maria Silva", "Ana"), "Ana-Maria")
+
+    def test_to_the_left(self):
+        self.assertEqual(
+            self.expand("Nome: João-Ana Silva", "Ana"), "João-Ana")
+
+    def test_both_sides_and_several_parts(self):
+        self.assertEqual(
+            self.expand("a Ana-Maria-José b", "Maria"), "Ana-Maria-José")
+
+    def test_unicode_hyphens(self):
+        for hyphen in ("‐", "‑"):
+            line = "Ana%sMaria" % hyphen
+            self.assertEqual(self.expand(line, "Ana"), line)
+
+    def test_a_standalone_word_is_left_alone(self):
+        self.assertEqual(self.expand("Nome: Ana Silva", "Ana"), "Ana")
+
+    def test_hyphens_that_join_nothing(self):
+        for line in ("Ana - Maria", "Ana- Maria", "Ana -Maria", "- Ana",
+                     "Ana-"):
+            self.assertEqual(self.expand(line, "Ana"), "Ana", line)
+
+    def test_the_edges_of_the_line(self):
+        self.assertEqual(self.expand("Ana-Maria", "Ana"), "Ana-Maria")
+        self.assertEqual(self.expand("Maria-Ana", "Ana"), "Maria-Ana")
+
+    def test_punctuation_is_not_part_of_the_compound(self):
+        self.assertEqual(self.expand("(Ana-Maria),", "Ana"), "Ana-Maria")
+
+    def test_an_en_dash_does_not_join(self):
+        self.assertEqual(self.expand("Ana–Maria", "Ana"), "Ana")
 
 
 class SharedRuleTest(unittest.TestCase):

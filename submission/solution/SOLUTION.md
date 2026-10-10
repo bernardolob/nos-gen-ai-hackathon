@@ -126,7 +126,7 @@ a pontuação original.
   `João,Ana` dá `*,*` e `Rui/Ana` dá `*/*`. Entre dois dígitos não separam:
   `1,68m` e `12/03/1978` ficam com um único `*`. Uma data com o mês
   escrito (`12/mar/1978`) é uma só palavra, e um hífen liga duas palavras
-  (`Ana-Maria`).
+  (`Ana-Maria` é uma só: um valor dentro dela mascara-a por inteiro).
 - Os espaços e a estrutura das linhas não mudam.
 - O item é procurado como **palavra inteira** (`Ana` em `Anabela e Ana` é a
   última palavra, não o início de `Anabela`), na linha indicada, depois nas
