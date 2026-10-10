@@ -13,7 +13,8 @@ Regras (detalhes e exemplos em ``MASKING.md``):
 - os endereços web são uma só palavra;
 - a pontuação nas pontas de uma palavra mantém-se (``Santos,`` dá ``*,``);
 - um símbolo isolado, sem letras nem números (``-``), não é uma palavra;
-- um hífen entre duas palavras liga-as: ``Ana-Maria`` é uma só.
+- um hífen entre duas palavras liga-as: ``Ana-Maria`` é uma só, e um valor
+  dentro dela mascara-a por inteiro.
 """
 
 import re
@@ -73,15 +74,66 @@ def mask_token(token):
     )
 
 
+def has_letters(text):
+    """Diz se o texto tem pelo menos uma letra (um nome, não um número)."""
+    return any(char.isalpha() for char in text)
+
+
 def whole_word_pattern(text):
     """Expressão que encontra ``text`` só como palavra inteira.
 
-    Não há letras, dígitos ou ``_`` colados de nenhum dos lados, e um hífen
-    entre duas palavras também as liga: ``Ana`` não está em ``Anabela`` nem em
-    ``Ana-Maria``, mas está em ``(Ana)``, ``Ana - Maria`` e ``- Ana``.
+    Não há letras, dígitos ou ``_`` colados de nenhum dos lados:
+    ``Ana`` não está em ``Anabela``, mas está em ``(Ana)``, ``Ana - Maria`` e
+    ``- Ana``.
+
+    Um hífen entre duas palavras liga-as. Para um **nome** (``text`` com
+    letras), ``Ana`` está também em ``Ana-Maria``: é a palavra ``Ana-Maria``
+    que se mascara (ver ``expand_compound``). Para um **número**, um hífen
+    não deixa encontrá-lo (``1234`` não está em ``1234-05-06``): um número
+    não se propaga para dentro de uma data ou de um código.
     """
-    return re.compile(
-        r"(?<!\w)(?<!\w[" + HYPHENS + r"])"
-        + re.escape(text)
-        + r"(?!\w)(?![" + HYPHENS + r"]\w)"
+    before = r"(?<!\w)"
+    after = r"(?!\w)"
+    if not has_letters(text):
+        before += r"(?<!\w[" + HYPHENS + r"])"
+        after += r"(?![" + HYPHENS + r"]\w)"
+    return re.compile(before + re.escape(text) + after)
+
+
+def _is_word_char(char):
+    """Letra, dígito ou sublinhado: o que conta como parte de uma palavra."""
+    return char.isalnum() or char == "_"
+
+
+def _hyphen_joins(line, hyphen_at, word_at):
+    """Diz se o hífen em ``hyphen_at`` liga à palavra em ``word_at``."""
+    return (
+        0 <= hyphen_at < len(line)
+        and 0 <= word_at < len(line)
+        and line[hyphen_at] in HYPHENS
+        and _is_word_char(line[word_at])
     )
+
+
+def expand_compound(line, start, end):
+    """Alarga ``[start, end)`` ao nome ligado por hífens que o contém.
+
+    ``Ana`` em ``Nome: Ana-Maria Silva`` cobre ``Ana-Maria``. Um hífen só
+    liga se tem uma palavra de cada lado, por isso ``Ana - Maria``, ``- Ana``
+    e ``Ana-`` não alargam nada. Uma pontuação à volta não faz parte do nome:
+    em ``(Ana-Maria),`` cobre ``Ana-Maria``.
+    """
+    while True:
+        moved = False
+        if _hyphen_joins(line, start - 1, start - 2):
+            start -= 2
+            while start > 0 and _is_word_char(line[start - 1]):
+                start -= 1
+            moved = True
+        if _hyphen_joins(line, end, end + 1):
+            end += 2
+            while end < len(line) and _is_word_char(line[end]):
+                end += 1
+            moved = True
+        if not moved:
+            return start, end

@@ -40,8 +40,8 @@ Regra do enunciado: um `*` por cada palavra anonimizada. Concretizamos assim
 - a pontuação nas pontas mantém-se (`Santos,` dá `*,`);
 - uma data com o mês escrito (`12/mar/1978`) e um endereço web são uma só
   palavra;
-- um hífen entre duas palavras liga-as (`Ana-Maria` é uma só), e um valor não
-  se propaga para dentro de um nome composto;
+- um hífen entre duas palavras liga-as: `Ana-Maria` é uma só, e um valor
+  (`Ana`) dentro dela mascara o nome composto inteiro;
 - um símbolo isolado (`-`) não é uma palavra.
 
 - **Porquê:** `João,Ana` e `João, Ana` são o mesmo conteúdo e devem dar o
@@ -173,6 +173,21 @@ marcar como erro o que o mascaramento fez bem.
   mascaramento produz passa sempre na verificação.
 - **Porquê agora:** a correção das datas com o mês escrito e dos nomes
   compostos tocava na regra, e fazê-lo em duas cópias seria repetir o erro.
+
+### 14. Um nome composto com hífen mascara-se por inteiro
+
+Se o valor sensível é `Ana` e aparece dentro de `Ana-Maria`, mascara-se
+`Ana-Maria` (um só `*`), e não só `Ana` (`*-Maria`).
+
+- **Porquê:** um hífen liga duas palavras numa só, e uma palavra mascara-se
+  por inteiro (a regra do enunciado conta palavras). Mascarar só o pedaço
+  deixaria `Maria` visível e a palavra incompleta.
+- **Custo:** `Maria` fica mascarada sem ter sido apontada. É a parte do mesmo
+  nome, por isso é o lado seguro.
+- **Só para valores com letras.** Um número não se propaga para dentro de uma
+  data (`1234-05-06`) nem de um código (`ID-1234`).
+- **O apelido só se mascara se for apontado** (ou se o item for o nome
+  completo). O código não sabe o que é o apelido de quem.
 
 ## Decisões em aberto
 

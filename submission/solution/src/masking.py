@@ -20,7 +20,8 @@ Regras:
   linhas vizinhas e depois no documento todo; só sem nenhuma palavra inteira
   se aceita um pedaço de palavra. Se não for encontrado, gera um aviso.
 - Os valores são também mascarados nas outras ocorrências, quando aparecem
-  como palavra inteira (``Ana`` não se mascara dentro de ``Ana-Maria``): os
+  como palavra inteira (``Ana`` dentro de ``Ana-Maria`` mascara o nome
+  composto todo): os
   que têm letras com pelo menos ``MIN_PROPAGATION_LETTERS`` caracteres e os
   só com números com pelo menos ``MIN_PROPAGATION_LENGTH``.
 - Um símbolo isolado, sem letras nem números (como ``-``), não é uma palavra
@@ -29,7 +30,12 @@ Regras:
 
 import re
 
-from words import mask_token, whole_word_pattern
+from words import (
+    expand_compound,
+    has_letters,
+    mask_token,
+    whole_word_pattern,
+)
 
 MIN_PROPAGATION_LENGTH = 4
 MIN_PROPAGATION_LETTERS = 3
@@ -53,7 +59,7 @@ def mask_lines(lines, items):
             warnings.append(_warning(item, "não encontrado no documento"))
             continue
         index, start = found
-        spans[index].append((start, start + len(text)))
+        spans[index].append(_cover(lines[index], start, text))
         if _should_propagate(text):
             _add_other_occurrences(lines, text, spans)
     masked = [_apply(line, spans[i]) for i, line in enumerate(lines)]
@@ -149,12 +155,25 @@ def _should_propagate(text):
     return len(text) >= MIN_PROPAGATION_LENGTH
 
 
+def _cover(line, start, text):
+    """Intervalo a mascarar para ``text`` encontrado em ``start``.
+
+    Um nome dentro de um nome composto cobre o nome todo (``Ana`` em
+    ``Ana-Maria`` cobre ``Ana-Maria``), porque as palavras ligadas por hífen
+    são uma só e mascaram-se por inteiro. Um número cobre só o que é.
+    """
+    end = start + len(text)
+    if has_letters(text):
+        return expand_compound(line, start, end)
+    return start, end
+
+
 def _add_other_occurrences(lines, text, spans):
     """Acrescenta as ocorrências de ``text`` como palavra inteira."""
     pattern = whole_word_pattern(text)
     for index, line in enumerate(lines):
         for match in pattern.finditer(line):
-            spans[index].append(match.span())
+            spans[index].append(_cover(line, match.start(), text))
 
 
 def _merge(spans):
