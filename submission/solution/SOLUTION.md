@@ -1,168 +1,166 @@
 # Solução
 
-Sistema que deteta e oculta dados pessoais e sensíveis num documento
-(RGPD), trocando cada palavra sensível por `*`.
+Sistema que deteta dados pessoais e sensíveis num documento (RGPD) e os
+oculta, trocando **cada palavra sensível por um `*`**, sem mudar mais nada. Gera
+também um relatório a explicar o que foi ocultado e porquê.
 
-Este documento é incremental: vai crescendo com a arquitetura. O
-`submission/README.md` é o guia de submissão da organização e não deve ser
-alterado.
+Foi pensado para **qualquer tipo de documento** (formulários, relatórios,
+contratos, emails, registos). O documento do desafio, um relatório de admissão
+hospitalar fictício, é apenas um caso de teste.
 
-## Ficheiros
+Este é o ponto de entrada da documentação da solução. O
+[`submission/README.md`](../README.md) é o guia de submissão da organização e
+não deve ser alterado.
 
-| Ficheiro | Descrição |
-|---|---|
-| `taxonomy.md` | Taxonomia de dados sensíveis: categorias, exemplos do documento, o que não ocultar e decisões em aberto. |
-| `ARCHITECTURE.md` | Componentes núcleo, fluxo e estrutura de pastas. |
-| `MASKING.md` | Como o mascaramento trata cada caso (separadores, pontuação, números, endereços web). |
-| `internal_prompt.txt` | Prompt interna enviada ao Gemini (versão 3, genérica para qualquer tipo de documento; ainda por testar). |
+## Como funciona
 
-## Prompt interna
-
-- Pede ao modelo apenas a **lista de itens sensíveis** em JSON
-  (`line`, `text`, `category`, `reason`, `confidence` e, opcionalmente,
-  `occurrence`). O mascaramento com `*` é feito em código, não pelo modelo.
-- O documento vai entre `<document>` e é tratado como dados, nunca como
-  instruções.
-- Cada linha do documento é enviada numerada (`[7] Nome: ...`). O modelo
-  devolve o número da linha de cada item e o código procura o `text` só
-  dentro dessa linha. Os números são retirados antes do mascaramento, por
-  isso não aparecem no documento final.
-- As instruções opcionais do utilizador vão entre `<user_instructions>` e só
-  podem acrescentar regras de ocultação.
-- As categorias seguem o `taxonomy.md`.
-
-## Regras de segurança (`src/safety_rules.py`)
-
-Padrões fixos (regex) para dados com formato conhecido: emails, telefones com
-`+351`, NIF, Cartão de Cidadão, Segurança Social, CRM, data de nascimento,
-cartão de crédito, validade, CVV, apólice, IBAN e identificadores
-biométricos. `find_sensitive(lines)` devolve itens com os mesmos campos da
-deteção (`line`, `text`, `category`, `reason`, `confidence`) mais
-`source: "regex"`.
-
-Pressupõe texto com a pontuação original. Os números só são apanhados quando
-têm a etiqueta ao lado (por exemplo `NIF:`), porque um número de 9 dígitos
-sozinho pode ser um telefone, um NIF ou uma apólice.
-
-## Mascaramento (`src/masking.py`)
-
-`mask_lines(lines, items)` devolve `(linhas_mascaradas, avisos)`.
-
-- Cada palavra (separada por espaços) de um valor sensível passa a `*`:
-  `Maria Conceição Oliveira Santos` passa a `* * * *`.
-- A pontuação nas pontas de cada palavra mantém-se: `Santos,` passa a `*,` e
-  `(João,` passa a `(*,`. Símbolos como `+` e `€` contam como parte da
-  palavra.
-- A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem espaço:
-  `João,Ana` e `João, Ana` dão ambos dois asteriscos (`*,*` e `*, *`) e
-  `Rui/Ana` dá `*/*`. Entre dois dígitos não separam: `1,68m`, `2.350,50` e
-  `12/03/1978` ficam com um único `*`. O hífen não separa e os endereços web
-  são uma só palavra. Todos os casos estão em [MASKING.md](MASKING.md).
-- Um símbolo isolado, sem letras nem números (por exemplo `-`), não é uma
-  palavra e mantém-se.
-- Os espaços e a estrutura das linhas não mudam.
-
-### Localização dos itens no código
-
-1. Procurar o `text` na linha indicada (usando `occurrence` quando existir).
-2. Se não for encontrado, procurar nas linhas vizinhas e depois no documento
-   todo.
-3. Se mesmo assim falhar, devolver um aviso (`line`, `text`, `problem`) para
-   a verificação e a revisão manual tratarem.
-4. Mascarar também as outras ocorrências do mesmo valor (por exemplo,
-   "Maria Santos" no texto corrido). Só se aplica quando o valor aparece
-   como palavra inteira (`Ana` não apanha `Anabela`) e a valores com pelo
-   menos 3 caracteres, se tiverem letras, ou 4, se forem só números. Assim
-   um `2` isolado não mascara outros `2` sem relação.
-
-O texto dos itens tem de coincidir exatamente com o do documento. Se o Gemini
-devolver o mesmo texto com os acentos decompostos (Unicode NFD), o item não é
-encontrado e gera um aviso. Convém normalizar o texto para NFC na extração e
-na deteção.
-
-## Relatório (`src/report.py`)
-
-`build_report(items, warnings=None, include_values=False)` devolve o relatório
-explicativo em Markdown, a partir dos itens da deteção e das regras de
-segurança e dos avisos do mascaramento:
-
-- um **resumo** (itens ocultados, palavras e contagens por categoria, origem e
-  confiança);
-- uma **tabela** com um item por linha: linha, categoria, razão, confiança,
-  origem e número de palavras;
-- uma secção de **avisos**, se o mascaramento não conseguiu aplicar algum item.
-
-Por defeito o relatório **não mostra os valores originais**: um relatório que
-lista o nome ocultado deixava de ser anónimo. Para uso interno (por exemplo,
-na revisão manual) `include_values=True` mostra-os.
-
-Se o mesmo valor foi apanhado na mesma linha pelo Gemini e pelas regras de
-segurança, aparece uma só vez, com as duas origens e a maior confiança.
-
-## Como correr o projeto
-
-Esta secção cresce à medida que os componentes ficam prontos.
-
-### Requisitos
-
-- Python 3.10 ou superior (o workflow de lint usa 3.10).
-- Uma chave da API do Gemini, guardada numa variável de ambiente e nunca
-  num ficheiro do repositório.
-
-### Verificar o estilo do código (flake8)
-
-O workflow `.github/workflows/lint.yml` corre o `flake8` em cada push e em
-cada pull request, por isso todo o código Python tem de o passar. Antes de
-fazer push, corre localmente a partir da raiz do repositório:
-
-```bash
-pip install flake8
-flake8 .
+```
+PDF -> Extração -> Deteção (Gemini) + Regras de segurança (regex)
+    -> Mascaramento -> Verificação -> submission.txt + relatório
 ```
 
-Se o comando `flake8` não for reconhecido (acontece no Windows quando a pasta
-dos scripts do Python não está no PATH), usa:
-
-```bash
-python -m flake8 .
-```
-
-Sem nenhuma mensagem de erro, o código está conforme. Os erros mais comuns
-são linhas com mais de 79 caracteres, imports não usados, espaços no fim da
-linha e a falta de duas linhas em branco entre funções.
-
-### Correr os testes
-
-Os testes usam apenas a biblioteca padrão do Python (`unittest`). A partir
-da raiz do repositório:
-
-```bash
-python -m unittest discover -s submission/solution/tests -v
-```
-
-Cobrem as regras de segurança (`tests/test_safety_rules.py`) e o
-mascaramento (`tests/test_masking.py`).
-
-### Executar a solução
-
-A fazer: instruções de execução, depois de existir o ponto de entrada.
+O Gemini só **deteta**: devolve a lista dos valores sensíveis. Quem escreve os
+`*` é o código, por isso a formatação do documento nunca depende do modelo.
+Pormenores em [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Estado
 
-- [x] Extração do PDF (`submission/src/pdf_extractor.py`)
-- [x] Taxonomia (versão 3, genérica)
-- [x] Prompt interna (versão 3, por testar)
-- [x] Regras de segurança (regex)
-- [x] Mascaramento
-- [x] Testes das regras de segurança e do mascaramento
-- [ ] Testar a prompt no documento real
-- [x] Relatório
-- [ ] Deteção, verificação
-- [ ] Avaliação própria
+Pontos do pipeline, pela ordem do fluxo:
+
+| # | Componente | Estado |
+|---|---|---|
+| 1 | Extração do PDF | feito (`submission/src/pdf_extractor.py`) |
+| 2 | Prompt interna e taxonomia | feitas, **por testar com o Gemini** |
+| 3 | Deteção | **por fazer** (o cliente do Gemini está em desenvolvimento) |
+| 4 | Regras de segurança | feito |
+| 5 | Mascaramento | feito |
+| 6 | Verificação | em desenvolvimento |
+| 7 | Relatório | feito |
+| 8 | Avaliação própria | **por fazer** |
+| | Ponto de entrada que liga tudo | **por fazer** |
+| | `submission/prompt.txt` e `submission/submission.txt` | **por preencher** |
+
+Sem a deteção, o pipeline já corre no documento do desafio e mascara o que as
+regras de segurança apanham (data de nascimento, números de identificação,
+telefones, emails, cartão, etc.). Nomes, morada e dados de saúde dependem do
+Gemini.
+
+## Documentação
+
+| Documento | Para quê |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, contrato de dados e estrutura de pastas |
+| [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
+| [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
+| [taxonomy.md](taxonomy.md) | Categorias de dados sensíveis |
+| [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (versão 3, genérica) |
+
+## Experimentar
+
+A partir da raiz do repositório, com `pip install PyMuPDF`. Isto corre tudo o
+que existe, sem o Gemini:
+
+```python
+import sys
+
+sys.path[:0] = ["submission/src", "submission/solution/src"]
+
+import masking
+import pdf_extractor
+import report
+import safety_rules
+
+text = pdf_extractor.extract_and_prepare_text(
+    "raw_data/document_to_anonymize.pdf"
+)
+lines = text.split("\n")
+
+items = safety_rules.find_sensitive(lines)          # 4 regras de segurança
+masked, warnings = masking.mask_lines(lines, items)  # 5 mascaramento
+markdown = report.build_report(items, warnings)      # 7 relatório
+
+print("\n".join(masked))
+print(markdown)
+```
+
+No documento do desafio isto dá 60 linhas, 18 itens e 0 avisos.
+
+## Regras de segurança
+
+`safety_rules.find_sensitive(lines)` devolve itens com os mesmos campos da
+deteção, mais `source: "regex"`. Apanha, entre outros:
+
+- emails, telefones (com e sem indicativo `+351`), endereços web e IP;
+- NIF, Cartão de Cidadão e BI, passaporte, Segurança Social, números de
+  registo ou cédula profissional (`CRM`, `OA`, `Cédula`...), matrículas;
+- data de nascimento, código postal;
+- cartão de crédito, validade, CVV, apólice, IBAN;
+- identificadores biométricos, **quando têm etiqueta** (`Impressão
+  digital: ID-BIO-1`).
+
+Os números só são apanhados com a etiqueta ao lado (`NIF:`), porque um número
+de 9 dígitos sozinho pode ser um telefone, um NIF ou uma apólice. Os padrões
+mais ambíguos (telefone sem indicativo, matrícula, código postal, endereço
+web, IP) têm confiança `provavel`; os outros têm `certo`. Pressupõe texto com
+a pontuação original.
+
+## Mascaramento
+
+`masking.mask_lines(lines, items)` devolve `(linhas_mascaradas, avisos)`.
+
+- Cada palavra (separada por espaços) de um valor sensível passa a `*`:
+  `Maria Conceição Oliveira Santos` passa a `* * * *`.
+- A pontuação nas pontas de cada palavra mantém-se: `Santos,` passa a `*,`.
+- A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem espaço:
+  `João,Ana` dá `*,*` e `Rui/Ana` dá `*/*`. Entre dois dígitos não separam:
+  `1,68m` e `12/03/1978` ficam com um único `*`.
+- Os espaços e a estrutura das linhas não mudam.
+- O item é procurado na linha indicada, depois nas vizinhas e depois no
+  documento todo; se não for encontrado, gera um aviso em vez de falhar.
+- O mesmo valor é mascarado nas outras ocorrências (por exemplo, "Maria
+  Santos" no texto corrido).
+
+Todos os casos, com exemplos, estão em [MASKING.md](MASKING.md).
+
+## Relatório
+
+`report.build_report(items, warnings=None, include_values=False)` devolve o
+relatório em Markdown: um resumo (por categoria, origem e confiança), a
+tabela dos itens e os avisos. Por defeito **não mostra os valores originais**:
+um relatório que lista o nome ocultado deixava de ser anónimo. Para uso
+interno, `include_values=True` mostra-os. Se o Gemini e as regras de
+segurança apanham o mesmo valor na mesma linha, aparece uma só vez, com as
+duas origens e a maior confiança.
+
+## Como a solução responde aos critérios
+
+| Critério (peso) | Onde está | Estado |
+|---|---|---|
+| Precisão (10%) | Regras de segurança, prompt, taxonomia | por medir: falta a avaliação própria |
+| Prompt (10%) | [internal_prompt.txt](internal_prompt.txt), [taxonomy.md](taxonomy.md) | por testar com o Gemini |
+| Qualidade da anonimização (5%) | [MASKING.md](MASKING.md) | formatação preservada; contexto por medir |
+| Explicabilidade (5%) | Relatório, campo `reason` de cada item | feito |
+| Eficiência (5%) | Uma chamada ao modelo; o resto é código | por medir |
+| GitHub (5%) e Colaboração (30%) | Um branch por componente, pull requests com merge commit, testes | ver [DEVELOPMENT.md](DEVELOPMENT.md) |
+| Documentação (10%) | Esta pasta | em curso |
+| Pitch (20%) | | por preparar |
+
+## Problemas conhecidos
+
+- **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
+  `import pymupdf`.
+- **A verificação e o mascaramento têm de partilhar a definição de palavra**
+  antes de a verificação entrar: palavras coladas como `João,Ana` seriam
+  marcadas como erro. Ver [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pontos em aberto
 
-- Confirmar com a NOS que `submission/prompt.txt` pode conter esta prompt,
-  uma vez que o documento final é produzido pelo código a partir do JSON.
-- Decisões da secção 12 do `taxonomy.md` (datas, referência, sexo,
-  especialidade).
+- Confirmar com a NOS que `submission/prompt.txt` pode conter a prompt
+  interna, uma vez que o documento final é produzido pelo código a partir do
+  JSON.
+- Confirmar com a NOS onde entregar o relatório explicativo: o guia de
+  submissão só pede `submission.txt`, `prompt.txt` e o código.
+- Decisões da taxonomia (exames e sintomas, sexo ou género, nome da
+  organização): ver o fim de [taxonomy.md](taxonomy.md).
+- Mais em [DECISIONS.md](DECISIONS.md).
