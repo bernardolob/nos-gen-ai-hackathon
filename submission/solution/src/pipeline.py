@@ -26,6 +26,7 @@ from pathlib import Path
 
 import detection
 import gateway
+import labels
 import masking
 import report
 import safety_rules
@@ -82,7 +83,8 @@ def run(lines, generate=None, user_instructions=None, include_values=False):
 
     Com ``generate=None`` só se usam as regras de segurança. Chaves:
     ``masked`` (linhas), ``items``, ``warnings``, ``issues`` (da
-    verificação) e ``report`` (Markdown).
+    verificação), ``label_changes`` (itens do modelo corrigidos para deixar a
+    etiqueta visível, ver ``labels.py``) e ``report`` (Markdown).
 
     Levanta ``detection.DetectionError`` se a resposta do modelo não se
     puder usar.
@@ -94,6 +96,7 @@ def run(lines, generate=None, user_instructions=None, include_values=False):
             lines, generate, user_instructions=user_instructions)
         warnings = warnings + detection.empty_answer_warnings(
             model_items, rule_items)
+    model_items, label_changes = labels.keep_labels(lines, model_items)
     items = model_items + rule_items
     masked, mask_warnings = masking.mask_lines(lines, items)
     warnings = warnings + mask_warnings
@@ -101,6 +104,7 @@ def run(lines, generate=None, user_instructions=None, include_values=False):
         "masked": masked,
         "items": items,
         "warnings": warnings,
+        "label_changes": label_changes,
         "issues": verification.compare_lines(lines, masked),
         "report": report.build_report(items, warnings, include_values),
     }
@@ -118,12 +122,16 @@ def write_outputs(result, out_dir):
 
 def summary(result):
     """Resumo de uma linha por tema, sem valores sensíveis."""
-    return "\n".join([
+    rows = [
         "linhas: %d" % len(result["masked"]),
         "itens mascarados: %d" % len(result["items"]),
         "avisos: %d" % len(result["warnings"]),
         "problemas na verificação: %d" % len(result["issues"]),
-    ])
+    ]
+    if result["label_changes"]:
+        rows.append(
+            "etiquetas deixadas visíveis: %d" % result["label_changes"])
+    return "\n".join(rows)
 
 
 def build_parser():
