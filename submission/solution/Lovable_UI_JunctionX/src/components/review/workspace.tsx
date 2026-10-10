@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { MAX_REASON_CHARS, type HistoryEntry, type Snapshot } from "@/lib/review/types";
+import { censoredAudioUrl } from "@/lib/review/api";
 
 export function MaskedText({ text, className = "" }: { text: string; className?: string }) {
   const parts = text.split(/(\*+)/);
@@ -52,10 +53,16 @@ export function ReviewWorkspace({
   onApprove: () => void;
   onNewDocument: () => void;
 }) {
+  const isAudio = snapshot.kind === "audio";
+  const audioUrl = censoredAudioUrl(snapshot);
+
   const [rejectOpen, setRejectOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [copied, setCopied] = useState(false);
+  const [downloadingAudio, setDownloadingAudio] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+
   const masks = (snapshot.text.match(/\*+/g) ?? []).length;
 
   const submitReject = async () => {
@@ -72,11 +79,42 @@ export function ReviewWorkspace({
     URL.revokeObjectURL(url);
   };
 
+  const downloadAudio = async () => {
+    const url = censoredAudioUrl(snapshot);
+    if (!url) {
+      setAudioError("No audio available");
+      return;
+    }
+    setDownloadingAudio(true);
+    setAudioError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = "censored-audio.m4a";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      setAudioError(err instanceof Error ? err.message : "Failed to download audio.");
+    } finally {
+      setDownloadingAudio(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Attempt" value={snapshot.attempt} />
-        <Stat label="Masked words" value={masks} />
+        {isAudio ? (
+          <Stat label="Replaced stretches" value={snapshot.audio_ranges} />
+        ) : (
+          <Stat label="Masked words" value={masks} />
+        )}
         <Stat label="Warnings" value={snapshot.warnings} tone={snapshot.warnings > 0 ? "warn" : undefined} />
         <Stat label="Issues" value={snapshot.issues} tone={snapshot.issues > 0 ? "warn" : undefined} />
       </div>
@@ -105,23 +143,58 @@ export function ReviewWorkspace({
         </div>
       )}
 
+      {isAudio && (
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-base font-bold text-foreground">Censored audio</h3>
+          <div className="mt-4">
+            {audioUrl ? (
+              <audio
+                key={snapshot.attempt}
+                controls
+                preload="metadata"
+                src={audioUrl}
+                className="w-full"
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No audio available</p>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Each masked word was replaced by a sound.</p>
+          {audioError && (
+            <p role="alert" className="mt-2 text-sm text-destructive">{audioError}</p>
+          )}
+        </div>
+      )}
+
       <section className="relative">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-bold text-foreground">Version {snapshot.attempt}</h3>
+          <h3 className="text-base font-bold text-foreground">
+            {isAudio ? "Masked transcript" : `Version ${snapshot.attempt}`}
+          </h3>
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
               <History aria-hidden /> History ({snapshot.history.length})
             </Button>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={async () => {
-              await navigator.clipboard.writeText(snapshot.text);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                await navigator.clipboard.writeText(snapshot.text);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
               <Copy aria-hidden /> {copied ? "Copied!" : "Copy"}
             </Button>
             <Button variant="ghost" size="sm" onClick={download} disabled={busy}>
               <Download aria-hidden /> Download .txt
             </Button>
+            {isAudio && (
+              <Button variant="ghost" size="sm" onClick={downloadAudio} disabled={busy || downloadingAudio}>
+                {downloadingAudio ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download aria-hidden />} Download audio
+              </Button>
+            )}
           </div>
         </div>
         <div className="document-paper max-h-[34rem] overflow-auto rounded-lg border border-border bg-card p-6" aria-busy={busy}>
@@ -152,7 +225,11 @@ export function ReviewWorkspace({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject version {snapshot.attempt}</DialogTitle>
-            <DialogDescription>Explain what should change: hide more, or keep visible something that was hidden.</DialogDescription>
+            <DialogDescription>
+              {isAudio
+                ? "The audio is not uploaded again; the transcript is analysed again with your feedback."
+                : "Explain what should change: hide more, or keep visible something that was hidden."}
+            </DialogDescription>
           </DialogHeader>
           <Textarea
             value={reason}
@@ -180,7 +257,10 @@ export function ReviewWorkspace({
             {snapshot.history.length === 0 && <p className="text-sm text-muted-foreground">No rejected versions yet.</p>}
             {[...snapshot.history].reverse().map((h: HistoryEntry) => (
               <article key={h.attempt} className="rounded-lg border border-border bg-card p-4">
-                <p className="text-sm font-bold text-foreground">Attempt {h.attempt}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-bold text-foreground">Attempt {h.attempt}</p>
+                  {isAudio && <span className="text-xs font-medium text-muted-foreground">Transcript</span>}
+                </div>
                 <p className="mt-1 text-sm text-muted-foreground">“{h.reason}”</p>
                 <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">
                   <MaskedText text={h.text} className="text-xs leading-6" />
