@@ -9,9 +9,10 @@ Regras:
 - Cada palavra (separada por espaços) de um valor sensível passa a ``*``.
 - A pontuação nas pontas de cada palavra mantém-se: ``Santos,`` passa a
   ``*,`` e ``(João,`` passa a ``(*,``.
-- A vírgula e o ponto e vírgula separam palavras mesmo sem espaço:
-  ``João,Ana`` passa a ``*,*``. Entre dois dígitos não separam (``1,68m`` e
-  ``2.350,50`` passam a um único ``*``). A barra e o hífen não separam.
+- A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem espaço:
+  ``João,Ana`` passa a ``*,*`` e ``Rui/Ana`` a ``*/*``. Entre dois dígitos
+  não separam (``1,68m``, ``2.350,50`` e ``12/03/1978`` passam a um único
+  ``*``). O hífen não separa e os endereços web são uma só palavra.
 - Os espaços e a estrutura das linhas não mudam.
 - Cada item é procurado na sua linha; se não estiver lá, nas linhas vizinhas
   e depois no documento todo. Se não for encontrado, gera um aviso.
@@ -29,8 +30,10 @@ MASK = "*"
 EDGE_PUNCTUATION = ",;:.!?()[]{}\"'"
 MIN_PROPAGATION_LENGTH = 4
 MIN_PROPAGATION_LETTERS = 3
-# Vírgula ou ponto e vírgula que não está entre dois dígitos.
-LIST_SEPARATOR = re.compile(r"((?<!\d)[,;]|[,;](?!\d))")
+# Vírgula, ponto e vírgula ou barra que não está entre dois dígitos.
+LIST_SEPARATOR = re.compile(r"((?<!\d)[,;/]|[,;/](?!\d))")
+# Endereços web são sempre uma só palavra, apesar das barras.
+WEB_ADDRESS = re.compile(r"^\W*(?:https?://|www\.)", re.IGNORECASE)
 
 
 def mask_lines(lines, items):
@@ -147,9 +150,13 @@ def _mask_span(segment):
 def _mask_token(token):
     """Mascara uma sequência sem espaços, separando as palavras coladas.
 
-    A vírgula e o ponto e vírgula separam palavras mesmo sem espaço
-    (``João,Ana`` passa a ``*,*``), exceto entre dois dígitos (``1,68m``).
+    A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem
+    espaço (``João,Ana`` passa a ``*,*`` e ``Rui/Ana`` a ``*/*``), exceto
+    entre dois dígitos (``1,68m``, ``12/03/1978``). Os endereços web contam
+    como uma só palavra.
     """
+    if WEB_ADDRESS.match(token):
+        return _mask_word(token)
     parts = LIST_SEPARATOR.split(token)
     return "".join(
         part if index % 2 else _mask_word(part)

@@ -128,17 +128,47 @@ class JoinedWordsTest(unittest.TestCase):
             out, _ = mask([line], [{"line": 1, "text": text}])
             self.assertEqual(out, [line.replace(text, "*")], line)
 
-    def test_slash_and_hyphen_do_not_separate(self):
+    def test_slash_between_words_separates(self):
         out, _ = mask(
-            ["Data: 12/03/1978"],
-            [{"line": 1, "text": "12/03/1978"}],
+            ["Pessoas: Rui/Ana"],
+            [{"line": 1, "text": "Rui/Ana"}],
         )
-        self.assertEqual(out, ["Data: *"])
+        self.assertEqual(out, ["Pessoas: */*"])
+        out, _ = mask(["Pessoas: a/b/c"], [{"line": 1, "text": "a/b/c"}])
+        self.assertEqual(out, ["Pessoas: */*/*"])
+
+    def test_slash_between_digits_does_not_separate(self):
+        for line, text in (
+            ("Data: 12/03/1978", "12/03/1978"),
+            ("Pressão: 145/90", "145/90"),
+            ("Validade: 09/27", "09/27"),
+        ):
+            out, _ = mask([line], [{"line": 1, "text": text}])
+            self.assertEqual(out, [line.replace(text, "*")], line)
+
+    def test_slash_between_letter_and_digit_separates(self):
+        out, _ = mask(
+            ["Data: 12/mar/1978"],
+            [{"line": 1, "text": "12/mar/1978"}],
+        )
+        self.assertEqual(out, ["Data: */*/*"])
+
+    def test_hyphen_does_not_separate(self):
         out, _ = mask(
             ["Nome: Ana-Maria"],
             [{"line": 1, "text": "Ana-Maria"}],
         )
         self.assertEqual(out, ["Nome: *"])
+
+    def test_web_address_is_a_single_word(self):
+        url = "https://www.exemplo.pt/perfil/maria"
+        out, _ = mask(["Site: " + url], [{"line": 1, "text": url}])
+        self.assertEqual(out, ["Site: *"])
+        out, _ = mask(
+            ["Ver www.exemplo.pt/maria."],
+            [{"line": 1, "text": "www.exemplo.pt/maria"}],
+        )
+        self.assertEqual(out, ["Ver *."])
 
     def test_email_is_a_single_word(self):
         out, _ = mask(

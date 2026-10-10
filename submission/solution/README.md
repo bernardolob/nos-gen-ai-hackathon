@@ -11,6 +11,7 @@ Este README é incremental: vai crescendo com a arquitetura.
 |---|---|
 | `taxonomy.md` | Taxonomia de dados sensíveis: categorias, exemplos do documento, o que não ocultar e decisões em aberto. |
 | `ARCHITECTURE.md` | Componentes núcleo, fluxo e estrutura de pastas. |
+| `MASKING.md` | Como o mascaramento trata cada caso (separadores, pontuação, números, endereços web). |
 | `internal_prompt.txt` | Prompt interna enviada ao Gemini (versão 2, com linhas numeradas; ainda por testar). |
 
 ## Prompt interna
@@ -50,10 +51,11 @@ sozinho pode ser um telefone, um NIF ou uma apólice.
 - A pontuação nas pontas de cada palavra mantém-se: `Santos,` passa a `*,` e
   `(João,` passa a `(*,`. Símbolos como `+` e `€` contam como parte da
   palavra.
-- A vírgula e o ponto e vírgula separam palavras mesmo sem espaço:
-  `João,Ana` e `João, Ana` dão ambos dois asteriscos (`*,*` e `*, *`). Entre
-  dois dígitos não separam: `1,68m` e `2.350,50` ficam com um único `*`. A
-  barra e o hífen não separam (`12/03/1978` e `Ana-Maria` são uma palavra).
+- A vírgula, o ponto e vírgula e a barra separam palavras mesmo sem espaço:
+  `João,Ana` e `João, Ana` dão ambos dois asteriscos (`*,*` e `*, *`) e
+  `Rui/Ana` dá `*/*`. Entre dois dígitos não separam: `1,68m`, `2.350,50` e
+  `12/03/1978` ficam com um único `*`. O hífen não separa e os endereços web
+  são uma só palavra. Todos os casos estão em [MASKING.md](MASKING.md).
 - Um símbolo isolado, sem letras nem números (por exemplo `-`), não é uma
   palavra e mantém-se.
 - Os espaços e a estrutura das linhas não mudam.
