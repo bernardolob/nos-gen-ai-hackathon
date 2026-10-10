@@ -78,17 +78,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Véu — Revisão de anonimização" },
-      { name: "description", content: "Revisão manual de documentos anonimizados." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Véu — Revisão de anonimização" },
-      { property: "og:description", content: "Revisão manual de documentos anonimizados." },
+      { title: "Document Anonymizer" },
+      {
+        name: "description",
+        content: "Anonymize documents containing personal and sensitive data (GDPR).",
+      },
+      { property: "og:title", content: "Document Anonymizer" },
+      {
+        property: "og:description",
+        content: "Anonymize documents containing personal and sensitive data (GDPR).",
+      },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:card", content: "summary" },
     ],
     links: [
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;650;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -104,7 +108,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-PT">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
