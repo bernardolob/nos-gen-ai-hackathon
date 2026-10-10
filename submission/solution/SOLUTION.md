@@ -3,7 +3,9 @@
 Sistema que deteta e oculta dados pessoais e sensíveis num documento
 (RGPD), trocando cada palavra sensível por `*`.
 
-Este README é incremental: vai crescendo com a arquitetura.
+Este documento é incremental: vai crescendo com a arquitetura. O
+`submission/README.md` é o guia de submissão da organização e não deve ser
+alterado.
 
 ## Ficheiros
 
