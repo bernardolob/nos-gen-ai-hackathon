@@ -43,6 +43,7 @@ Every person mentioned receives the same protection as the main subject.
 6. Keep each item as short as possible while covering the whole sensitive value. Do not join unrelated values in one item.
 7. Do not flag a span that is already inside another flagged span.
 8. Return the items in the order in which they appear in the document.
+9. Provide a 'reason' (one short sentence in Portuguese) ONLY when the 'confidence' is 'incerto', explaining why you are unsure. Omit the 'reason' otherwise.
 
 ## Confidence
 
@@ -51,31 +52,3 @@ Every person mentioned receives the same protection as the main subject.
 - "incerto": you really cannot decide whether to mask it. Use this sparingly: it will be shown to a human. Do not use it to avoid a decision.
 
 When in doubt between flagging and not flagging, flag it, and set the confidence accordingly.
-
-## Output format
-
-Return ONLY a JSON array, with no text before or after it and no code fences. Each element has these fields:
-
-{
-  "line": the line number, as an integer,
-  "text": "exact text copied from that line",
-  "category": "one of the category ids above",
-  "reason": "one short sentence in Portuguese explaining why it is sensitive",
-  "confidence": "certo | provavel | incerto",
-  "occurrence": optional integer, only as described in rule 5
-}
-
-Example. For the lines:
-
-[3] Funcionário: Rui Pinto, NIF 123456789
-[4] Salário mensal: 2.350 EUR
-
-return:
-
-[
-  {"line": 3, "text": "Rui Pinto", "category": "identificacao", "reason": "Nome do funcionário.", "confidence": "certo"},
-  {"line": 3, "text": "123456789", "category": "identificacao", "reason": "Número de identificação fiscal.", "confidence": "certo"},
-  {"line": 4, "text": "2.350 EUR", "category": "financeiro", "reason": "Remuneração de uma pessoa.", "confidence": "certo"}
-]
-
-If the document has no sensitive information, return [].

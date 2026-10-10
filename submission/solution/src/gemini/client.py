@@ -163,6 +163,7 @@ class GeminiClient:
         self,
         system_instruction: str,
         content: str,
+        response_schema: Any = None,
     ) -> GenerationResult:
         """Send content with a cached system instruction.
 
@@ -191,6 +192,10 @@ class GeminiClient:
                     contents=content,
                     config=types.GenerateContentConfig(
                         cached_content=cache_name,
+                        response_mime_type=(
+                            "application/json" if response_schema else None
+                        ),
+                        response_schema=response_schema,
                     ),
                 ),
             )
@@ -205,6 +210,10 @@ class GeminiClient:
                     contents=content,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
+                        response_mime_type=(
+                            "application/json" if response_schema else None
+                        ),
+                        response_schema=response_schema,
                     ),
                 ),
             )

@@ -273,13 +273,13 @@ class MainTest(unittest.TestCase):
 
     def test_main_falls_back_to_gemini_adapter_when_gateway_absent(self):
         with mock.patch("gateway.from_env", return_value=None):
-            with mock.patch("gemini_adapter.make_cached_generate") as mock_cache:
-                mock_cache.return_value = fake_model(item(1, "Ana Silva"))
+            with mock.patch("gemini_adapter.make_cached_generate") as mock_c:
+                mock_c.return_value = fake_model(item(1, "Ana Silva"))
                 code, _, _ = self.run_main(
                     str(self.document), "--out", str(self.out)
                 )
                 self.assertEqual(code, pipeline.EXIT_OK)
-                mock_cache.assert_called_once()
+                mock_c.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -25,6 +25,17 @@ devolve ``None`` (como o ``gateway.from_env``).
 
 from gemini import GeminiClient, GeminiSettings
 from gemini.errors import ConfigurationError
+from pydantic import BaseModel
+from typing import Optional
+
+
+class DetectionItem(BaseModel):
+    line: int
+    text: str
+    category: str
+    reason: Optional[str] = None
+    confidence: str
+    occurrence: Optional[int] = None
 
 
 def make_cached_generate(settings=None, client=None):
@@ -47,7 +58,7 @@ def make_cached_generate(settings=None, client=None):
 
     def generate(system_prompt, content):
         result = client.generate_with_system_instruction(
-            system_prompt, content
+            system_prompt, content, response_schema=list[DetectionItem]
         )
         return result.text
 
