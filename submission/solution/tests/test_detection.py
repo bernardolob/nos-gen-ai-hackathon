@@ -95,6 +95,19 @@ class BuildRequestTest(unittest.TestCase):
         for category in detection.CATEGORY_NAMES:
             self.assertIn(category, prompt)
 
+    def test_prompt_tells_the_model_to_leave_the_label_out(self):
+        """Regra 1: valor sem a etiqueta, com um exemplo errado e um certo."""
+        prompt = detection.load_internal_prompt()
+        self.assertIn("never the label", prompt)
+        self.assertIn('Wrong: "text": "Nome: Rui Pinto"', prompt)
+        self.assertIn('Right: "text": "Rui Pinto"', prompt)
+
+    def test_prompt_and_document_fit_the_optional_api_limit(self):
+        """A API opcional recusa mais de 10 000 caracteres por pedido."""
+        document = detection.build_request(["x" * 60] * 50)
+        total = len(detection.load_internal_prompt()) + len(document)
+        self.assertLess(total, 10000)
+
     def test_normalize_lines_to_nfc(self):
         decomposed = unicodedata.normalize("NFD", "Conceição")
         self.assertNotEqual(decomposed, "Conceição")

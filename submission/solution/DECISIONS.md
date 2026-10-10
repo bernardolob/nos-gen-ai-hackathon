@@ -138,6 +138,21 @@ função `generate(instrução_de_sistema, conteúdo) -> texto`.
 - **Categorias e níveis de confiança numa só definição** (`src/categories.py`),
   usada pela deteção e pelo relatório, em vez de duas cópias.
 
+### 12. A etiqueta do campo não é um valor sensível
+
+`Nome: Rui Pinto` passa a `Nome: * *`: a etiqueta fica visível, como no
+exemplo do enunciado. Se o modelo devolver o valor **com** a etiqueta, o
+mascaramento oculta-a também (`*: * *`), o que conta como mascarar a mais.
+
+- **Decisão:** tratar o problema na prompt, com um exemplo errado e um certo
+  lado a lado na regra 1, e **medir com o Gemini antes de mexer no código**.
+  A prompt não dá garantias, mas é a causa; uma correção no código seria uma
+  heurística (o que é uma etiqueta?) que pode enganar-se com horas
+  (`10:30`) ou endereços (`https:`).
+- **Fica pronta, se a medição o justificar:** uma salvaguarda determinística
+  que só tira a etiqueta quando o texto começa no início da linha e tem a
+  forma `<etiqueta>: <valor>`.
+
 ## Decisões em aberto
 
 1. **Uma só definição de "palavra" para o mascaramento e a verificação.** A
@@ -154,8 +169,11 @@ função `generate(instrução_de_sistema, conteúdo) -> texto`.
 4. **Revisão manual.** Está prevista (os itens `incerto` iriam a um humano
    antes do mascaramento) mas não implementada. É um requisito opcional do
    enunciado.
-5. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
+5. **Etiquetas incluídas no valor.** Medir com o Gemini quantas vezes
+   acontece, mesmo com o exemplo na prompt (decisão 12). Só então decidir se
+   a salvaguarda no código vale a pena.
+6. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
    Ver o fim de [taxonomy.md](taxonomy.md).
-6. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
+7. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
    sanitizados e a API opcional serão acrescentadas quando o branch
    `feature/api` entrar na `main`.

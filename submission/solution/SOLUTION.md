@@ -55,7 +55,7 @@ Gemini.
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
 | [taxonomy.md](taxonomy.md) | Categorias de dados sensíveis |
-| [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (versão 3, genérica) |
+| [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (versão 4, genérica) |
 
 ## Experimentar
 
