@@ -112,6 +112,47 @@ guardar os commits de cada pessoa. Antes de cada merge atualiza-se o branch
 com a `main` e confirma-se o lint e os testes. Ver
 [DEVELOPMENT.md](DEVELOPMENT.md).
 
+### 11. A deteção recebe o cliente como parâmetro
+
+`detection.detect(lines, generate)` não importa nenhum cliente: recebe uma
+função `generate(instrução_de_sistema, conteúdo) -> texto`.
+
+- **Porquê:** testa-se sem chave nem rede (`tests/test_detection.py`), e o
+  cliente real liga-se com um adaptador pequeno. Se o cliente mudar, só o
+  adaptador muda.
+- **Um elemento mal formado não deita fora os outros.** Fica de fora e gera um
+  aviso; só uma resposta que não seja uma lista JSON é repetida. Deitar fora
+  tudo por causa de um elemento perderia proteção; aceitar o elemento
+  estragado quebraria o mascaramento.
+- **Tolerante na forma, exigente no conteúdo.** Maiúsculas, espaços nas
+  pontas, acentos nos ids e `1.0` por `1` não deitam um valor fora: um
+  anonimizador que falha em silêncio por uma diferença cosmética é pior do
+  que um que a absorve. O `text` passa a ser o que está na linha, para o
+  mascaramento o encontrar. O que muda o sentido (categoria desconhecida,
+  linha fora do documento, acentos diferentes no valor) continua a ser
+  rejeitado, com aviso.
+- **Uma lista vazia levanta suspeita.** É válida, mas se as regras de
+  segurança apanharam algo, `empty_answer_warnings` avisa.
+- **As mensagens nunca repetem a resposta do modelo**, porque pode conter os
+  dados sensíveis.
+- **Categorias e níveis de confiança numa só definição** (`src/categories.py`),
+  usada pela deteção e pelo relatório, em vez de duas cópias.
+
+### 12. A etiqueta do campo não é um valor sensível
+
+`Nome: Rui Pinto` passa a `Nome: * *`: a etiqueta fica visível, como no
+exemplo do enunciado. Se o modelo devolver o valor **com** a etiqueta, o
+mascaramento oculta-a também (`*: * *`), o que conta como mascarar a mais.
+
+- **Decisão:** tratar o problema na prompt, com um exemplo errado e um certo
+  lado a lado na regra 1, e **medir com o Gemini antes de mexer no código**.
+  A prompt não dá garantias, mas é a causa; uma correção no código seria uma
+  heurística (o que é uma etiqueta?) que pode enganar-se com horas
+  (`10:30`) ou endereços (`https:`).
+- **Fica pronta, se a medição o justificar:** uma salvaguarda determinística
+  que só tira a etiqueta quando o texto começa no início da linha e tem a
+  forma `<etiqueta>: <valor>`.
+
 ## Decisões em aberto
 
 1. **Uma só definição de "palavra" para o mascaramento e a verificação.** A
@@ -128,8 +169,11 @@ com a `main` e confirma-se o lint e os testes. Ver
 4. **Revisão manual.** Está prevista (os itens `incerto` iriam a um humano
    antes do mascaramento) mas não implementada. É um requisito opcional do
    enunciado.
-5. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
+5. **Etiquetas incluídas no valor.** Medir com o Gemini quantas vezes
+   acontece, mesmo com o exemplo na prompt (decisão 12). Só então decidir se
+   a salvaguarda no código vale a pena.
+6. **Taxonomia.** Exames e sintomas, sexo ou género, e o nome da organização.
    Ver o fim de [taxonomy.md](taxonomy.md).
-6. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
+7. **Cliente do Gemini e API.** As decisões sobre o modelo fixo, os erros
    sanitizados e a API opcional serão acrescentadas quando o branch
    `feature/api` entrar na `main`.

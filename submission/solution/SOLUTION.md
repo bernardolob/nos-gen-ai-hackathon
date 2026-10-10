@@ -31,7 +31,7 @@ Pontos do pipeline, pela ordem do fluxo:
 |---|---|---|
 | 1 | Extração do PDF | feito (`submission/src/pdf_extractor.py`) |
 | 2 | Prompt interna e taxonomia | feitas, **por testar com o Gemini** |
-| 3 | Deteção | **por fazer** (o cliente do Gemini está em desenvolvimento) |
+| 3 | Deteção | feita, **falta ligar o cliente real do Gemini** (em desenvolvimento) |
 | 4 | Regras de segurança | feito |
 | 5 | Mascaramento | feito |
 | 6 | Verificação | em desenvolvimento |
@@ -52,9 +52,10 @@ Gemini.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, contrato de dados e estrutura de pastas |
 | [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
+| [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
 | [taxonomy.md](taxonomy.md) | Categorias de dados sensíveis |
-| [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (versão 3, genérica) |
+| [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (versão 4, genérica) |
 
 ## Experimentar
 
@@ -85,6 +86,15 @@ print(markdown)
 ```
 
 No documento do desafio isto dá 60 linhas, 18 itens e 0 avisos.
+
+## Deteção
+
+`detection.detect(lines, generate)` envia ao modelo a prompt interna e o documento
+com as linhas numeradas, e valida a resposta em JSON contra o contrato de
+dados. O cliente do modelo entra como parâmetro (`generate`), por isso a
+deteção já se testa sem o Gemini. Um elemento mal formado fica de fora e gera
+um aviso; uma resposta que não seja uma lista JSON é repetida uma vez.
+Detalhes em [DETECTION.md](DETECTION.md).
 
 ## Regras de segurança
 

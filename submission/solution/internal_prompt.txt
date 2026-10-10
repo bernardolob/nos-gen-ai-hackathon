@@ -32,7 +32,10 @@ Every person mentioned receives the same protection as the main subject.
 
 ## How to build the list
 
-1. Flag the VALUE only, not its label. For "Nome: Rui Pinto" the item is "Rui Pinto".
+1. Flag the VALUE only, never the label of the field. The label (for example "Nome:", "NIF:", "Telefone:") and the colon after it stay visible, so they must not be part of the "text".
+   - Wrong: "text": "Nome: Rui Pinto"
+   - Right: "text": "Rui Pinto"
+   The same goes for "NIF: 123456789" (the item is "123456789") and "Telefone: +351 912 345 678" (the item is "+351 912 345 678").
 2. The "text" of each item must be copied exactly from the document, character for character, including accents, spaces and punctuation. Never correct, translate or normalize it.
 3. The "line" of each item is the number shown in brackets at the start of the line where the value appears. The "text" must be found inside that line.
 4. Flag every place where a sensitive value appears. If a name is written again in the running text, in a shorter form for example, it is a separate item with its own line.
