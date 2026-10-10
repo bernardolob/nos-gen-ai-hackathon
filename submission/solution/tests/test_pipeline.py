@@ -165,6 +165,8 @@ class MainTest(unittest.TestCase):
             "model": "m", "text": json.dumps([item(1, "Ana Silva")])}
         env = {"GEMINI_GATEWAY_URL": worker.url,
                "GEMINI_GATEWAY_ORIGIN": ORIGIN}
+        if "SystemRoot" in os.environ:
+            env["SystemRoot"] = os.environ["SystemRoot"]
         with mock.patch.dict(os.environ, env, clear=True):
             code, _, _ = self.run_main(
                 str(self.document), "--out", str(self.out))
@@ -181,6 +183,8 @@ class MainTest(unittest.TestCase):
         worker.script = [422]
         env = {"GEMINI_GATEWAY_URL": worker.url,
                "GEMINI_GATEWAY_ORIGIN": ORIGIN}
+        if "SystemRoot" in os.environ:
+            env["SystemRoot"] = os.environ["SystemRoot"]
         with mock.patch.dict(os.environ, env, clear=True):
             code, _, err = self.run_main(
                 str(self.document), "--out", str(self.out))
@@ -257,6 +261,25 @@ class MainTest(unittest.TestCase):
     def test_the_summary_never_shows_sensitive_values(self):
         _, out, err = self.run_main(str(self.document), "--no-model")
         self.assertNotIn("123456789", out + err)
+
+    def test_use_cache_flag_invokes_cached_adapter(self):
+        with mock.patch("gemini_adapter.make_cached_generate") as mock_cache:
+            mock_cache.return_value = fake_model(item(1, "Ana Silva"))
+            code, _, _ = self.run_main(
+                str(self.document), "--use-cache", "--out", str(self.out)
+            )
+            self.assertEqual(code, pipeline.EXIT_OK)
+            mock_cache.assert_called_once()
+
+    def test_main_falls_back_to_gemini_adapter_when_gateway_absent(self):
+        with mock.patch("gateway.from_env", return_value=None):
+            with mock.patch("gemini_adapter.make_cached_generate") as mock_cache:
+                mock_cache.return_value = fake_model(item(1, "Ana Silva"))
+                code, _, _ = self.run_main(
+                    str(self.document), "--out", str(self.out)
+                )
+                self.assertEqual(code, pipeline.EXIT_OK)
+                mock_cache.assert_called_once()
 
 
 if __name__ == "__main__":

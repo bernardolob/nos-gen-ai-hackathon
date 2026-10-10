@@ -26,6 +26,7 @@ from pathlib import Path
 
 import detection
 import gateway
+import gemini_adapter
 import masking
 import report
 import safety_rules
@@ -145,6 +146,9 @@ def build_parser():
     parser.add_argument(
         "--include-values", action="store_true",
         help="mostra os valores originais no relatório")
+    parser.add_argument(
+        "--use-cache", action="store_true",
+        help="usa o cliente SDK com context caching em vez do gateway")
     return parser
 
 
@@ -155,11 +159,18 @@ def main(argv=None, generate=None):
         if args.no_model:
             generate = None
         elif generate is None:
-            generate = gateway.from_env()
+            if args.use_cache:
+                generate = gemini_adapter.make_cached_generate()
+            else:
+                generate = (
+                    gateway.from_env() or gemini_adapter.make_cached_generate()
+                )
             if generate is None:
                 print("Erro: falta ligar ao Gemini. Defina "
-                      "GEMINI_GATEWAY_URL e GEMINI_GATEWAY_ORIGIN, ou use "
-                      "--no-model para correr só as regras de segurança.",
+                      "GEMINI_GATEWAY_URL e GEMINI_GATEWAY_ORIGIN "
+                      "(gateway), ou GEMINI_API_KEY (SDK com cache), "
+                      "ou use --no-model para correr só as regras de "
+                      "segurança.",
                       file=sys.stderr)
                 return EXIT_ERROR
         instructions = read_instructions(
