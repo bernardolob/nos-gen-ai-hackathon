@@ -157,6 +157,15 @@ completo como um só item. Com o item só `Ana`, fica `Nome: * Silva`.
 `1234-05-06` nem de um código `ID-1234`, porque um número dentro de uma data
 ou de um código é, quase sempre, outra coisa.
 
+### Símbolos colados à palavra
+
+Quando o valor é encontrado como palavra inteira, o intervalo alarga-se ao
+que está colado a ele até aos espaços ou a `, ; /`: `@ana`, `#Ana`, `Ana's`,
+`Ana-` e `Ana.Silva` mascaram-se por inteiro (`*`), como `€62.500`. Um sinal
+de pontuação só entra se tiver uma letra ou um dígito do outro lado; em
+`(Ana)`, `«Ana»` e `Filhos:(Ana` a pontuação das pontas fica. Um **pedaço**
+de palavra (`12345` em `ID12345`) continua a mascarar só o pedaço.
+
 ## Itens sobrepostos
 
 Se dois itens se sobrepõem na mesma linha (por exemplo `Maria Conceição` e
@@ -173,6 +182,9 @@ mascarada uma vez.
   propagado para dentro de uma palavra ligada por símbolos (`€:Ana`).
 - **Só se tiram acentos às letras latinas.** Um valor com outro tipo de
   diferença (uma letra trocada) não é encontrado e gera aviso.
+- **Um rótulo colado ao valor por pontuação** (`Filhos:(Ana`) fica com a
+  pontuação e perde só o valor (`Filhos:(*`), e a verificação assinala-o.
+  Não acontece com o texto extraído do PDF, onde os rótulos têm espaço.
 - **A lista de palavras de instituição é curta** (`ORGANISATION_WORDS` em
   `masking.py`, português e inglês). Uma instituição sem uma dessas palavras
   (`Lusíadas Lisboa`) ainda propaga o valor.

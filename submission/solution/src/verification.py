@@ -16,7 +16,7 @@ verificação precisa da lista de itens e fica para quando o mascaramento e a
 deteção estiverem integrados.
 """
 
-from words import mask_token
+from words import mask_token, mask_word, split_token
 
 
 def compare_files(original_path, masked_path):
@@ -94,6 +94,17 @@ def _is_valid(original_word, masked_word):
     """Diz se ``masked_word`` é uma versão válida de ``original_word``.
 
     É válida se ficou idêntica (palavra não mascarada) ou se corresponde
-    ao que ``masking.py`` produziria a partir do original.
+    ao que ``masking.py`` produziria a partir do original. Numa sequência
+    com palavras coladas (``João,Ana``) cada palavra conta à parte: ``João,*``
+    é válido, porque só ``Ana`` era sensível.
     """
-    return masked_word in (original_word, mask_token(original_word))
+    if masked_word in (original_word, mask_token(original_word)):
+        return True
+    original = split_token(original_word)
+    masked = split_token(masked_word)
+    if len(original) != len(masked):
+        return False
+    return all(
+        new == old if index % 2 else new in (old, mask_word(old))
+        for index, (old, new) in enumerate(zip(original, masked))
+    )

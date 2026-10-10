@@ -20,7 +20,8 @@ Regras (detalhes e exemplos em ``MASKING.md``):
 import re
 
 MASK = "*"
-EDGE_PUNCTUATION = ",;:.!?()[]{}\"'"
+# Inclui as aspas tipográficas e as reticências: ``«Rui»`` dá ``«*»``.
+EDGE_PUNCTUATION = ",;:.!?()[]{}\"'«»“”‘’…"
 # Hífen normal, hífen Unicode e hífen sem quebra de linha.
 HYPHENS = "-‐‑"
 
@@ -65,13 +66,22 @@ def mask_token(token):
     dígitos (``1,68m``, ``12/03/1978``). Os endereços web e as datas com o mês
     escrito (``12/mar/1978``) contam como uma só palavra.
     """
-    if WEB_ADDRESS.match(token) or WRITTEN_DATE.match(token):
-        return mask_word(token)
-    parts = LIST_SEPARATOR.split(token)
     return "".join(
         part if index % 2 else mask_word(part)
-        for index, part in enumerate(parts)
+        for index, part in enumerate(split_token(token))
     )
+
+
+def split_token(token):
+    """Divide uma sequência sem espaços nas suas palavras e separadores.
+
+    Devolve uma lista em que os índices pares são palavras e os ímpares os
+    separadores (``João,Ana`` dá ``["João", ",", "Ana"]``). Um endereço web ou
+    uma data com o mês escrito é uma só palavra.
+    """
+    if WEB_ADDRESS.match(token) or WRITTEN_DATE.match(token):
+        return [token]
+    return LIST_SEPARATOR.split(token)
 
 
 def has_letters(text):
@@ -100,7 +110,7 @@ def whole_word_pattern(text):
     return re.compile(before + re.escape(text) + after)
 
 
-def _is_word_char(char):
+def is_word_char(char):
     """Letra, dígito ou sublinhado: o que conta como parte de uma palavra."""
     return char.isalnum() or char == "_"
 
@@ -111,7 +121,7 @@ def _hyphen_joins(line, hyphen_at, word_at):
         0 <= hyphen_at < len(line)
         and 0 <= word_at < len(line)
         and line[hyphen_at] in HYPHENS
-        and _is_word_char(line[word_at])
+        and is_word_char(line[word_at])
     )
 
 
@@ -127,12 +137,12 @@ def expand_compound(line, start, end):
         moved = False
         if _hyphen_joins(line, start - 1, start - 2):
             start -= 2
-            while start > 0 and _is_word_char(line[start - 1]):
+            while start > 0 and is_word_char(line[start - 1]):
                 start -= 1
             moved = True
         if _hyphen_joins(line, end, end + 1):
             end += 2
-            while end < len(line) and _is_word_char(line[end]):
+            while end < len(line) and is_word_char(line[end]):
                 end += 1
             moved = True
         if not moved:
