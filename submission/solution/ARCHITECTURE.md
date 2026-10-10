@@ -52,9 +52,10 @@ mascaramento. Se os dois apanham o mesmo valor, o relatório junta-os num só.
 O cliente do Gemini e uma API HTTP opcional estão em desenvolvimento no branch
 `feature/api` e ainda não fazem parte da `main`.
 
-Falta ainda o **ponto de entrada** que liga os componentes (ler o PDF,
-chamar cada passo e gravar `submission.txt` e o relatório). Hoje a ligação
-faz-se à mão, como se mostra no [SOLUTION.md](SOLUTION.md).
+O **ponto de entrada** é `src/pipeline.py`: lê o PDF (ou texto), chama cada
+passo, verifica o resultado e grava `submission.txt` e `report.md`. O modelo
+entra como a função `generate`; sem ela corre só com as regras de segurança
+(`--no-model`). Como se usa está no [SOLUTION.md](SOLUTION.md).
 
 ## Contrato de dados
 
@@ -136,11 +137,11 @@ submission/
       masking.py              5 Mascaramento
       verification.py         6 Verificação
       report.py               7 Relatório
+      pipeline.py             ponto de entrada que liga tudo
     tests/                    testes de tudo o que está acima
 ```
 
-Por fazer: o cliente real do Gemini para a deteção, `eval/` (8) e o ponto de
-entrada.
+Por fazer: o cliente real do Gemini para a deteção e `eval/` (8).
 
 ## Problemas conhecidos
 

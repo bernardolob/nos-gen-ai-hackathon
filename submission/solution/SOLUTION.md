@@ -37,7 +37,7 @@ Pontos do pipeline, pela ordem do fluxo:
 | 6 | Verificação | feito |
 | 7 | Relatório | feito |
 | 8 | Avaliação própria | **por fazer** |
-| | Ponto de entrada que liga tudo | **por fazer** |
+| | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), falta o cliente do Gemini |
 | | `submission/prompt.txt` e `submission/submission.txt` | **por preencher** |
 
 Sem a deteção, o pipeline já corre no documento do desafio e mascara o que as
@@ -58,6 +58,25 @@ Gemini.
 | [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (versão 4, genérica) |
 
 ## Experimentar
+
+Pela linha de comandos, a partir da pasta `submission/solution/src`
+(precisa de `pip install PyMuPDF`):
+
+```bash
+python pipeline.py ../../../raw_data/document_to_anonymize.pdf --no-model
+python pipeline.py ../../../raw_data/document_to_anonymize.pdf --no-model --out saida
+```
+
+Sem `--out` é um ensaio: só mostra o resumo (linhas, itens, avisos e
+problemas da verificação, nunca valores). Com `--out DIR` escreve
+`submission.txt` e `report.md`. `--instructions "..."` junta instruções do
+utilizador e `--include-values` mostra os valores no relatório. Saída 0 sem
+problemas, 1 se a verificação encontrou problemas, 2 em erro. Enquanto o
+cliente do Gemini não estiver ligado, falta `--no-model` dá erro.
+
+Em código, o `pipeline.run(lines, generate)` faz o mesmo e devolve as linhas
+mascaradas, os itens, os avisos, os problemas e o relatório. Passo a passo,
+sem o ponto de entrada:
 
 A partir da raiz do repositório, com `pip install PyMuPDF`. Isto corre tudo o
 que existe, sem o Gemini:
