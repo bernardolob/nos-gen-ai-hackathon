@@ -104,6 +104,12 @@ class BuildRequestTest(unittest.TestCase):
             request = detection.build_request(LINES, blank)
             self.assertNotIn("user_instructions", request)
 
+    def test_the_prompt_gives_the_user_the_final_word(self):
+        prompt = detection.load_internal_prompt()
+        self.assertIn("final word", prompt)
+        self.assertIn("flag less", prompt)
+        self.assertNotIn("may only ADD", prompt)
+
     def test_internal_prompt_is_loaded(self):
         prompt = detection.load_internal_prompt()
         self.assertIn("<document>", prompt)

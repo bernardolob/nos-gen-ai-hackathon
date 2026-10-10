@@ -49,7 +49,8 @@ DEFAULT_ORIGINS = (
     "http://127.0.0.1:3000",
 )
 INSTRUCTIONS_HEADER = (
-    "O revisor rejeitou a versão anterior e pediu o seguinte:"
+    "O revisor rejeitou a versão anterior e pediu o seguinte (os pedidos mais "
+    "recentes prevalecem):"
 )
 MODEL_FAILED = "Não foi possível gerar a nova versão. Tente outra vez."
 
