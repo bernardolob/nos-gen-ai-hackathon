@@ -136,6 +136,19 @@ Nenhuma sobre o funcionamento (ver "Estado": esquema da API já confirmado
 com pedidos reais). Falta só confirmar o valor exato dos créditos por
 minuto — "A confirmar" em "Custo", abaixo.
 
+## A chave é do servidor
+
+Quem usa a UI **não precisa de chave**: a `ELEVENLABS_API_KEY` é do servidor,
+lida do ambiente por quem corre o backend. Para a demonstração, ligamos o
+backend com a nossa chave e o utilizador só envia o áudio. Sem ela o backend
+arranca na mesma, com o áudio desligado (`audio_enabled` falso); o texto e o
+PDF funcionam. Os caminhos alternativos (um Worker da Cloudflare como o do
+Gemini, transcrição local com Whisper, a chave colada na UI) e porque ficou
+este estão em [DECISIONS.md](DECISIONS.md), 16.
+
+A chave nunca vai para o repositório, para a UI nem para o registo; quem a
+partilhar numa conversa deve gerar uma nova.
+
 ## Privacidade
 
 - **O áudio original vai para um serviço de terceiros.** A transcrição é
