@@ -100,7 +100,6 @@ def build_request(lines, user_instructions=None):
     return "\n".join(parts)
 
 
-
 def detect(
     lines,
     generate,
