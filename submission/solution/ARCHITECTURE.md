@@ -119,6 +119,17 @@ e na deteção.
    à prompt contra um documento anonimizado à mão. A equipa decidiu não a
    fazer: as execuções comparam-se à mão.
 
+## Extras
+
+Fora da numeração 1-8 acima (essa numeração segue os critérios dos
+organizadores). Um extra pode reaproveitar o pipeline de texto sem lhe
+tocar.
+
+| Extra | Ficheiros | Estado |
+|---|---|---|
+| Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | feito e testado com a API real do ElevenLabs, ver [AUDIO.md](AUDIO.md) |
+| Rota de áudio da revisão | `src/user_validation.py` (`/api/audio`) | feita e testada com a transcrição falsa e o `ffmpeg` real; a UI de áudio existe (visto em modo demonstração), ver [REVIEW.md](REVIEW.md) |
+
 ## Estrutura de pastas
 
 ```
@@ -132,6 +143,8 @@ submission/
     DEVELOPMENT.md            como trabalhar no projeto
     DETECTION.md              deteção e validação da resposta
     MASKING.md                regras do mascaramento
+    AUDIO.md                  extra: censura de áudio
+    REVIEW.md                 revisão manual: UI, backend e rotas
     taxonomy.md               categorias de dados sensíveis
     internal_prompt.txt       2 Prompt interna
     src/
@@ -147,8 +160,12 @@ submission/
       gateway.py              liga o pipeline ao Gemini pelo Worker
       labels.py               deixa as etiquetas visíveis (itens do modelo)
       visibility.py           valores que o utilizador pediu para ficarem visíveis
-      user_validation.py      backend da revisão manual (FastAPI)
+      user_validation.py      backend da revisão manual, texto e áudio (FastAPI)
       gemini/                 cliente direto do Gemini (alternativa)
+      audio/                  extra: transcrição, alinhamento e redação
+      audio_pipeline.py       extra: ponto de entrada da censura de áudio
+    assets/
+      censor_sounds/          extra: sons de substituição (censor_1 a 4.m4a)
     api/                      API HTTP opcional
     Lovable_UI_JunctionX/     UI da revisão manual (React)
     tests/                    testes de tudo o que está acima

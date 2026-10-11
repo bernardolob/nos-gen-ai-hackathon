@@ -53,6 +53,12 @@ class GeminiSettings(EnvSettings):
         le=120,
         validation_alias="GEMINI_RETRY_MAX_DELAY_SECONDS",
     )
+    cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        validation_alias="GEMINI_CACHE_TTL_SECONDS",
+    )
 
     @model_validator(mode="after")
     def validate_retry_delays(self) -> "GeminiSettings":

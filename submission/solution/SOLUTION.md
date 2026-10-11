@@ -53,7 +53,8 @@ Gemini.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, contrato de dados e estrutura de pastas |
 | [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
-| [REVIEW.md](REVIEW.md) | Revisão manual: UI, backend e rejeição com observações |
+| [REVIEW.md](REVIEW.md) | Revisão manual (texto e áudio): UI, backend, rotas e rejeição com observações |
+| [AUDIO.md](AUDIO.md) | Extra: censura de áudio (linha de comandos e rota do backend) |
 | [GATEWAY.md](GATEWAY.md) | Como o pipeline chama o Gemini pelo Worker Cloudflare |
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
@@ -172,6 +173,26 @@ interno, `include_values=True` mostra-os. Se o Gemini e as regras de
 segurança apanham o mesmo valor na mesma linha, aparece uma só vez, com as
 duas origens e a maior confiança.
 
+## Extra: censura de áudio
+
+Aceita um ficheiro de áudio, transcreve-o com a ElevenLabs Scribe
+(timestamps por palavra), corre o mesmo `pipeline.run` sobre a
+transcrição, e substitui cada palavra ocultada por um som personalizado
+(não silêncio) no áudio. Reaproveita o pipeline de texto sem alterações —
+só a transcrição e a redação do áudio são novas. Feito e verificado com a
+API real do ElevenLabs na linha de comandos (`audio_pipeline.py`).
+
+O backend da revisão manual tem também a **rota de áudio** (`POST
+/api/audio` e `GET /api/audio/current`, ver [REVIEW.md](REVIEW.md)): envia-se
+um áudio, ouve-se a versão censurada e rejeita-se com observações, como no
+texto, sem voltar a enviar o áudio ao ElevenLabs. Testada com a transcrição e
+a censura falsas e com o `ffmpeg` real. A **UI de áudio** existe (envio com
+aviso de privacidade, leitor, rejeição e histórico) e foi vista em modo
+demonstração; nunca correu com áudio real de ponta a ponta. Nota de
+privacidade: o áudio original, ainda com os dados sensíveis, vai para o
+ElevenLabs.
+Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
+
 ## Como a solução responde aos critérios
 
 | Critério (peso) | Onde está | Estado |
@@ -183,10 +204,14 @@ duas origens e a maior confiança.
 | Eficiência (5%) | Uma chamada ao modelo; o resto é código | por medir |
 | GitHub (5%) e Colaboração (30%) | Um branch por componente, pull requests com merge commit, testes | ver [DEVELOPMENT.md](DEVELOPMENT.md) |
 | Documentação (10%) | Esta pasta | em curso |
-| Pitch (20%) | | por preparar |
+| Pitch (20%) | Extra: censura de áudio ([AUDIO.md](AUDIO.md)) | por preparar |
 
 ## Problemas conhecidos
 
+- **O áudio precisa de uma chave do ElevenLabs no servidor** e envia o áudio
+  original, ainda com os dados sensíveis, para esse serviço. Sem a chave o
+  áudio fica desligado e o resto funciona. A transcrição local (Whisper) é a
+  evolução que resolveria as duas coisas (ver [DECISIONS.md](DECISIONS.md), 16).
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.
 

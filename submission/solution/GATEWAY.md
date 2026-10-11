@@ -31,10 +31,15 @@ Fora de `localhost`, o endereço tem de ser `https`.
 
 ## O que o Worker aceita (e as consequências)
 
-- **Só `{"prompt": "..."}`.** A instrução de sistema e o documento seguem
-  juntos num só texto; não há modo JSON (`temperature` está obsoleta no
-  `gemini-3.5-flash-lite`). A deteção tolera blocos de código e repete uma
-  vez uma resposta inválida. As respostas podem variar entre execuções.
+- **`{"prompt": "..."}`, com um `"format"` opcional.** A instrução de sistema
+  e o documento seguem juntos num só texto. Com `"format": "detection"` o
+  Worker obriga o modelo a responder em JSON com o esquema de
+  `detection_schema.json` (`responseMimeType` e `responseSchema`); o esquema
+  vive no Worker, nunca no pedido, e qualquer outro valor ou campo dá 422.
+  Sem `format` o pedido é o de antes, por isso um cliente antigo continua a
+  funcionar. A deteção continua a tolerar blocos de código e repete uma vez
+  uma resposta inválida. As respostas podem variar entre execuções
+  (`temperature` está obsoleta no `gemini-3.5-flash-lite`).
 - **O modelo é o do Worker.** `GEMINI_MODEL` no `wrangler.jsonc`
   (`gemini-3.5-flash-lite`); mudá-lo exige publicar o Worker de novo.
 - **40 000 caracteres** (`MAX_PROMPT_LENGTH` em `wrangler.jsonc`, antes

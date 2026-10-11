@@ -1,0 +1,51 @@
+{
+  "type": "ARRAY",
+  "description": "The sensitive values found in the document, in document order. Empty when there are none.",
+  "items": {
+    "type": "OBJECT",
+    "properties": {
+      "line": {
+        "type": "INTEGER",
+        "description": "The line number shown in brackets where the value appears."
+      },
+      "text": {
+        "type": "STRING",
+        "description": "The value, copied exactly from that line, without any label."
+      },
+      "category": {
+        "type": "STRING",
+        "description": "The category id of the value.",
+        "enum": [
+          "identificacao",
+          "saude",
+          "genetico",
+          "biometrico",
+          "origem_religiao_politica",
+          "financeiro",
+          "familia",
+          "comportamento",
+          "quasi_identificador"
+        ]
+      },
+      "reason": {
+        "type": "STRING",
+        "description": "One short sentence in Portuguese. Only when the confidence is incerto."
+      },
+      "confidence": {
+        "type": "STRING",
+        "description": "How sure it is that the value is sensitive.",
+        "enum": ["certo", "provavel", "incerto"]
+      },
+      "occurrence": {
+        "type": "INTEGER",
+        "description": "Which occurrence of the text in the line is meant. Only when it repeats."
+      },
+      "visible": {
+        "type": "BOOLEAN",
+        "description": "True only when the user's instructions ask to keep this value visible."
+      }
+    },
+    "required": ["line", "text", "category", "confidence"],
+    "propertyOrdering": ["line", "text", "category", "confidence", "reason", "occurrence", "visible"]
+  }
+}

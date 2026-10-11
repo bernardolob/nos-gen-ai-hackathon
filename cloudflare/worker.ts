@@ -1,3 +1,5 @@
+import detectionSchema from "../submission/solution/detection_schema.json";
+
 interface RateLimiter {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
@@ -15,8 +17,13 @@ interface Env {
   MAX_MEDIA_FRAMES: string;
 }
 
+/** The answer shapes a client may ask for. The schemas live here, never in the request. */
+const RESPONSE_FORMATS = { detection: detectionSchema } as const;
+type ResponseFormat = keyof typeof RESPONSE_FORMATS;
+
 interface GenerationPayload {
   prompt: string;
+  format?: ResponseFormat;
 }
 
 interface MediaFrame {
@@ -241,14 +248,24 @@ async function parseGenerationPayload(
   }
   const keys = Object.keys(value);
   const prompt = (value as Record<string, unknown>).prompt;
+  const format = (value as Record<string, unknown>).format;
   if (
-    keys.length !== 1 ||
-    keys[0] !== "prompt" ||
+    !keys.includes("prompt") ||
+    keys.some((key) => key !== "prompt" && key !== "format") ||
     typeof prompt !== "string" ||
     !prompt.trim() ||
     prompt.length > maxPromptLength
   ) {
     return null;
+  }
+  if (keys.includes("format")) {
+    if (
+      typeof format !== "string" ||
+      !Object.prototype.hasOwnProperty.call(RESPONSE_FORMATS, format)
+    ) {
+      return null;
+    }
+    return { prompt, format: format as ResponseFormat };
   }
   return { prompt };
 }
@@ -372,6 +389,7 @@ async function callGemini(
 async function generateText(
   prompt: string,
   env: Env,
+  format?: ResponseFormat,
 ): Promise<{ model: string; text: string }> {
   const model = textModelId(env);
   if (!model) {
@@ -381,6 +399,14 @@ async function generateText(
     model,
     {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
+      ...(format
+        ? {
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: RESPONSE_FORMATS[format],
+            },
+          }
+        : {}),
       store: false,
     },
     env,
@@ -619,7 +645,7 @@ export default {
       }
       try {
         return jsonResponse(
-          await generateText(payload.prompt, env),
+          await generateText(payload.prompt, env, payload.format),
           200,
           requestId,
           origin,

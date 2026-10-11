@@ -189,6 +189,48 @@ Se o valor sensível é `Ana` e aparece dentro de `Ana-Maria`, mascara-se
 - **O apelido só se mascara se for apontado** (ou se o item for o nome
   completo). O código não sabe o que é o apelido de quem.
 
+### 15. Áudio: transcrever uma só vez por sessão
+
+**O problema.** Na revisão manual, cada rejeição gera uma versão nova. Se
+cada uma voltasse a transcrever, o áudio, com os dados sensíveis, seria
+enviado outra vez ao ElevenLabs, com custo em créditos e mais exposição.
+
+**A decisão.** A rota de áudio transcreve uma só vez, quando se envia o
+áudio, e guarda a transcrição e os tempos das palavras. Cada rejeição repete
+só a deteção e a censura (`audio_pipeline.run_transcript`), sempre a partir do
+áudio original guardado numa pasta temporária privada, que se apaga ao
+substituir o documento, ao fechar a sessão e ao sair do servidor.
+
+**O que se perde.** O histórico guarda só o texto das versões rejeitadas, não
+o seu áudio. E se a transcrição estiver errada, rejeitar não a corrige: é
+preciso enviar o áudio outra vez.
+
+### 16. A chave do ElevenLabs é do servidor, não do utilizador
+
+**O problema.** A censura de áudio precisa de transcrever o áudio, e o
+ElevenLabs Scribe exige uma chave de API. Quem usa a UI não deve ter de a
+ter, nem de a ver.
+
+**Os caminhos considerados**
+
+| Caminho | Prós | Contras |
+|---|---|---|
+| **1. A chave no servidor** (`ELEVENLABS_API_KEY`) | o mais simples; o utilizador não vê nem precisa de nada | quem corre o backend precisa de uma chave |
+| 2. Um Worker da Cloudflare para o ElevenLabs, como o do Gemini | a chave fica na Cloudflare; o backend só conhece um endereço | o áudio passa também pela Cloudflare; limites de tamanho; mais uma peça |
+| 3. Transcrição local (Whisper) | sem chave; o **áudio nunca sai da máquina** | descarregar um modelo (centenas de MB); mais lento sem placa gráfica |
+| 4. O utilizador cola a sua chave na UI | nenhuma infraestrutura | a chave fica no navegador: mais um dado sensível a proteger |
+
+**A decisão.** O caminho 1. Serve a demonstração e o pitch: nós ligamos o
+backend com a nossa chave e quem experimenta a UI não precisa de nada. O
+caminho 4 rejeita-se. Os caminhos 2 e 3 ficam como evolução; o 3 é o que
+resolve também o problema de privacidade, porque hoje o áudio original,
+ainda com os dados sensíveis, vai para o ElevenLabs (ver [AUDIO.md](AUDIO.md)).
+
+**O que se perde.** Sem a chave, o backend arranca na mesma mas o áudio fica
+desligado (`audio_enabled` falso) e a UI bloqueia o envio com "Audio censoring
+is not available on this server."; o texto e o PDF não são afetados. E cada
+pessoa que corra o backend por conta própria precisa da sua chave.
+
 ## Decisões em aberto
 
 1. **Normalização Unicode.** Se o Gemini devolver `ç` decomposto (NFD), o

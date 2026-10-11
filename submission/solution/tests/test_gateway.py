@@ -76,9 +76,14 @@ class GatewayTest(unittest.TestCase):
         self.assertEqual(answer, '[{"a": 1}]')
         request = self.worker.requests[0]
         self.assertEqual(request["path"], "/api/v1/generate")
-        self.assertEqual(list(request["body"]), ["prompt"])
+        self.assertEqual(list(request["body"]), ["prompt", "format"])
+        self.assertEqual(request["body"]["format"], "detection")
         self.assertEqual(
             request["body"]["prompt"], "SISTEMA\n\n<document>x</document>")
+
+    def test_the_structured_format_can_be_left_out(self):
+        self.generate(response_format=None)("s", "c")
+        self.assertEqual(list(self.worker.requests[0]["body"]), ["prompt"])
 
     def test_origin_and_json_headers_are_sent(self):
         self.generate()("s", "c")

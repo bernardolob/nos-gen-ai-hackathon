@@ -28,6 +28,7 @@ import urllib.request
 
 GENERATE_PATH = "/api/v1/generate"
 DEFAULT_MAX_PROMPT = 40000
+RESPONSE_FORMAT = "detection"
 DEFAULT_TIMEOUT = 90.0
 DEFAULT_ATTEMPTS = 3
 DEFAULT_DELAY = 5.0
@@ -62,8 +63,13 @@ def make_generate(
     attempts=DEFAULT_ATTEMPTS,
     delay=DEFAULT_DELAY,
     sleep=time.sleep,
+    response_format=RESPONSE_FORMAT,
 ):
-    """Devolve ``generate(sistema, conteúdo)`` para o ``detection.detect``."""
+    """Devolve ``generate(sistema, conteúdo)`` para o ``detection.detect``.
+
+    ``response_format`` pede ao Worker que obrigue o modelo a responder com o
+    esquema de deteção (JSON). ``None`` envia só a prompt.
+    """
     endpoint = _endpoint(url)
     if not origin or not origin.strip():
         raise GatewayConfigError("Falta o Origin do gateway.")
@@ -76,7 +82,10 @@ def make_generate(
             raise GatewayConfigError(
                 "O pedido tem %d caracteres e o gateway aceita %d."
                 % (len(prompt), max_prompt_length))
-        body = json.dumps({"prompt": prompt}).encode("utf-8")
+        payload = {"prompt": prompt}
+        if response_format:
+            payload["format"] = response_format
+        body = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             endpoint, data=body, method="POST", headers={
                 "Content-Type": "application/json",
