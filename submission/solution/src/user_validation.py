@@ -27,7 +27,9 @@ import os
 import re
 import tempfile
 import atexit
+import json
 import shutil
+import subprocess
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -713,6 +715,49 @@ def lines_from_upload(content_type, body):
     raise ReviewError(415, "Envie um PDF ou texto simples (UTF-8).")
 
 
+AUDIO_ONLY_CONTAINERS = {
+    "video/mp4": "audio/mp4",
+    "video/quicktime": "audio/mp4",
+}
+PROBE_TIMEOUT = 20
+
+
+def audio_only_video(content_type, body):
+    """Diz se um "vídeo" enviado é só áudio.
+
+    Uma gravação do telemóvel ou do WhatsApp só com som costuma chegar com a
+    extensão ``.mp4`` ou ``.mov``, e o navegador di-la ``video/mp4``. O
+    ``ffprobe`` vê se há mesmo imagem (uma capa de álbum não conta). Sem o
+    ``ffprobe`` ou se não conseguir ler o ficheiro, trata-se como vídeo, que é
+    o que fazia antes.
+    """
+    kind = content_type.split(";")[0].strip().lower()
+    if kind not in AUDIO_ONLY_CONTAINERS or len(body) > MAX_AUDIO_BYTES:
+        return False
+    if shutil.which("ffprobe") is None:
+        return False
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
+        path = Path(folder) / "probe"
+        path.write_bytes(body)
+        try:
+            done = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries",
+                 "stream=codec_type:stream_disposition=attached_pic",
+                 "-of", "json", str(path)],
+                capture_output=True, timeout=PROBE_TIMEOUT, check=False)
+            streams = json.loads(done.stdout or b"{}").get("streams", [])
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return False
+    if done.returncode != 0 or not streams:
+        return False
+    has_audio = any(s.get("codec_type") == "audio" for s in streams)
+    has_picture = any(
+        s.get("codec_type") == "video"
+        and not s.get("disposition", {}).get("attached_pic")
+        for s in streams)
+    return has_audio and not has_picture
+
+
 def audio_suffix(content_type, body):
     """Extensão do áudio enviado, validando o tipo e o tamanho."""
     if len(body) > MAX_AUDIO_BYTES:
@@ -781,6 +826,14 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
             request.headers.get("x-user-instructions"))
         body = await request.body()
         content_type = request.headers.get("content-type", "")
+        if await run_in_threadpool(audio_only_video, content_type, body):
+            # An audio recording named .mp4: it goes the audio way.
+            suffix = audio_suffix(
+                AUDIO_ONLY_CONTAINERS[
+                    content_type.split(";")[0].strip().lower()], body)
+            await run_in_threadpool(
+                session.load_audio, body, suffix, initial)
+            return session.snapshot()
         if supported_media_kind(content_type):
             session.load_media(
                 body, content_type,
