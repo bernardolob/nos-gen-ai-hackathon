@@ -243,7 +243,7 @@ export function ReviewWorkspace({
         </div>
         {/* The frame clips the scan effect; the inner box is the one that scrolls. */}
         <div key={snapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
-          <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
+          <div className="max-h-[34rem] overflow-y-auto p-6 clean-scrollbar" tabIndex={0} aria-label="Anonymized text">
             <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
           </div>
         </div>
@@ -346,7 +346,7 @@ export function ReviewWorkspace({
                   {isAudio && <span className="text-xs font-medium text-muted-foreground">Transcript</span>}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">“{h.reason}”</p>
-                <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">
+                <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3 clean-scrollbar">
                   <MaskedText text={h.text} className="text-xs leading-6" />
                 </div>
               </article>
