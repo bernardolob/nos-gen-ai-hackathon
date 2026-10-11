@@ -412,3 +412,99 @@ def test_the_shutil_module_is_what_decides_ffmpeg(monkeypatch):
     assert user_validation.ffmpeg_available() is False
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/" + name)
     assert user_validation.ffmpeg_available() is True
+
+
+# ---- an audio recording named .mp4 (phones and WhatsApp do this) ----
+
+real_ffmpeg = pytest.mark.skipif(
+    not user_validation.ffmpeg_available(),
+    reason="precisa do ffmpeg e do ffprobe instalados")
+
+
+def upload_as_video(api, body, content_type="video/mp4"):
+    return api.post("/api/document", content=body,
+                    headers={"Content-Type": content_type})
+
+
+@real_ffmpeg
+def test_an_audio_only_mp4_is_treated_as_audio(fake_redact):
+    scribe = FakeScribe()
+    api = client(scribe)
+    data = upload_as_video(api, SOUND.read_bytes()).json()
+    assert data["kind"] == "audio"
+    assert data["text"] == "Contacto * para marcar."
+    assert data["audio_url"] == "/api/audio/current"
+    assert scribe.calls == 1
+    # A normal audio review afterwards: rejecting does not transcribe again.
+    api.post("/api/reject", json={
+        "attempt": 1, "text": "", "reason": "x"})
+    assert scribe.calls == 1
+
+
+@real_ffmpeg
+def test_a_quicktime_audio_file_goes_the_same_way(fake_redact):
+    api = client(FakeScribe())
+    data = upload_as_video(
+        api, SOUND.read_bytes(), "video/quicktime").json()
+    assert data["kind"] == "audio"
+
+
+@real_ffmpeg
+def test_audio_with_a_cover_picture_is_still_audio(fake_redact, tmp_path):
+    import subprocess
+    cover = tmp_path / "cover.png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=1",
+         "-frames:v", "1", str(cover)], check=True, capture_output=True)
+    with_cover = tmp_path / "with_cover.m4a"
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(SOUND), "-i", str(cover), "-map", "0:a",
+         "-map", "1:v", "-c", "copy", "-disposition:v:0", "attached_pic",
+         str(with_cover)], check=True, capture_output=True)
+    assert user_validation.audio_only_video(
+        "video/mp4", with_cover.read_bytes()) is True
+
+
+@real_ffmpeg
+def test_a_real_video_is_not_mistaken_for_audio(tmp_path):
+    import subprocess
+    video = tmp_path / "clip.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc2=s=64x64:d=0.5:r=10",
+         "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+         "-shortest", str(video)], check=True, capture_output=True)
+    assert user_validation.audio_only_video(
+        "video/mp4", video.read_bytes()) is False
+    # With no image model configured the video way answers 503, not audio.
+    api = client(FakeScribe())
+    assert upload_as_video(api, video.read_bytes()).status_code == 503
+
+
+def test_without_ffprobe_the_file_stays_a_video(monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    assert user_validation.audio_only_video("video/mp4", b"x" * 100) is False
+
+
+def test_only_mp4_and_quicktime_are_probed(monkeypatch):
+    def boom(*args, **kwargs):
+        raise AssertionError("ffprobe was not supposed to run")
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(user_validation.subprocess, "run", boom)
+    assert user_validation.audio_only_video("video/webm", b"x") is False
+    assert user_validation.audio_only_video("image/png", b"x") is False
+    big = b"x" * (user_validation.MAX_AUDIO_BYTES + 1)
+    assert user_validation.audio_only_video("video/mp4", big) is False
+
+
+def test_an_unreadable_file_stays_a_video(monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/" + name)
+
+    class Done:
+        returncode = 1
+        stdout = b"not json"
+
+    monkeypatch.setattr(
+        user_validation.subprocess, "run", lambda *a, **k: Done())
+    assert user_validation.audio_only_video("video/mp4", b"junk") is False

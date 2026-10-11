@@ -65,6 +65,7 @@ export function UploadStep({
   errorTitle,
   onRetry,
   audioEnabled = false,
+  audioOnly = false,
 }: {
   file: File | null;
   onFile: (f: File | null) => void;
@@ -78,6 +79,8 @@ export function UploadStep({
   errorTitle?: string;
   onRetry: () => void;
   audioEnabled?: boolean;
+  /** A .mp4 or .mov that has no picture: it is an audio recording (see useAudioOnly). */
+  audioOnly?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -95,9 +98,9 @@ export function UploadStep({
     }
   };
 
-  const isAudio = Boolean(file && isAudioFile(file));
-  const isMedia = Boolean(file && isMediaFile(file));
-  const isVideo = Boolean(file && isVideoFile(file));
+  const isAudio = Boolean(file && (isAudioFile(file) || audioOnly));
+  const isMedia = Boolean(file && isMediaFile(file) && !audioOnly);
+  const isVideo = Boolean(file && isVideoFile(file) && !audioOnly);
   const isImage = Boolean(file && isMedia && !isVideo);
 
   const needsConsent = isAudio || isMedia;

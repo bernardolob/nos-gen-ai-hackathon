@@ -102,6 +102,10 @@ Comportamento:
   (transcrição, alinhamento, modelo ou `ffmpeg`), 503 (sem chave ou sem
   `ffmpeg`). As mensagens são fixas e nunca incluem o áudio nem a chave.
 
+- **Áudio guardado como `.mp4` ou `.mov`.** Uma gravação de voz com essa
+  extensão é tratada como áudio, não como vídeo (ver [AUDIO.md](AUDIO.md)); o
+  estado vem com `kind: "audio"`.
+
 ### Privacidade
 
 Escuta só em `127.0.0.1` e o CORS só aceita as origens da UI

@@ -136,6 +136,19 @@ Nenhuma sobre o funcionamento (ver "Estado": esquema da API já confirmado
 com pedidos reais). Falta só confirmar o valor exato dos créditos por
 minuto — "A confirmar" em "Custo", abaixo.
 
+## Áudio guardado como `.mp4` ou `.mov`
+
+Os telemóveis e o WhatsApp guardam muitas gravações de voz como `.mp4` (ou
+`.m4a.mp4`) e o navegador di-las `video/mp4`. Se o ficheiro entra pela rota dos
+documentos (`POST /api/document`) com um desses tipos, o backend corre o
+`ffprobe` e, se **não houver imagem** (uma capa de álbum não conta), trata-o
+como áudio: transcreve, deteta e censura como em `POST /api/audio`
+(`audio_only_video` em `user_validation.py`). Só se vê até 25 MB (o limite do
+áudio); sem o `ffprobe`, ou se o ficheiro não se lê, continua a ser um vídeo,
+como antes. A UI faz a mesma pergunta no navegador (a metadata do ficheiro) para
+mostrar o aviso certo, o do ElevenLabs e não o do Gemini (`use-audio-only.ts`).
+Um `.webm` só de som não é aceite: use mp3, m4a ou wav.
+
 ## A chave é do servidor
 
 Quem usa a UI **não precisa de chave**. Há dois caminhos, escolhidos por

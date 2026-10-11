@@ -4,6 +4,7 @@ import { Info, Loader2, LockKeyhole, Moon, ShieldCheck, Sun } from "lucide-react
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useAudioOnly } from "@/lib/use-audio-only";
 import { UploadStep } from "@/components/anonymizer/steps";
 import { ReviewWorkspace } from "@/components/review/workspace";
 import { ThemePicker } from "@/components/theme-picker";
@@ -47,6 +48,7 @@ function Index() {
   const [initialising, setInitialising] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const audioOnly = useAudioOnly(file);
   const [instructions, setInstructions] = useState("");
   const [wantsNew, setWantsNew] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -214,7 +216,7 @@ function Index() {
                     onAnalyze={upload}
                     loading={uploading}
                     status={
-                      file && isAudioFile(file)
+                      file && (isAudioFile(file) || audioOnly)
                         ? "Transcribing and censoring the audio... this can take several seconds."
                         : file && isVideoFile(file)
                         ? "Analyzing video frames... this can take a while."
@@ -235,6 +237,7 @@ function Index() {
                     }
                     onRetry={() => (file ? void upload() : void load())}
                     audioEnabled={snapshot?.audio_enabled ?? false}
+                    audioOnly={audioOnly}
                   />
                 </div>
               )}
