@@ -628,6 +628,36 @@ def test_media_review_api_is_fail_closed_and_exports(tmp_path):
         assert api.get("/api/media/output").content == b"redacted"
 
 
+def test_media_initial_instructions_reach_the_analysis_and_the_reanalysis():
+    pytest.importorskip("fastapi")
+    from urllib.parse import quote
+    from fastapi.testclient import TestClient
+    import user_validation
+
+    class Recording(FakeMediaProcessor):
+        def __init__(self):
+            self.received = []
+
+        def analyze(self, path, content_type, progress, instructions):
+            self.received.append(instructions)
+            return super().analyze(path, content_type, progress, instructions)
+
+    processor = Recording()
+    with TestClient(user_validation.create_app(
+            media_processor=processor)) as api:
+        api.post("/api/document", content=b"fake-image", headers={
+            "Content-Type": "image/jpeg",
+            "X-User-Instructions": quote("Tapa também as matrículas."),
+        })
+        wait_ready(api)
+        api.post("/api/reject", json={
+            "attempt": 1, "text": "", "reason": "Falta uma cara."})
+        wait_ready(api)
+    assert processor.received[0] == "Tapa também as matrículas."
+    assert "Tapa também as matrículas." in processor.received[1]
+    assert "Falta uma cara." in processor.received[1]
+
+
 def test_review_session_tracks_a_video_region_at_the_requested_time(tmp_path):
     from user_validation import RegionTrackRequest, ReviewSession
 
