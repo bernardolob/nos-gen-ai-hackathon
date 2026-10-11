@@ -21,7 +21,11 @@ async function liveApi() {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: RequestInit) => {
-      calls.push({ url, headers: { ...(init.headers as Record<string, string>) }, body: init.body });
+      calls.push({
+        url,
+        headers: { ...(init.headers as Record<string, string>) },
+        body: init.body,
+      });
       return new Response(JSON.stringify(SNAPSHOT), { status: 200 });
     }),
   );
@@ -94,7 +98,9 @@ describe("instructions in the real upload requests", () => {
   it("refuses too long instructions before anything is sent", async () => {
     const { api, calls } = await liveApi();
 
-    await expect(api.uploadFile(textFile(), "a".repeat(MAX_INSTRUCTIONS + 1))).rejects.toMatchObject({
+    await expect(
+      api.uploadFile(textFile(), "a".repeat(MAX_INSTRUCTIONS + 1)),
+    ).rejects.toMatchObject({
       status: 422,
     });
     expect(calls).toHaveLength(0);
