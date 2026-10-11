@@ -131,7 +131,7 @@ locais. Sem esta variável, a aplicação continua a funcionar com caixas.
 - O áudio do vídeo é preservado. Dados pessoais falados não são censurados
   nesta versão.
 
-## Uma cara, uma região
+## Uma coisa, uma região
 
 A mesma cara costuma voltar de vários detetores (o modelo, o detetor local, uma
 pista partida em pedaços), cada um com a sua caixa, e isso aparecia como duas ou
@@ -142,8 +142,19 @@ pelo menos um terço desses instantes (o fim de um pedaço pode já ter derivado
 da cara). O resultado é uma só região cuja caixa, em cada instante, é a **união**
 das caixas do grupo: a máscara só pode crescer, nunca perde parte da cara. Duas
 caras diferentes, ou a mesma zona em instantes muito afastados, não se juntam.
-Corre nas fotografias e nos vídeos (antes e depois do alisamento das caixas), e
-só toca em rostos. Num vídeo real passou de 5 pistas de rosto para 1.
+Corre nas fotografias e nos vídeos (antes e depois do alisamento das caixas).
+Num vídeo real passou de 5 pistas de rosto para 1.
+
+O mesmo vale para o resto (`_merge_object_regions`), com um critério mais
+apertado: a caixa mais pequena tem de estar 75% dentro da maior, em metade dos
+instantes comuns. Assim o mesmo cartão, que o modelo devolve como
+`identity_document` e como `other` (um cartão de pagamento), ou em pedaços no
+tempo, e as linhas de texto lidas dele, ficam numa só região, e é a maior que
+lhe dá o tipo e a categoria. A caixa é a união, por isso cobre tudo o que
+cobriam as várias. Os rostos e os outros objetos nunca se juntam entre si. Num
+vídeo real a lista passou de 4 regiões para 2 (uma cara e o cartão) e, na
+fotografia de um cartão de cidadão, de 10 para 2; quando os pedaços de um
+cartão em movimento não se tocam, podem ficar 2 ou 3.
 
 ## Verificação real
 

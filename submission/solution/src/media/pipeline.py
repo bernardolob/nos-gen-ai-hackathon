@@ -174,10 +174,10 @@ class MediaProcessor:
         combined = self._recover_video_objects(
             path, combined, llm_regions, face_regions, samples, info,
             scene_cuts, instructions, report)
-        combined = _merge_face_regions(combined)
+        combined = _merge_duplicate_regions(combined)
         # Smoothing moves the face boxes a little, so a join that was just
         # short of the threshold can be found afterwards.
-        combined = _merge_face_regions(
+        combined = _merge_duplicate_regions(
             [_smooth_region(track) for track in combined])
         return kind, info, combined, model
 
@@ -1584,7 +1584,11 @@ def _box_near(region, time_ms):
     return region.box_at(min(region.end_ms, max(region.start_ms, time_ms)))
 
 
-def _same_face(first, second):
+def _same_region(first, second, containment=FACE_MERGE_CONTAINMENT,
+                 share=3):
+    """Do two regions follow the same thing? ``containment`` is how much of
+    the smaller box must lie inside the larger one, and it must hold at one
+    ``share``-th (or more) of the instants the two have in common."""
     low = max(first.start_ms, second.start_ms) - FACE_MERGE_GAP_MS
     high = min(first.end_ms, second.end_ms) + FACE_MERGE_GAP_MS
     if low > high:
@@ -1593,10 +1597,14 @@ def _same_face(first, second):
              if low <= key.time_ms <= high} or {first.start_ms}
     matches = sum(
         _containment(_box_near(first, t), _box_near(second, t))
-        >= FACE_MERGE_CONTAINMENT for t in times)
+        >= containment for t in times)
+    return matches * share >= len(times)
+
+
+def _same_face(first, second):
     # A third is enough: where two pieces of one track meet, the earlier one
     # may already have drifted off the face for a few frames.
-    return matches * 3 >= len(times)
+    return _same_region(first, second)
 
 
 def _union_box(boxes):
@@ -1617,7 +1625,24 @@ def _merge_face_regions(regions):
     """
     faces = [region for region in regions if region.kind == "face"]
     others = [region for region in regions if region.kind != "face"]
-    parent = list(range(len(faces)))
+    return others + _merge_group(faces, _same_face, _best_face)
+
+
+def _best_face(members):
+    return next((m for m in members if m.source == "gemini"), members[0])
+
+
+def _best_object(members):
+    """The biggest region names the thing (a card seen as a card, not as a
+    line of text inside it)."""
+    return max(members, key=lambda m: max(
+        _box_area(key.box) for key in m.keyframes))
+
+
+def _merge_group(items, same, best):
+    """Cluster ``items`` with ``same`` and join each cluster (``best`` picks
+    the member that names it)."""
+    parent = list(range(len(items)))
 
     def find(index):
         while parent[index] != index:
@@ -1625,25 +1650,24 @@ def _merge_face_regions(regions):
             index = parent[index]
         return index
 
-    for first in range(len(faces)):
-        for second in range(first + 1, len(faces)):
-            if _same_face(faces[first], faces[second]):
+    for first in range(len(items)):
+        for second in range(first + 1, len(items)):
+            if same(items[first], items[second]):
                 parent[find(second)] = find(first)
     groups = {}
-    for index, region in enumerate(faces):
+    for index, region in enumerate(items):
         groups.setdefault(find(index), []).append(region)
     merged = []
     for members in groups.values():
         if len(members) == 1:
             merged.append(members[0])
             continue
-        merged.append(_join_face_group(members))
+        merged.append(_join_group(members, best(members)))
     # Keep the original order of first appearance.
-    return others + sorted(merged, key=lambda region: region.start_ms)
+    return sorted(merged, key=lambda region: region.start_ms)
 
 
-def _join_face_group(members):
-    best = next((m for m in members if m.source == "gemini"), members[0])
+def _join_group(members, best):
     start = min(member.start_ms for member in members)
     end = max(member.end_ms for member in members)
     times = sorted({key.time_ms for member in members
@@ -1671,6 +1695,33 @@ def _join_face_group(members):
     return result
 
 
+OBJECT_MERGE_CONTAINMENT = 0.75
+
+
+def _same_object(first, second):
+    return _same_region(first, second, OBJECT_MERGE_CONTAINMENT, share=2)
+
+
+def _merge_object_regions(regions):
+    """Join the non-face regions that cover the same thing.
+
+    The same card comes back as an ``identity_document`` and as an ``other``
+    (a payment card), or as pieces in time, and a line of text read off it is
+    one more region inside it. They are joined when the smaller box lies for
+    at least 75% inside the larger one, for at least half of the shared
+    instants; the box is the union at each instant, and the biggest member
+    gives the kind and category. Faces are not touched.
+    """
+    faces = [region for region in regions if region.kind == "face"]
+    others = [region for region in regions if region.kind != "face"]
+    return faces + _merge_group(others, _same_object, _best_object)
+
+
+def _merge_duplicate_regions(regions):
+    """One region per thing: faces first, then everything else."""
+    return _merge_object_regions(_merge_face_regions(regions))
+
+
 def _merge_image_regions(regions):
     output = []
     for region in regions:
@@ -1681,7 +1732,7 @@ def _merge_image_regions(regions):
                               region.keyframes[0].box) >= 0.55), None)
         if duplicate is None:
             output.append(region)
-    return _merge_face_regions(output)
+    return _merge_duplicate_regions(output)
 
 
 # Faces are not covered with a block mosaic: the crop is reduced to a handful

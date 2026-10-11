@@ -37,7 +37,9 @@ from media.pipeline import (  # noqa: E402
     _capture_time_ms,
     _extend_face_tracks_to_edges,
     _link_regions,
+    _merge_duplicate_regions,
     _merge_face_regions,
+    _merge_object_regions,
     _merge_image_regions,
     _pixelate_video_regions,
     _polygon_from_face_classes,
@@ -806,6 +808,76 @@ def test_duplicate_faces_in_a_photo_become_one():
     other.keyframes = other.keyframes[:1]
     merged = _merge_image_regions([big, nested, other])
     assert sorted(item.kind for item in merged) == ["face", "plate"]
+
+
+def _thing(kind, boxes, start=0, category="identificacao",
+           source="gemini", reason="Região."):
+    keys = [RegionKeyframe(time_ms=time, box=Box(
+        x=x, y=y, width=w, height=h)) for time, (x, y, w, h) in boxes]
+    item = region(source=source)
+    item.kind = kind
+    item.category = category
+    item.reason = reason
+    item.start_ms, item.end_ms = start, keys[-1].time_ms
+    item.keyframes = keys
+    return item
+
+
+def test_the_same_card_seen_as_two_kinds_becomes_one_region():
+    card = _thing("identity_document", [(0, (0.06, 0.32, 0.52, 0.23)),
+                                        (1000, (0.08, 0.33, 0.52, 0.23))],
+                  reason="Cartão de identificação.")
+    seen_as_other = _thing("other", [(0, (0.08, 0.34, 0.45, 0.18)),
+                                     (1000, (0.10, 0.35, 0.45, 0.18))],
+                           category="financeiro")
+    merged = _merge_object_regions([seen_as_other, card])
+    assert len(merged) == 1
+    assert merged[0].kind == "identity_document"  # the bigger one names it
+    assert merged[0].reason == "Cartão de identificação."
+    box = merged[0].box_at(0)
+    assert box.x <= 0.06 and box.x + box.width >= 0.58 - 1e-9
+
+
+def test_a_line_of_text_inside_a_document_is_absorbed():
+    document = _thing("identity_document", [(0, (0.1, 0.1, 0.6, 0.4))])
+    line = _thing("text", [(0, (0.2, 0.2, 0.3, 0.05))])
+    merged = _merge_object_regions([line, document])
+    assert [item.kind for item in merged] == ["identity_document"]
+
+
+def test_pieces_of_one_document_track_in_time_become_one():
+    first = _thing("identity_document", [(3300, (0.06, 0.32, 0.52, 0.23)),
+                                         (4900, (0.05, 0.32, 0.55, 0.25))],
+                   start=3300)
+    second = _thing("identity_document", [(5000, (0.04, 0.32, 0.57, 0.21)),
+                                          (6700, (0.0, 0.32, 0.72, 0.39))],
+                    start=5000)
+    merged = _merge_object_regions([first, second])
+    assert len(merged) == 1
+    assert (merged[0].start_ms, merged[0].end_ms) == (3300, 6700)
+
+
+def test_separate_things_and_partial_overlaps_stay_separate():
+    plate = _thing("plate", [(0, (0.6, 0.8, 0.2, 0.1))])
+    document = _thing("identity_document", [(0, (0.05, 0.1, 0.4, 0.3))])
+    # Only a corner of the line lies inside the document: not the same thing.
+    corner = _thing("text", [(0, (0.40, 0.30, 0.30, 0.05))])
+    assert len(_merge_object_regions([plate, document, corner])) == 3
+
+
+def test_merging_objects_leaves_the_faces_alone_and_vice_versa():
+    face = _face_track([(0, (0.3, 0.3, 0.3, 0.3)),
+                        (1000, (0.3, 0.3, 0.3, 0.3))])
+    document = _thing("identity_document",
+                      [(0, (0.35, 0.35, 0.2, 0.2)),
+                       (1000, (0.35, 0.35, 0.2, 0.2))])
+    # The card is held in front of the face: the boxes overlap, the kinds
+    # differ, and neither merge touches the other's kind.
+    assert len(_merge_object_regions([face, document])) == 2
+    assert len(_merge_face_regions([face, document])) == 2
+    merged = _merge_duplicate_regions([face, document])
+    assert sorted(item.kind for item in merged) == [
+        "face", "identity_document"]
 
 
 def test_a_face_is_blurred_smoothly_not_as_a_grid_of_cells():
