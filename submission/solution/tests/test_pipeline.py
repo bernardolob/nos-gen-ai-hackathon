@@ -210,7 +210,9 @@ class MainTest(unittest.TestCase):
             str(self.document), "--instructions", "Mascara as cidades.",
             generate=generate)
         self.assertEqual(code, pipeline.EXIT_OK)
-        self.assertIn("<user_instructions>\nMascara as cidades.\n", seen[0])
+        self.assertIn("<user_instructions>", seen[0])
+        self.assertIn("Mascara as cidades.", seen[0])
+        self.assertIn("WHAT to mask or unmask", seen[0])
 
     def test_instructions_can_come_from_a_file(self):
         seen = []

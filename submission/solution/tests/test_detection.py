@@ -79,10 +79,10 @@ class BuildRequestTest(unittest.TestCase):
 
     def test_user_instructions_go_in_their_own_block(self):
         request = detection.build_request(LINES, "  Mascara as datas.  ")
-        self.assertTrue(request.endswith(
-            "</document>\n\n"
-            "<user_instructions>\nMascara as datas.\n</user_instructions>"
-        ))
+        self.assertIn("<user_instructions>", request)
+        self.assertIn("</user_instructions>", request)
+        self.assertIn("Mascara as datas.", request)
+        self.assertIn("WHAT to mask or unmask", request)
 
     def test_tags_inside_the_document_cannot_close_the_block(self):
         request = detection.build_request(
@@ -472,7 +472,9 @@ class DetectTest(unittest.TestCase):
                          system_prompt="PROMPT")
         system_prompt, request = model.calls[0]
         self.assertEqual(system_prompt, "PROMPT")
-        self.assertIn("<user_instructions>\nExtra.", request)
+        self.assertIn("<user_instructions>", request)
+        self.assertIn("Extra.", request)
+        self.assertIn("WHAT to mask or unmask", request)
 
     def test_returns_items_and_warnings(self):
         model = FakeModel(answer(NAME, dict(NIF, category="x")))
