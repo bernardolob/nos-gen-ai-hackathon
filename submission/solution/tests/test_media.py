@@ -30,6 +30,7 @@ from media.regions import (  # noqa: E402
     Point,
     RegionKeyframe,
     padded_box,
+    polygon_box,
     transform_polygon,
 )
 from media.pipeline import (  # noqa: E402
@@ -90,6 +91,51 @@ def test_only_allowlisted_multimodal_models_are_accepted():
         })
     with pytest.raises(MediaConfigurationError):
         media_model_from_env({"GEMINI_MEDIA_MODEL": "gemini-3.5-flash-lite"})
+
+
+def test_bundled_yunet_loads_offline_without_configuration(monkeypatch):
+    from media import pipeline
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    monkeypatch.delenv("OPENCV_FACE_DETECTOR_MODEL", raising=False)
+    kind, detector = pipeline._create_face_detector(cv2)
+    assert kind == "yunet"
+    assert detector.getScoreThreshold() == pytest.approx(0.85)
+    frame = np.full((320, 320, 3), 128, dtype=np.uint8)
+    assert pipeline._detect_faces(
+        frame, frame[:, :, 0], 1, (kind, detector)) == []
+
+
+def test_face_detector_explicit_override_is_preserved(monkeypatch):
+    from media import pipeline
+    cv2 = pytest.importorskip("cv2")
+    monkeypatch.setenv("OPENCV_FACE_DETECTOR_MODEL", "/missing/model.onnx")
+    kind, _ = pipeline._create_face_detector(cv2)
+    assert kind == "haar"
+
+
+def test_confident_measured_faces_have_a_contour_without_face_parser():
+    from media import pipeline
+    cv2 = pytest.importorskip("cv2")
+    box = Box(x=0.2, y=0.3, width=0.3, height=0.4)
+    polygon = pipeline._detected_face_polygon(None, box, None, "yunet", cv2)
+    assert len(polygon) == 32
+    measured = polygon_box(polygon)
+    assert measured.x == pytest.approx(box.x)
+    assert measured.width == pytest.approx(box.width)
+    assert polygon[0].x == pytest.approx(0.35)
+    assert polygon[0].y == pytest.approx(0.3)
+    assert pipeline._detected_face_polygon(
+        None, box, None, "haar", cv2) is None
+
+
+def test_measured_face_contour_prefers_actual_segmentation(monkeypatch):
+    from media import pipeline
+    expected = face_polygon()
+    monkeypatch.setattr(pipeline, "_parse_face_polygon", lambda *_: expected)
+    assert pipeline._detected_face_polygon(
+        None, Box(x=0.2, y=0.15, width=0.4, height=0.5),
+        object(), "yunet", None) is expected
 
 
 def test_boxes_are_padded_clamped_and_interpolated():
@@ -701,37 +747,32 @@ def _textured_frame(np, size=200):
     ), axis=-1).astype(np.uint8)
 
 
-def test_a_face_is_blurred_smoothly_not_as_a_grid_of_cells():
-    cv2 = pytest.importorskip("cv2")
-    np = pytest.importorskip("numpy")
-    frame = _textured_frame(np)
-    _pixelate_video_regions(frame, [_face_item()], 0, cv2, np)
-    core = frame[70:130, 70:130].astype(int)
-    # Neighbouring pixels in the middle of the face differ little: there are
-    # no hard cell borders (a nearest-neighbour mosaic jumps at every cell).
-    assert np.max(np.abs(np.diff(core, axis=1))) < 12
-    assert np.max(np.abs(np.diff(core, axis=0))) < 12
-
-
-def test_a_face_blur_follows_the_face_not_the_whole_box():
+def test_a_face_is_pixelated_as_a_grid_of_averaged_cells():
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
     frame = _textured_frame(np)
     original = frame.copy()
-    # The box covers 40..160 horizontally and 30..170 vertically.
     _pixelate_video_regions(frame, [_face_item()], 0, cv2, np)
-    assert not np.array_equal(frame[100, 100], original[100, 100])
-    assert not np.array_equal(frame[100, 45], original[100, 45])
-    # The corners of the box are outside the face ellipse: untouched.
+    assert np.array_equal(frame[80, 72], frame[82, 74])
+    assert not np.array_equal(original[80, 72], original[82, 74])
+    colors = np.unique(frame[30:170, 40:160].reshape(-1, 3), axis=0)
+    assert 1 < len(colors) <= 30
+
+
+def test_a_face_without_a_polygon_covers_its_whole_box():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    frame = _textured_frame(np)
+    original = frame.copy()
+    _pixelate_video_regions(frame, [_face_item()], 0, cv2, np)
+    # Without a contour, the safe fallback covers the entire box.
     for row, column in ((32, 42), (32, 158), (168, 42), (168, 158)):
-        assert np.array_equal(frame[row, column], original[row, column])
-    # And nothing far outside the box changes (the ellipse is a little larger
-    # than the box, and its soft edge reaches a few pixels more).
-    assert np.array_equal(frame[:8], original[:8])
-    assert np.array_equal(frame[:, :18], original[:, :18])
+        assert not np.array_equal(frame[row, column], original[row, column])
+    assert np.array_equal(frame[:30], original[:30])
+    assert np.array_equal(frame[:, :40], original[:, :40])
 
 
-def test_a_face_blur_removes_the_fine_detail():
+def test_a_face_mosaic_removes_the_fine_detail():
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
     rows, columns = np.indices((200, 200))
@@ -746,7 +787,7 @@ def test_a_face_blur_removes_the_fine_detail():
         plain[70:130, 70:130].astype(int) - fine[70:130, 70:130])) < 6
 
 
-def test_a_very_small_face_falls_back_to_the_mosaic():
+def test_a_very_small_face_uses_the_mosaic():
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
     frame = _textured_frame(np, 100)
@@ -756,7 +797,7 @@ def test_a_very_small_face_falls_back_to_the_mosaic():
     assert not np.array_equal(frame[41:44, 41:44], original[41:44, 41:44])
 
 
-def test_a_face_in_a_photo_is_blurred_the_same_way(tmp_path):
+def test_a_face_in_a_photo_is_pixelated(tmp_path):
     Image = pytest.importorskip("PIL.Image")
     np = pytest.importorskip("numpy")
     source, output = tmp_path / "source.png", tmp_path / "output.png"
@@ -765,8 +806,9 @@ def test_a_face_in_a_photo_is_blurred_the_same_way(tmp_path):
     with Image.open(source) as original, Image.open(output) as result:
         before = np.asarray(original.convert("RGB")).astype(int)
         after = np.asarray(result.convert("RGB")).astype(int)
-    assert np.max(np.abs(np.diff(after[70:130, 70:130], axis=1))) < 12
-    assert np.array_equal(after[32, 42], before[32, 42])
+    assert np.array_equal(after[80, 72], after[82, 74])
+    assert not np.array_equal(after[32, 42], before[32, 42])
+    assert np.array_equal(after[:30], before[:30])
 
 
 @pytest.mark.skipif(
@@ -963,33 +1005,27 @@ def test_a_failing_preview_is_a_fixed_message_not_the_detail():
         assert "OpenCV" not in reply.text
 
 
-def test_the_real_preview_shows_the_blur_of_a_photo(tmp_path):
+def test_the_real_photo_preview_matches_the_pixelated_export(tmp_path):
     Image = pytest.importorskip("PIL.Image")
     np = pytest.importorskip("numpy")
     import io
-    source = tmp_path / "photo.png"
+    source, output = tmp_path / "photo.png", tmp_path / "export.png"
     Image.fromarray(_textured_frame(np)).save(source)
     processor = MediaProcessor(analyzer=None)
-
-    def decode(data):
-        with Image.open(io.BytesIO(data)) as picture:
-            return np.asarray(picture.convert("RGB")).astype(int)
-
-    plain = decode(processor.preview(source, "image/png", [], 0))
-    blurred = decode(processor.preview(source, "image/png", [_face_item()], 0))
-    # Smooth in the middle of the face, and the same as the plain preview at
-    # the corners of the box (outside the ellipse).
-    assert np.max(np.abs(np.diff(blurred[70:130, 70:130], axis=1))) < 14
-    # (JPEG works in blocks, so "identical" means within its rounding.)
-    assert np.abs(blurred[32, 42] - plain[32, 42]).max() <= 8
-    assert np.abs(blurred[100, 100] - plain[100, 100]).max() > 20
+    items = [_face_item()]
+    _render_image(source, output, items, "image/png")
+    expected = io.BytesIO()
+    with Image.open(output) as picture:
+        picture.save(expected, "JPEG", quality=85)
+    assert processor.preview(source, "image/png", items, 0) == (
+        expected.getvalue())
 
 
 @pytest.mark.skipif(
     shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
     reason="ffmpeg is required",
 )
-def test_the_real_preview_shows_the_blur_of_a_video_frame(tmp_path):
+def test_the_real_preview_shows_the_mosaic_of_a_video_frame(tmp_path):
     cv2 = pytest.importorskip("cv2")
     np = pytest.importorskip("numpy")
     source = tmp_path / "clip.mp4"
@@ -1003,8 +1039,8 @@ def test_the_real_preview_shows_the_blur_of_a_video_frame(tmp_path):
     data = processor.preview(source, "video/mp4", [item], 500)
     frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     assert frame.shape[:2] == (200, 200)
-    assert np.max(np.abs(np.diff(
-        frame[70:130, 70:130].astype(int), axis=1))) < 30
+    # Neighbours well inside an averaged cell have no source detail.
+    assert np.abs(frame[80, 72].astype(int) - frame[82, 74]).max() < 10
 
 
 def test_media_initial_instructions_reach_the_analysis_and_the_reanalysis():

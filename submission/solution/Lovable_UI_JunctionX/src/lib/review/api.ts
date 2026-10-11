@@ -278,13 +278,13 @@ export async function updateRegions(attempt: number, regions: MediaRegion[]): Pr
 
 /**
  * A picture of the file with the redaction applied, exactly as the export will
- * look (a face is blurred, text and documents are pixelated): the photo, or
+ * look (faces, text and documents are pixelated): the photo, or
  * the video frame at `timeMs`. It uses the regions you pass, so unsaved edits
  * show too. Resolves with an object URL that the caller must revoke. Only the
  * real backend can draw it, so in demo mode it rejects.
  */
 export async function previewMedia(attempt: number, timeMs: number, regions: MediaRegion[]): Promise<string> {
-  if (isMockMode) throw new ApiError(0, "The blur preview needs the real backend.");
+  if (isMockMode) throw new ApiError(0, "The server preview needs the real backend.");
   let res: Response;
   try {
     res = await fetch(`${API_URL}/api/media/preview`, {

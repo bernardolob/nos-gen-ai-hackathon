@@ -44,6 +44,10 @@ TRACK_MAX_GAP_MS = 1100
 FACE_POLYGON_POINTS = 32
 FACE_PARSER_SIZE = 512
 FACE_LABELS = frozenset(range(1, 13)) | {15}
+DEFAULT_FACE_DETECTOR_MODEL = (
+    Path(__file__).resolve().parents[2] / "assets" / "models" /
+    "face_detection_yunet_2023mar.onnx"
+)
 
 
 class MediaError(Exception):
@@ -395,20 +399,42 @@ def _capture_time_ms(capture, index, fps, previous=-1):
 
 
 def _create_face_detector(cv2):
-    """Prefer a YuNet ONNX detector and retain an offline Haar fallback."""
+    """Use the bundled YuNet model, with an explicit path override."""
 
-    model_path = os.environ.get("OPENCV_FACE_DETECTOR_MODEL", "").strip()
+    model_path = os.environ.get("OPENCV_FACE_DETECTOR_MODEL", "").strip() or (
+        str(DEFAULT_FACE_DETECTOR_MODEL))
     if model_path and Path(model_path).is_file() and hasattr(
             cv2, "FaceDetectorYN"):
         try:
             detector = cv2.FaceDetectorYN.create(
-                model_path, "", (320, 320), 0.72, 0.3, 5000)
+                model_path, "", (320, 320), 0.85, 0.3, 5000)
             return "yunet", detector
         except (cv2.error, OSError, ValueError):
             pass
     cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     return "haar", cascade
+
+
+def _detected_face_polygon(frame, box, parser, detector_kind, cv2):
+    """Prefer segmentation; fit an oval to a confident YuNet face otherwise.
+
+    Haar candidates are not precise enough to safely trim their corners.
+    Manual regions and model-only boxes also keep their rectangle fallback.
+    """
+    polygon = _parse_face_polygon(frame, box, parser, cv2)
+    if polygon is not None or detector_kind != "yunet":
+        return polygon
+    center_x = box.x + box.width / 2
+    center_y = box.y + box.height / 2
+    return [Point(
+        x=min(1.0, max(0.0, (
+            center_x + math.sin(index * 2 * math.pi / FACE_POLYGON_POINTS) *
+            box.width / 2))),
+        y=min(1.0, max(0.0, (
+            center_y - math.cos(index * 2 * math.pi / FACE_POLYGON_POINTS) *
+            box.height / 2))),
+    ) for index in range(FACE_POLYGON_POINTS)]
 
 
 def _create_face_parser(cv2):
@@ -808,7 +834,8 @@ def _sample_video(path, info, report):
         small = cv2.resize(gray, None, fx=scale, fy=scale)
         if index % face_interval == 0:
             for box in _detect_faces(frame, small, scale, detector):
-                polygon = _parse_face_polygon(frame, box, parser, cv2)
+                polygon = _detected_face_polygon(
+                    frame, box, parser, detector[0], cv2)
                 if polygon is not None:
                     box = polygon_box(polygon)
                 faces.append(MediaRegion(
@@ -896,7 +923,8 @@ def _detect_image_faces(jpeg):
     parser = _create_face_parser(cv2)
     faces = []
     for box in _detect_faces(frame, small, scale, detector):
-        polygon = _parse_face_polygon(frame, box, parser, cv2)
+        polygon = _detected_face_polygon(
+            frame, box, parser, detector[0], cv2)
         if polygon is not None:
             box = polygon_box(polygon)
         faces.append(MediaRegion(
@@ -1566,55 +1594,6 @@ def _merge_image_regions(regions):
     return output
 
 
-# Faces are not covered with a block mosaic: the crop is reduced to a handful
-# of colour cells (which is what makes it irreversible), enlarged smoothly and
-# lightly blurred, and shown through an ellipse that hugs the face, with a
-# soft edge.
-FACE_BLUR_CELLS = 6        # cells across the shorter side of the face
-FACE_ELLIPSE_MARGIN = 1.08  # the ellipse is a little larger than the box
-FACE_EDGE_SOFTNESS = 0.03   # edge feather, as a fraction of the shorter side
-FACE_MIN_SIDE = 8           # smaller boxes fall back to the plain mosaic
-
-
-def _blur_face(image, box, cv2, np):
-    """Blur one face in place. ``image`` is a BGR or RGB array and ``box`` is
-    ``(left, top, right, bottom)`` in pixels. Returns False if the box is too
-    small, so the caller can use the mosaic instead."""
-    height, width = image.shape[:2]
-    left, top, right, bottom = box
-    box_w, box_h = right - left, bottom - top
-    if min(box_w, box_h) < FACE_MIN_SIDE:
-        return False
-    short = min(box_w, box_h)
-    sigma = max(1.5, short * FACE_EDGE_SOFTNESS)
-    # Work on a crop larger than the box: the ellipse is larger too, plus its
-    # soft edge, and a crop that cut it would leave a flat edge to the blur.
-    pad_x = int(round(box_w * (FACE_ELLIPSE_MARGIN - 1) / 2 + 3 * sigma)) + 2
-    pad_y = int(round(box_h * (FACE_ELLIPSE_MARGIN - 1) / 2 + 3 * sigma)) + 2
-    x0, y0 = max(0, left - pad_x), max(0, top - pad_y)
-    x1, y1 = min(width, right + pad_x), min(height, bottom + pad_y)
-    area = image[y0:y1, x0:x1]
-    area_h, area_w = area.shape[:2]
-    cell = max(4.0, short / FACE_BLUR_CELLS)
-    columns = max(1, int(math.ceil(area_w / cell)))
-    rows = max(1, int(math.ceil(area_h / cell)))
-    coarse = cv2.resize(area, (columns, rows), interpolation=cv2.INTER_AREA)
-    blurred = cv2.resize(
-        coarse, (area_w, area_h), interpolation=cv2.INTER_CUBIC)
-    blurred = cv2.GaussianBlur(blurred, (0, 0), cell * 0.5)
-    mask = np.zeros((area_h, area_w), dtype=np.float32)
-    center = (int(round((left + right) / 2 - x0)),
-              int(round((top + bottom) / 2 - y0)))
-    axes = (int(round(box_w / 2 * FACE_ELLIPSE_MARGIN + 2 * sigma)),
-            int(round(box_h / 2 * FACE_ELLIPSE_MARGIN + 2 * sigma)))
-    cv2.ellipse(mask, center, axes, 0, 0, 360, 1.0, -1)
-    mask = np.clip(cv2.GaussianBlur(mask, (0, 0), sigma), 0.0, 1.0)[..., None]
-    mixed = area.astype(np.float32) * (1.0 - mask) + (
-        blurred.astype(np.float32) * mask)
-    area[:] = np.clip(mixed + 0.5, 0, 255).astype(area.dtype)
-    return True
-
-
 def _redact_jpeg(data, regions, time_ms):
     import io
     from PIL import Image
@@ -1627,7 +1606,6 @@ def _redact_jpeg(data, regions, time_ms):
 
 def _pixelate_image_regions(image, regions, time_ms):
     width, height = image.size
-    faces = []
     for region in regions:
         box = region.box_at(time_ms)
         if box is None:
@@ -1638,32 +1616,12 @@ def _pixelate_image_regions(image, regions, time_ms):
         bottom = min(height, round((box.y + box.height) * height))
         if right <= left or bottom <= top:
             continue
-        if region.kind == "face":
-            faces.append((region, (left, top, right, bottom)))
-            continue
         _mosaic_image_region(
             image, region, time_ms, (left, top, right, bottom))
-    if faces:
-        _blur_image_faces(image, faces, time_ms)
-
-
-def _blur_image_faces(image, faces, time_ms):
-    import numpy as np
-    from PIL import Image
-    try:
-        import cv2
-    except ImportError:
-        raise MediaError("O OpenCV não está instalado.") from None
-    array = np.array(image)
-    for region, box in faces:
-        if not _blur_face(array, box, cv2, np):
-            _mosaic_image_region(image, region, time_ms, box)
-            array = np.array(image)
-    image.paste(Image.fromarray(array))
 
 
 def _mosaic_image_region(image, region, time_ms, box):
-    """Cover a region with a coarse, tinted mosaic (text, plates, cards)."""
+    """Cover faces and objects with a coarse, tinted mosaic."""
     from PIL import Image, ImageDraw
     width, height = image.size
     left, top, right, bottom = box
@@ -1723,9 +1681,6 @@ def _pixelate_video_regions(frame, regions, time_ms, cv2, np):
         left, top = max(0, left), max(0, top)
         right, bottom = min(width, right), min(height, bottom)
         if right <= left or bottom <= top:
-            continue
-        if region.kind == "face" and _blur_face(
-                frame, (left, top, right, bottom), cv2, np):
             continue
         area = frame[top:bottom, left:right]
         area_width, area_height = right - left, bottom - top

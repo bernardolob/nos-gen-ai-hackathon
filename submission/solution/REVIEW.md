@@ -176,17 +176,18 @@ interface está **em inglês** (decisão da equipa).
   demonstração com uma fotografia e um vídeo falsos; os testes de contrato
   verificam os campos, os limites, o vocabulário das regiões e as etapas
   contra o backend.
-- **Pré-visualização do desfoque.** O botão "Blur preview" (ligado por
-  defeito) desenha por cima da fotografia, ou do fotograma do vídeo parado, o
-  resultado tal como a exportação o vai fazer: a UI pede-o ao backend com as
-  regiões do rascunho, por isso as edições por guardar também se veem. Com o
-  vídeo a tocar mostra só os contornos, e a tira de baixo fica para os
-  controlos do leitor. Com a pré-visualização ligada **não se vê nenhum
-  contorno nem etiqueta** por cima da imagem, só o resultado: uma região
-  continua a poder escolher-se (clicando onde está) e só então mostra o contorno,
-  a etiqueta e as pegas de redimensionar; ao desenhar uma região nova vêem-se
-  todos. Com o botão desligado vêem-se todos os contornos, como antes. No modo de demonstração não existe (só o backend a
-  desenha). Sem ela, o desfoque só se via depois de aprovar e descarregar.
+- **Pré-visualização da censura.** O botão "Censorship preview" (ligado por
+  defeito) mostra rostos e objetos pixelizados por canvas, tanto na fotografia
+  como durante a reprodução do vídeo. As regiões do rascunho atualizam-se
+  imediatamente, incluindo edições por guardar. O mosaico usa as mesmas
+  células e tonalidade da exportação, com pequenas diferenças de amostragem
+  entre o navegador e Pillow/OpenCV. Os polígonos e os intervalos temporais
+  seguem o contrato do backend. Com a pré-visualização ligada, os contornos
+  e etiquetas aparecem apenas na região selecionada ou ao desenhar; com o
+  botão desligado aparecem todos. Funciona também no modo de demonstração.
+  Em caso de falha, mostra um aviso e máscaras opacas nas regiões ativas.
+  O endpoint `/api/media/preview` continua disponível, mas a reprodução
+  não faz pedidos ao backend por fotograma.
 - **Descarregar o PDF.** Num documento que veio de um PDF, "Download PDF" ao
   lado de "Download .txt" gera o PDF anonimizado da versão em revisão (ver
   [PDF.md](PDF.md)).

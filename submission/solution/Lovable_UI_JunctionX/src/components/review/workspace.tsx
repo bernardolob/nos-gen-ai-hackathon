@@ -49,7 +49,6 @@ import {
   getCurrent,
   isMockMode,
   mediaOutputUrl,
-  previewMedia,
   trackRegion,
   updateRegions,
 } from "@/lib/review/api";
@@ -263,12 +262,9 @@ export function ReviewWorkspace({
   const [removedHistory, setRemovedHistory] = useState<MediaRegion[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
 
-  // Blur preview: what the export will look like, drawn by the backend.
-  const [showBlur, setShowBlur] = useState(true);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Live pixelated preview uses the draft without a server round trip.
+  const [showCensorship, setShowCensorship] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [videoPlaying, setVideoPlaying] = useState(false);
-  const lastPreview = useRef<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -282,46 +278,6 @@ export function ReviewWorkspace({
     setRemovedHistory([]);
     setSaveError(null);
   }, [activeSnapshot.attempt, activeSnapshot.regions]);
-
-  useEffect(
-    () => () => {
-      if (lastPreview.current) URL.revokeObjectURL(lastPreview.current);
-    },
-    [],
-  );
-
-  const previewTime = isVideo ? currentTimeMs : 0;
-  const canPreview =
-    isMedia && showBlur && !isMockMode && activeSnapshot.status === "ready" && !videoPlaying;
-  useEffect(() => {
-    if (!canPreview) {
-      setPreviewUrl(null);
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        const url = await previewMedia(activeSnapshot.attempt, previewTime, draftRegions);
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        if (lastPreview.current) URL.revokeObjectURL(lastPreview.current);
-        lastPreview.current = url;
-        setPreviewUrl(url);
-        setPreviewError(null);
-      } catch (err) {
-        if (!cancelled) {
-          setPreviewUrl(null);
-          setPreviewError(err instanceof Error ? err.message : "Could not draw the blur preview.");
-        }
-      }
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [canPreview, activeSnapshot.attempt, previewTime, draftRegions]);
 
   const isDirty = useMemo(() => {
     if (!isMedia) return false;
@@ -700,17 +656,15 @@ export function ReviewWorkspace({
                     </Button>
                   </>
                 )}
-                {!isMockMode && (
-                  <Button
-                    variant={showBlur ? "secondary" : "ghost"}
-                    size="sm"
-                    aria-pressed={showBlur}
-                    onClick={() => setShowBlur((v) => !v)}
-                    title="Show how the result will look: faces blurred, text and documents pixelated"
-                  >
-                    {showBlur ? <Eye aria-hidden /> : <EyeOff aria-hidden />} Blur preview
-                  </Button>
-                )}
+                <Button
+                  variant={showCensorship ? "secondary" : "ghost"}
+                  size="sm"
+                  aria-pressed={showCensorship}
+                  onClick={() => setShowCensorship((v) => !v)}
+                  title="Preview pixelated faces and objects, including during playback"
+                >
+                  {showCensorship ? <Eye aria-hidden /> : <EyeOff aria-hidden />} Censorship preview
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
                   <History aria-hidden /> History ({activeSnapshot.history.length})
                 </Button>
@@ -757,12 +711,12 @@ export function ReviewWorkspace({
                 onRemoveRegion={handleRemoveRegion}
                 isDrawing={isDrawing}
                 onToggleDrawMode={() => setIsDrawing(!isDrawing)}
-                previewUrl={previewUrl}
-                onPlayingChange={setVideoPlaying}
+                previewEnabled={showCensorship && activeSnapshot.status === "ready"}
+                onPreviewError={setPreviewError}
               />
-              {previewError && showBlur && (
+              {previewError && showCensorship && (
                 <p role="status" className="mt-2 text-xs text-muted-foreground">
-                  Blur preview unavailable: {previewError}
+                  Censorship preview unavailable: {previewError}
                 </p>
               )}
 

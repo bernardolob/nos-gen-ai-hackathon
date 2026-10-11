@@ -15,9 +15,11 @@ texto nem para deteção apenas de rostos.
 O modelo recebe fotografias ou amostras JPEG do vídeo como partes de imagem
 reais. O vídeo é amostrado uniformemente até 3 fotogramas por segundo e nas
 mudanças de cena, sem esgotar o orçamento antes do fim do ficheiro. Um detetor
-OpenCV procura rostos até 10 vezes por segundo. Se
-`OPENCV_FACE_DETECTOR_MODEL` apontar para um modelo ONNX YuNet, usa-o; sem esse
-ficheiro mantém o Haar cascade offline como fallback. Uma segunda
+OpenCV procura rostos até 10 vezes por segundo.
+O modelo ONNX YuNet incluído em `assets/models/` é usado por defeito,
+com confiança mínima de 0,85. `OPENCV_FACE_DETECTOR_MODEL` pode substituir
+o seu caminho. Se o modelo não puder ser carregado, mantém o Haar offline
+como fallback. Uma segunda
 passagem procura dados residuais depois de aplicar as primeiras ocultações.
 Uma falha de qualquer lote interrompe a análise: nunca gera silenciosamente
 uma versão parcial.
@@ -54,7 +56,12 @@ fotogramas-chave gerados e permite corrigi-los.
 Se `OPENCV_FACE_PARSER_MODEL` apontar para o modelo ResNet18 BiSeNet ONNX, cada
 caixa de rosto detetada é refinada localmente para um polígono de 32 pontos. A máscara
 inclui pele, características faciais, orelhas, óculos e brincos, mas exclui
-cabelo, chapéus, pescoço, roupa e fundo. O código fecha pequenos buracos e
+cabelo, chapéus, pescoço, roupa e fundo. Sem o parser, uma deteção YuNet
+de alta confiança recebe um contorno oval de 32 pontos dentro da caixa
+medida e da sua margem de segurança, em vez de censurar os cantos da caixa.
+Esse contorno é geométrico, não uma segmentação pixel a pixel. Deteções Haar
+ou regiões sem localização facial medida mantêm a caixa completa.
+O código de segmentação fecha pequenos buracos e
 acrescenta uma margem de segurança igual ao maior de 4 píxeis ou 3% da largura
 do rosto. No vídeo, os mesmos 32 vértices são suavizados e interpolados entre
 fotogramas-chave, sem atravessar cortes de cena.
@@ -99,14 +106,15 @@ três capacidades necessárias devolve HTTP 503 nos uploads multimédia.
 São necessários Pillow, OpenCV e os executáveis `ffmpeg`/`ffprobe`. As
 dependências Python constam de `requirements.txt`.
 
-Para ativar YuNet, descarregue um modelo `face_detection_yunet_*.onnx` do
-repositório oficial OpenCV Zoo e defina o seu caminho absoluto em
-`OPENCV_FACE_DETECTOR_MODEL`. O ficheiro e a deteção ficam locais.
+YuNet já vem incluído, com a respetiva licença MIT e SHA-256 em
+`assets/models/`. Não é necessário descarregar modelos ao iniciar o backend.
+Para usar outro modelo compatível, defina `OPENCV_FACE_DETECTOR_MODEL`.
+O ficheiro e a deteção ficam locais.
 
 Para ativar a máscara ajustada, descarregue `resnet18.onnx` da versão usada
 pelo projeto `yakhyo/face-parsing` e defina o seu caminho absoluto em
 `OPENCV_FACE_PARSER_MODEL`. O ficheiro, a inferência e as máscaras permanecem
-locais. Sem esta variável, a aplicação continua a funcionar com caixas.
+locais. Sem esta variável, rostos YuNet usam o contorno oval descrito acima.
 
 ## Privacidade e saída
 

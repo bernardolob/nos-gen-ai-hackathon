@@ -70,6 +70,7 @@ describe("Media review UI (Request 2a)", () => {
     expect(box.style.top).toBe("25%");
     expect(box.style.width).toBe("35%");
     expect(box.style.height).toBe("45%");
+    fireEvent.click(box);
     expect(box).toHaveTextContent("ID document");
     expect(screen.getByText("Regions")).toBeInTheDocument();
   });
@@ -252,10 +253,10 @@ describe("Media review loop (Request 2b)", () => {
 
     // Direct interpolateBox function at midpoint t=0.5
     const midBox = interpolateBox(box1, box2, 0.5);
-    expect(midBox.x).toBe(0.3);
-    expect(midBox.y).toBe(0.4);
-    expect(midBox.width).toBe(0.3);
-    expect(midBox.height).toBe(0.3);
+    expect(midBox.x).toBeCloseTo(0.3);
+    expect(midBox.y).toBeCloseTo(0.4);
+    expect(midBox.width).toBeCloseTo(0.3);
+    expect(midBox.height).toBeCloseTo(0.3);
 
     // Active keyframe interpolation inside region
     const region: MediaRegion = {
@@ -275,10 +276,10 @@ describe("Media review loop (Request 2b)", () => {
 
     const renderedAt500 = getActiveRenderRegion(region, 500, false);
     expect(renderedAt500).not.toBeNull();
-    expect(renderedAt500?.box.x).toBe(0.3);
-    expect(renderedAt500?.box.y).toBe(0.4);
-    expect(renderedAt500?.box.width).toBe(0.3);
-    expect(renderedAt500?.box.height).toBe(0.3);
+    expect(renderedAt500?.box.x).toBeCloseTo(0.3);
+    expect(renderedAt500?.box.y).toBeCloseTo(0.4);
+    expect(renderedAt500?.box.width).toBeCloseTo(0.3);
+    expect(renderedAt500?.box.height).toBeCloseTo(0.3);
   });
 
   it("reject then approve ends with the Download button visible when approved with output_url", () => {

@@ -13,6 +13,10 @@ import type {
   Snapshot,
 } from "@/lib/review/types";
 import { mediaSourceUrl } from "@/lib/review/api";
+import { getActiveRenderRegion } from "@/lib/review/media-preview";
+import { useMediaPreview } from "./use-media-preview";
+export { getActiveRenderRegion, interpolateBox } from "@/lib/review/media-preview";
+export type { ActiveRenderRegion } from "@/lib/review/media-preview";
 
 export const CATEGORY_LABELS: Record<string, string> = {
   identificacao: "Personal identification",
@@ -94,100 +98,6 @@ export const SOURCE_LABELS: Record<RegionSource | string, string> = {
 
 export const formatSource = (src: string): string => SOURCE_LABELS[src] ?? src;
 
-export function interpolateBox(b1: RegionBox, b2: RegionBox, t: number): RegionBox {
-  const clampT = Math.max(0, Math.min(1, t));
-  return {
-    x: Number((b1.x + clampT * (b2.x - b1.x)).toFixed(6)),
-    y: Number((b1.y + clampT * (b2.y - b1.y)).toFixed(6)),
-    width: Number((b1.width + clampT * (b2.width - b1.width)).toFixed(6)),
-    height: Number((b1.height + clampT * (b2.height - b1.height)).toFixed(6)),
-  };
-}
-
-export interface ActiveRenderRegion {
-  box: RegionBox;
-  polygon: RegionPoint[] | null;
-}
-
-export function getActiveRenderRegion(
-  region: MediaRegion,
-  currentTimeMs: number,
-  isImage: boolean,
-): ActiveRenderRegion | null {
-  if (!region.keyframes || region.keyframes.length === 0) return null;
-  const firstKf = region.keyframes[0];
-  if (!firstKf) return null;
-
-  if (isImage) {
-    return {
-      box: firstKf.box,
-      polygon: firstKf.polygon ?? null,
-    };
-  }
-
-  if (currentTimeMs < region.start_ms || currentTimeMs > region.end_ms) {
-    return null;
-  }
-
-  const sorted = [...region.keyframes].sort((a, b) => a.time_ms - b.time_ms);
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  if (!first || !last) return null;
-
-  if (sorted.length === 1 || currentTimeMs <= first.time_ms) {
-    return {
-      box: first.box,
-      polygon: first.polygon ?? null,
-    };
-  }
-
-  if (currentTimeMs >= last.time_ms) {
-    return {
-      box: last.box,
-      polygon: last.polygon ?? null,
-    };
-  }
-
-  let prev: RegionKeyframe = first;
-  let next: RegionKeyframe = last;
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const cur = sorted[i];
-    const nxt = sorted[i + 1];
-    if (cur && nxt && cur.time_ms <= currentTimeMs && nxt.time_ms >= currentTimeMs) {
-      prev = cur;
-      next = nxt;
-      break;
-    }
-  }
-
-  if (next.time_ms === prev.time_ms) {
-    return {
-      box: prev.box,
-      polygon: prev.polygon ?? null,
-    };
-  }
-
-  const t = (currentTimeMs - prev.time_ms) / (next.time_ms - prev.time_ms);
-  const box = interpolateBox(prev.box, next.box, t);
-
-  let polygon: RegionPoint[] | null = null;
-  if (prev.polygon && next.polygon && prev.polygon.length === next.polygon.length) {
-    const nextPoly = next.polygon;
-    polygon = prev.polygon.map((p, idx) => {
-      const np = nextPoly[idx];
-      if (!np) return p;
-      return {
-        x: Number((p.x + t * (np.x - p.x)).toFixed(6)),
-        y: Number((p.y + t * (np.y - p.y)).toFixed(6)),
-      };
-    });
-  } else {
-    polygon = t < 0.5 ? prev.polygon ?? null : next.polygon ?? null;
-  }
-
-  return { box, polygon };
-}
-
 export function getActiveKeyframe(
   region: MediaRegion,
   currentTimeMs: number,
@@ -264,8 +174,8 @@ export function MediaViewer({
   onRemoveRegion,
   isDrawing = false,
   onToggleDrawMode,
-  previewUrl = null,
-  onPlayingChange,
+  previewEnabled = false,
+  onPreviewError,
 }: {
   snapshot: Snapshot;
   currentTimeMs: number;
@@ -279,9 +189,8 @@ export function MediaViewer({
   onRemoveRegion?: (regionId: string) => void;
   isDrawing?: boolean;
   onToggleDrawMode?: () => void;
-  /** The file with the redaction applied (see previewMedia); drawn over the original. */
-  previewUrl?: string | null;
-  onPlayingChange?: (playing: boolean) => void;
+  previewEnabled?: boolean;
+  onPreviewError?: (error: string | null) => void;
 }) {
   const isImage = snapshot.kind === "image";
   const sourceUrl = mediaSourceUrl(snapshot);
@@ -294,94 +203,26 @@ export function MediaViewer({
       ? `${snapshot.media.width} / ${snapshot.media.height}`
       : "16 / 9";
 
-  // Smooth frame updates during video playback
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const activeVideoRef = videoRef ?? localVideoRef;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sourceKey = `${snapshot.attempt}:${snapshot.kind}:${sourceUrl}`;
+  const preview = useMediaPreview({
+    sourceKey,
+    isImage,
+    enabled: previewEnabled,
+    regions: activeRegions,
+    currentTimeMs,
+    onTimeUpdate,
+    imageRef,
+    videoRef: activeVideoRef,
+    canvasRef,
+  });
   useEffect(() => {
-    const vid = videoRef?.current;
-    if (!vid || isImage) return;
-
-    let frameId: number | null = null;
-    let running = true;
-
-    const hasRvfc = typeof (vid as any).requestVideoFrameCallback === "function";
-
-    const onFrame = () => {
-      if (!running) return;
-      onTimeUpdate(Math.round(vid.currentTime * 1000));
-      if (hasRvfc) {
-        frameId = (vid as any).requestVideoFrameCallback(onFrame);
-      } else if (!vid.paused && !vid.ended) {
-        frameId = requestAnimationFrame(onFrame);
-      }
-    };
-
-    const startLoop = () => {
-      if (frameId !== null) return;
-      if (hasRvfc) {
-        frameId = (vid as any).requestVideoFrameCallback(onFrame);
-      } else {
-        frameId = requestAnimationFrame(onFrame);
-      }
-    };
-
-    const stopLoop = () => {
-      if (frameId !== null) {
-        if (typeof (vid as any).cancelVideoFrameCallback === "function") {
-          (vid as any).cancelVideoFrameCallback(frameId);
-        } else {
-          cancelAnimationFrame(frameId);
-        }
-        frameId = null;
-      }
-      onTimeUpdate(Math.round(vid.currentTime * 1000));
-    };
-
-    const onSeeking = () => {
-      onTimeUpdate(Math.round(vid.currentTime * 1000));
-    };
-
-    vid.addEventListener("play", startLoop);
-    vid.addEventListener("pause", stopLoop);
-    vid.addEventListener("ended", stopLoop);
-    vid.addEventListener("seeking", onSeeking);
-    vid.addEventListener("timeupdate", onSeeking);
-
-    if (!vid.paused && !vid.ended) {
-      startLoop();
-    }
-
-    return () => {
-      running = false;
-      vid.removeEventListener("play", startLoop);
-      vid.removeEventListener("pause", stopLoop);
-      vid.removeEventListener("ended", stopLoop);
-      vid.removeEventListener("seeking", onSeeking);
-      vid.removeEventListener("timeupdate", onSeeking);
-      stopLoop();
-    };
-  }, [videoRef, isImage, onTimeUpdate]);
-
-  // Tell the parent when the video plays: the blur preview is a still, so it
-  // is only shown while the video is paused.
-  useEffect(() => {
-    const vid = videoRef?.current;
-    if (!vid || isImage || !onPlayingChange) return;
-    const playing = () => onPlayingChange(true);
-    const stopped = () => onPlayingChange(false);
-    vid.addEventListener("play", playing);
-    vid.addEventListener("pause", stopped);
-    vid.addEventListener("ended", stopped);
-    onPlayingChange(!vid.paused && !vid.ended);
-    return () => {
-      vid.removeEventListener("play", playing);
-      vid.removeEventListener("pause", stopped);
-      vid.removeEventListener("ended", stopped);
-    };
-  }, [videoRef, isImage, onPlayingChange]);
-
-  // With the blur preview on, the picture is shown as the export will look:
-  // no dashed outlines or labels, except on the region being edited (and while
-  // drawing a new one). The regions stay clickable.
-  const quiet = Boolean(previewUrl) && !isDrawing;
+    onPreviewError?.(preview.error);
+  }, [preview.error, onPreviewError]);
+  const quiet = previewEnabled && !isDrawing;
 
   const renderedRegions = useMemo(() => {
     return activeRegions
@@ -471,6 +312,8 @@ export function MediaViewer({
 
   const handlePointerDownContainer = (e: React.PointerEvent) => {
     if (!isDrawing) return;
+    const bounds = containerRef.current?.getBoundingClientRect();
+    if (bounds && e.clientY > bounds.bottom) return;
     e.preventDefault();
     const { x, y } = getNormCoords(e);
     drawStartRef.current = { x, y };
@@ -637,205 +480,242 @@ export function MediaViewer({
 
   return (
     <div
-      ref={containerRef}
-      className={`relative w-full overflow-hidden rounded-2xl border border-border bg-black/90 shadow-inner ${
-        isDrawing ? "cursor-crosshair" : ""
-      }`}
-      style={{ aspectRatio }}
-      data-testid="media-container"
-      onPointerDown={handlePointerDownContainer}
-      onClick={() => {
-        if (!isDrawing) onSelectRegion(null);
-      }}
+      className="overflow-hidden rounded-2xl border border-border bg-black shadow-inner"
+      style={isImage ? undefined : { paddingBottom: 64 }}
     >
-      {isImage ? (
-        <img
-          src={sourceUrl ?? ""}
-          alt={snapshot.media.filename || "Source image"}
-          className="absolute inset-0 h-full w-full object-contain pointer-events-none select-none"
-        />
-      ) : (
-        <video
-          ref={videoRef}
-          controls
-          preload="metadata"
-          src={sourceUrl ?? ""}
-          className="absolute inset-0 h-full w-full object-contain"
-          onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
-        />
-      )}
+      <div
+        ref={containerRef}
+        className={`relative w-full ${
+          isDrawing ? "cursor-crosshair" : ""
+        }`}
+        style={{ aspectRatio }}
+        data-testid="media-container"
+        onPointerDown={handlePointerDownContainer}
+        onClick={() => {
+          if (!isDrawing) onSelectRegion(null);
+        }}
+      >
+        {isImage ? (
+          <img
+            key={sourceKey}
+            ref={imageRef}
+            crossOrigin="anonymous"
+            src={sourceUrl ?? ""}
+            alt={snapshot.media.filename || "Source image"}
+            className="absolute inset-0 h-full w-full object-contain pointer-events-none select-none"
+          />
+        ) : (
+          <video
+            key={sourceKey}
+            ref={activeVideoRef}
+            crossOrigin="anonymous"
+            controls
+            preload="metadata"
+            src={sourceUrl ?? ""}
+            // Keep the native controls below the pixels covered by the canvas.
+            style={{ height: "calc(100% + 64px)", objectPosition: "top" }}
+            className="absolute inset-0 h-full w-full object-contain"
+            onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
+          />
+        )}
 
-      {previewUrl && (
-        <img
-          src={previewUrl}
-          alt="Preview of the redacted result"
-          data-testid="blur-preview"
-          // For a video the bottom strip is left to the player's controls.
-          style={isImage ? undefined : { clipPath: "inset(0 0 44px 0)" }}
+        <canvas
+          ref={canvasRef}
+          aria-label="Preview of the pixelated result"
+          data-testid="censorship-preview"
+          hidden={!previewEnabled || !preview.ready}
           className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
         />
-      )}
+        {previewEnabled && !preview.ready && (
+          <svg
+            data-testid="censorship-fallback"
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full pointer-events-none"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            {renderedRegions.map(({ region, box, polygon }) =>
+              polygon ? (
+                <polygon
+                  key={region.id}
+                  fill="rgb(43, 69, 90)"
+                  points={polygon.map((point) => `${point.x * 100},${point.y * 100}`).join(" ")}
+                />
+              ) : (
+                <rect
+                  key={region.id}
+                  fill="rgb(43, 69, 90)"
+                  x={box.x * 100}
+                  y={box.y * 100}
+                  width={box.width * 100}
+                  height={box.height * 100}
+                />
+              ),
+            )}
+          </svg>
+        )}
 
-      {/* Overlay layer for boxes and polygons */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* SVG layer for polygons */}
-        <svg
-          className="absolute inset-0 h-full w-full pointer-events-none"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-        >
-          {renderedRegions.map(({ region, polygon }) => {
-            if (!polygon || polygon.length === 0) return null;
+        {/* Overlay layer for boxes and polygons */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* SVG layer for polygons */}
+          <svg
+            className="absolute inset-0 h-full w-full pointer-events-none"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            {renderedRegions.map(({ region, polygon }) => {
+              if (!polygon || polygon.length === 0) return null;
+              const isSelected = selectedRegionId === region.id;
+              const catVar = getCategoryVar(region.category);
+              const outlined = !quiet || isSelected;
+              const pointsStr = polygon.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
+
+              return (
+                <polygon
+                  key={`poly-${region.id}`}
+                  data-testid={`polygon-${region.id}`}
+                  points={pointsStr}
+                  strokeDasharray="4 2"
+                  style={{
+                    stroke: outlined ? catVar : "transparent",
+                    fill: !outlined
+                      ? "transparent"
+                      : isSelected
+                        ? `color-mix(in srgb, ${catVar} 32%, transparent)`
+                        : `color-mix(in srgb, ${catVar} 16%, transparent)`,
+                  }}
+                  className="pointer-events-auto cursor-pointer stroke-2 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectRegion(region.id);
+                  }}
+                />
+              );
+            })}
+          </svg>
+
+          {/* Live drawing preview */}
+          {drawingPreview && (
+            <div
+              className="absolute border-2 border-dashed border-primary bg-primary/20 pointer-events-none"
+              style={{
+                left: `${drawingPreview.x * 100}%`,
+                top: `${drawingPreview.y * 100}%`,
+                width: `${drawingPreview.width * 100}%`,
+                height: `${drawingPreview.height * 100}%`,
+              }}
+            />
+          )}
+
+          {/* Bounding box divs & labels */}
+          {renderedRegions.map(({ region, box, polygon }) => {
             const isSelected = selectedRegionId === region.id;
             const catVar = getCategoryVar(region.category);
+            const hasPolygon = Boolean(polygon && polygon.length > 0);
             const outlined = !quiet || isSelected;
-            const pointsStr = polygon.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
+
+            if (hasPolygon) {
+              if (!outlined) return null;
+              return (
+                <div
+                  key={`label-${region.id}`}
+                  style={{
+                    position: "absolute",
+                    left: `${box.x * 100}%`,
+                    top: `${box.y * 100}%`,
+                  }}
+                  className="pointer-events-none z-10"
+                >
+                  <span
+                    className="rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap"
+                    style={{
+                      backgroundColor: "var(--background)",
+                      color: catVar,
+                      borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
+                    }}
+                  >
+                    {formatKind(region.kind)}
+                  </span>
+                </div>
+              );
+            }
+
+            const handles = [
+              { dir: "nw", style: { top: -4, left: -4 }, cursor: "nwse-resize" },
+              { dir: "n", style: { top: -4, left: "calc(50% - 4px)" }, cursor: "ns-resize" },
+              { dir: "ne", style: { top: -4, right: -4 }, cursor: "nesw-resize" },
+              { dir: "w", style: { top: "calc(50% - 4px)", left: -4 }, cursor: "ew-resize" },
+              { dir: "e", style: { top: "calc(50% - 4px)", right: -4 }, cursor: "ew-resize" },
+              { dir: "sw", style: { bottom: -4, left: -4 }, cursor: "nesw-resize" },
+              { dir: "s", style: { bottom: -4, left: "calc(50% - 4px)" }, cursor: "ns-resize" },
+              { dir: "se", style: { bottom: -4, right: -4 }, cursor: "nwse-resize" },
+            ];
 
             return (
-              <polygon
-                key={`poly-${region.id}`}
-                data-testid={`polygon-${region.id}`}
-                points={pointsStr}
-                strokeDasharray="4 2"
-                style={{
-                  stroke: outlined ? catVar : "transparent",
-                  fill: !outlined
-                    ? "transparent"
-                    : isSelected
-                      ? `color-mix(in srgb, ${catVar} 32%, transparent)`
-                      : `color-mix(in srgb, ${catVar} 16%, transparent)`,
-                }}
-                className="pointer-events-auto cursor-pointer stroke-2 transition-colors"
+              <div
+                key={`box-${region.id}`}
+                data-testid={`box-${region.id}`}
+                data-outlined={outlined}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectRegion(region.id);
                 }}
-              />
-            );
-          })}
-        </svg>
-
-        {/* Live drawing preview */}
-        {drawingPreview && (
-          <div
-            className="absolute border-2 border-dashed border-primary bg-primary/20 pointer-events-none"
-            style={{
-              left: `${drawingPreview.x * 100}%`,
-              top: `${drawingPreview.y * 100}%`,
-              width: `${drawingPreview.width * 100}%`,
-              height: `${drawingPreview.height * 100}%`,
-            }}
-          />
-        )}
-
-        {/* Bounding box divs & labels */}
-        {renderedRegions.map(({ region, box, polygon }) => {
-          const isSelected = selectedRegionId === region.id;
-          const catVar = getCategoryVar(region.category);
-          const hasPolygon = Boolean(polygon && polygon.length > 0);
-          const outlined = !quiet || isSelected;
-
-          if (hasPolygon) {
-            if (!outlined) return null;
-            return (
-              <div
-                key={`label-${region.id}`}
+                onPointerDown={(e) => {
+                  startDragBox(e, region.id, box);
+                }}
                 style={{
                   position: "absolute",
                   left: `${box.x * 100}%`,
                   top: `${box.y * 100}%`,
+                  width: `${box.width * 100}%`,
+                  height: `${box.height * 100}%`,
+                  borderColor: outlined ? catVar : "transparent",
+                  backgroundColor: !outlined
+                    ? "transparent"
+                    : isSelected
+                      ? `color-mix(in srgb, ${catVar} 32%, transparent)`
+                      : `color-mix(in srgb, ${catVar} 16%, transparent)`,
+                  boxShadow: isSelected ? `0 0 0 2px ${catVar}` : undefined,
+                  cursor: isSelected ? "move" : "pointer",
                 }}
-                className="pointer-events-none z-10"
+                className="pointer-events-auto border-2 border-dashed transition-colors"
               >
-                <span
-                  className="rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap"
-                  style={{
-                    backgroundColor: "var(--background)",
-                    color: catVar,
-                    borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
-                  }}
-                >
-                  {formatKind(region.kind)}
-                </span>
+                {outlined && (
+                  <span
+                    className="absolute -top-5 left-0 rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap pointer-events-none select-none"
+                    style={{
+                      backgroundColor: "var(--background)",
+                      color: catVar,
+                      borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
+                    }}
+                  >
+                    {formatKind(region.kind)}
+                  </span>
+                )}
+
+                {/* 8 resize handles when selected */}
+                {isSelected &&
+                  handles.map((h) => (
+                    <div
+                      key={h.dir}
+                      data-testid={`handle-${h.dir}-${region.id}`}
+                      style={{
+                        position: "absolute",
+                        width: 8,
+                        height: 8,
+                        backgroundColor: "var(--background)",
+                        borderColor: catVar,
+                        cursor: h.cursor,
+                        ...h.style,
+                      }}
+                      className="rounded-xs border-2 z-20 pointer-events-auto shadow-sm"
+                      onPointerDown={(e) => startResizeBox(e, region.id, box, h.dir)}
+                    />
+                  ))}
               </div>
             );
-          }
-
-          const handles = [
-            { dir: "nw", style: { top: -4, left: -4 }, cursor: "nwse-resize" },
-            { dir: "n", style: { top: -4, left: "calc(50% - 4px)" }, cursor: "ns-resize" },
-            { dir: "ne", style: { top: -4, right: -4 }, cursor: "nesw-resize" },
-            { dir: "w", style: { top: "calc(50% - 4px)", left: -4 }, cursor: "ew-resize" },
-            { dir: "e", style: { top: "calc(50% - 4px)", right: -4 }, cursor: "ew-resize" },
-            { dir: "sw", style: { bottom: -4, left: -4 }, cursor: "nesw-resize" },
-            { dir: "s", style: { bottom: -4, left: "calc(50% - 4px)" }, cursor: "ns-resize" },
-            { dir: "se", style: { bottom: -4, right: -4 }, cursor: "nwse-resize" },
-          ];
-
-          return (
-            <div
-              key={`box-${region.id}`}
-              data-testid={`box-${region.id}`}
-              data-outlined={outlined}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectRegion(region.id);
-              }}
-              onPointerDown={(e) => {
-                startDragBox(e, region.id, box);
-              }}
-              style={{
-                position: "absolute",
-                left: `${box.x * 100}%`,
-                top: `${box.y * 100}%`,
-                width: `${box.width * 100}%`,
-                height: `${box.height * 100}%`,
-                borderColor: outlined ? catVar : "transparent",
-                backgroundColor: !outlined
-                  ? "transparent"
-                  : isSelected
-                    ? `color-mix(in srgb, ${catVar} 32%, transparent)`
-                    : `color-mix(in srgb, ${catVar} 16%, transparent)`,
-                boxShadow: isSelected ? `0 0 0 2px ${catVar}` : undefined,
-                cursor: isSelected ? "move" : "pointer",
-              }}
-              className="pointer-events-auto border-2 border-dashed transition-colors"
-            >
-              {outlined && (
-                <span
-                  className="absolute -top-5 left-0 rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap pointer-events-none select-none"
-                  style={{
-                    backgroundColor: "var(--background)",
-                    color: catVar,
-                    borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
-                  }}
-                >
-                  {formatKind(region.kind)}
-                </span>
-              )}
-
-              {/* 8 resize handles when selected */}
-              {isSelected &&
-                handles.map((h) => (
-                  <div
-                    key={h.dir}
-                    data-testid={`handle-${h.dir}-${region.id}`}
-                    style={{
-                      position: "absolute",
-                      width: 8,
-                      height: 8,
-                      backgroundColor: "var(--background)",
-                      borderColor: catVar,
-                      cursor: h.cursor,
-                      ...h.style,
-                    }}
-                    className="rounded-xs border-2 z-20 pointer-events-auto shadow-sm"
-                    onPointerDown={(e) => startResizeBox(e, region.id, box, h.dir)}
-                  />
-                ))}
-            </div>
-          );
-        })}
+          })}
+        </div>
       </div>
     </div>
   );
