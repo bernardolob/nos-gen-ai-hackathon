@@ -59,8 +59,21 @@ Documento -> Gemini deteta + regras de segurança -> o código mascara
 - **O brainstorming** e a preparação, os primeiros passos.
 - **Documentação logo desde o início.**
 
-<!-- Fotografias do quadro branco: pôr os ficheiros em docs/whiteboard/ e
-     ligá-los aqui com ![descrição](docs/whiteboard/ficheiro.jpg) -->
+O quadro branco, que usámos para planear e acompanhar o trabalho:
+
+![O fluxo do sistema e o estado do trabalho](docs/whiteboard/quadro-fluxo-e-estado.jpg)
+
+*O fluxo do sistema (extração, prompt interno, deteção, regras, mascaramento,
+verificação, relatório) e a revisão do estado.*
+
+![Preparação e problemas](docs/whiteboard/quadro-preparacao-e-problemas.jpg)
+
+*A preparação da apresentação (problema e solução, áudio, imagem e vídeo), os
+problemas que tivemos e as features futuras.*
+
+![As tarefas e as features futuras](docs/whiteboard/quadro-tarefas-e-features.jpg)
+
+*As tarefas por fazer e as features futuras.*
 
 ### O que correu menos bem
 
