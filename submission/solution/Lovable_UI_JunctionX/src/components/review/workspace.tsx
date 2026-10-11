@@ -129,9 +129,6 @@ export function MaskedText({
                       className="z-50 select-none rounded-md border border-border/80 bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-lg backdrop-blur"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-sans font-medium uppercase tracking-wider text-muted-foreground">
-                          Original:
-                        </span>
                         <span className="font-mono font-semibold text-primary">
                           {part.originalWord}
                         </span>
