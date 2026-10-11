@@ -90,3 +90,47 @@ def test_the_content_types_the_ui_sends_are_accepted():
     assert sent_audio == {"audio/mpeg", "audio/mp4", "audio/wav"}
     for kind in sent_audio:
         assert kind in user_validation.AUDIO_TYPES
+
+
+def test_the_ui_image_and_video_limits_are_the_backends():
+    types = TYPES.read_text(encoding="utf-8")
+    image = int(re.search(r"MAX_IMAGE_BYTES = (\d+) \* 1024 \* 1024", types)
+                .group(1))
+    video = int(re.search(r"MAX_VIDEO_BYTES = (\d+) \* 1024 \* 1024", types)
+                .group(1))
+    assert image * 1024 * 1024 <= user_validation.MAX_IMAGE_BYTES * 1.1
+    assert image * 1024 * 1024 >= user_validation.MAX_IMAGE_BYTES * 0.9
+    assert video * 1024 * 1024 <= user_validation.MAX_VIDEO_BYTES * 1.1
+    assert video * 1024 * 1024 >= user_validation.MAX_VIDEO_BYTES * 0.9
+    seconds = int(re.search(r"MAX_VIDEO_SECONDS = (\d+)", types).group(1))
+    from media.pipeline import MAX_VIDEO_DURATION_MS
+    assert seconds * 1000 == MAX_VIDEO_DURATION_MS
+
+
+def test_the_ui_region_vocabulary_is_the_backends():
+    from categories import CONFIDENCE_LEVELS
+    from media.regions import REGION_KINDS, REGION_SOURCES
+    types = TYPES.read_text(encoding="utf-8")
+
+    def union(name):
+        body = re.search(r"export type %s =(.*?);" % name, types,
+                         re.DOTALL).group(1)
+        return set(re.findall(r'"(\w+)"', body))
+
+    assert union("RegionKind") == REGION_KINDS
+    assert union("RegionSource") == REGION_SOURCES
+    assert union("Confidence") == set(CONFIDENCE_LEVELS)
+
+
+def test_the_media_region_fields_are_the_backends():
+    from media.regions import MediaRegion
+    assert interface_fields("MediaRegion") == set(MediaRegion.model_fields)
+
+
+def test_the_ui_labels_every_progress_stage_of_the_backend():
+    media = Path(user_validation.__file__).parent / "media" / "pipeline.py"
+    stages = set(re.findall(r'report\("([^"]+)"', media.read_text("utf-8")))
+    assert stages, "o pipeline já não reporta etapas?"
+    types = TYPES.read_text(encoding="utf-8")
+    labelled = set(re.findall(r'^\s+"([^"]+)":', types, re.MULTILINE))
+    assert stages <= labelled, stages - labelled
