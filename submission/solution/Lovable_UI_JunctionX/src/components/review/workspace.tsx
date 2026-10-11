@@ -42,6 +42,7 @@ import {
   type Snapshot,
 } from "@/lib/review/types";
 import {
+  anonymizedPdfUrl,
   censoredAudioUrl,
   getCurrent,
   mediaOutputUrl,
@@ -241,6 +242,8 @@ export function ReviewWorkspace({
   const [copied, setCopied] = useState(false);
   const [downloadingAudio, setDownloadingAudio] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   // Media download state
   const [downloadingMedia, setDownloadingMedia] = useState(false);
@@ -393,6 +396,37 @@ export function ReviewWorkspace({
     a.download = `anonymized-document-v${activeSnapshot.attempt}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadPdf = async () => {
+    const url = anonymizedPdfUrl(activeSnapshot);
+    if (!url) return;
+    setDownloadingPdf(true);
+    setPdfError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        let detail = "";
+        try {
+          detail = ((await res.json()) as { detail?: string }).detail ?? "";
+        } catch {
+          /* not JSON */
+        }
+        throw new Error(detail || `Could not generate the PDF (${res.status}).`);
+      }
+      const blobUrl = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `anonymized-document-v${activeSnapshot.attempt}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : "Could not generate the PDF.");
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const downloadAudio = async () => {
@@ -766,6 +800,11 @@ export function ReviewWorkspace({
                   <Button variant="ghost" size="sm" onClick={download} disabled={busy}>
                     <Download aria-hidden /> Download .txt
                   </Button>
+                  {activeSnapshot.pdf_url && (
+                    <Button variant="ghost" size="sm" onClick={downloadPdf} disabled={busy || downloadingPdf}>
+                      {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download aria-hidden />} Download PDF
+                    </Button>
+                  )}
                   {isAudio && (
                     <Button variant="ghost" size="sm" onClick={downloadAudio} disabled={busy || downloadingAudio}>
                       {downloadingAudio ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download aria-hidden />} Download audio
@@ -773,6 +812,9 @@ export function ReviewWorkspace({
                   )}
                 </div>
               </div>
+              {pdfError && (
+                <p role="alert" className="mb-2 text-sm text-destructive">{pdfError}</p>
+              )}
               <div key={activeSnapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
                 <div className="max-h-[34rem] overflow-y-auto p-6 clean-scrollbar" tabIndex={0} aria-label="Anonymized text">
                   <MaskedText

@@ -42,6 +42,7 @@ EXIT_ERROR = 2
 MAX_INSTRUCTIONS = 2000  # o pedido ao gateway tem um limite total
 SUBMISSION_FILE = "submission.txt"
 REPORT_FILE = "report.md"
+PDF_FILE = "anonymized.pdf"
 
 
 def read_lines(path):
@@ -178,6 +179,10 @@ def build_parser():
         "--include-values", action="store_true",
         help="mostra os valores originais no relatório")
     parser.add_argument(
+        "--pdf", action="store_true",
+        help="com --out, escreve também anonymized.pdf: o PDF original com "
+             "as palavras sensíveis apagadas e um * no lugar (só para PDF)")
+    parser.add_argument(
         "--use-cache", action="store_true",
         help="usa o cliente SDK com context caching em vez do gateway")
     return parser
@@ -186,6 +191,13 @@ def build_parser():
 def main(argv=None, generate=None):
     """Corre o pipeline pela linha de comandos e devolve o código de saída."""
     args = build_parser().parse_args(argv)
+    if args.pdf and not args.out:
+        print("Erro: --pdf precisa de --out DIR.", file=sys.stderr)
+        return EXIT_ERROR
+    if args.pdf and not str(args.document).lower().endswith(".pdf"):
+        print("Erro: --pdf só se aplica a um documento PDF.",
+              file=sys.stderr)
+        return EXIT_ERROR
     try:
         if args.no_model:
             generate = None
@@ -217,6 +229,15 @@ def main(argv=None, generate=None):
         return EXIT_ERROR
     if args.out:
         write_outputs(result, args.out)
+    if args.pdf:
+        import pdf_output  # importa o PyMuPDF, por isso só aqui
+        try:
+            pdf_output.anonymize_pdf(
+                args.document, lines, result["masked"],
+                Path(args.out) / PDF_FILE)
+        except pdf_output.PdfOutputError as error:
+            print("Erro: %s" % error, file=sys.stderr)
+            return EXIT_ERROR
     print(summary(result))
     if not args.out:
         print("(ensaio: nada foi escrito; use --out DIR)")

@@ -37,6 +37,7 @@ import audio_pipeline
 import detection
 import gateway
 import gemini_adapter
+import pdf_output
 import pipeline
 from audio import (
     AlignmentError,
@@ -80,6 +81,7 @@ AUDIO_TYPES = {
     "audio/wave": ".wav",
 }
 AUDIO_URL = "/api/audio/current"
+PDF_URL = "/api/pdf/current"
 CENSORED_MEDIA_TYPE = "audio/mp4"
 MAX_IMAGE_BYTES = 20_000_000
 MAX_VIDEO_BYTES = 100_000_000
@@ -109,6 +111,8 @@ NO_SPEECH = "O áudio não tem fala reconhecível."
 ALIGN_FAILED = ("Não foi possível alinhar a transcrição com o áudio; nada "
                 "foi censurado. Tente outra vez.")
 REDACT_FAILED = "Não foi possível censurar o áudio. Tente outra vez."
+PDF_FAILED = "Não foi possível gerar o PDF anonimizado. Tente outra vez."
+NO_PDF = "Esta revisão não vem de um PDF."
 
 
 def ffmpeg_available():
@@ -172,6 +176,7 @@ class ReviewSession:
         self._close_audio()
         self.kind = "text"
         self.lines = []
+        self.source_pdf = None
         self.status = "idle"
         self.progress = {"stage": "", "completed": 0, "total": 0}
         self.media = None
@@ -208,11 +213,13 @@ class ReviewSession:
                     # decoder on Windows. Its result is discarded by job id.
                     pass
 
-    def load(self, lines, initial=None):
+    def load(self, lines, initial=None, pdf=None):
         """Começa uma revisão nova com o documento dado.
 
         ``initial`` são as instruções que o utilizador escreveu ao enviar o
         ficheiro; valem na primeira versão e em todas as seguintes.
+        ``pdf`` são os bytes do PDF de onde vêm as linhas, para se poder
+        devolver o PDF anonimizado (ver ``pdf_path``).
         """
         if not any(line.strip() for line in lines):
             raise ReviewError(422, "O documento não tem texto.")
@@ -223,8 +230,31 @@ class ReviewSession:
             self._reset()
             self.initial = initial
             self.lines = lines
+            if pdf is not None:
+                source = Path(self.storage.name) / "source.pdf"
+                source.write_bytes(pdf)
+                self.source_pdf = source
             self.status = "ready"
             self._set(result)
+
+    def pdf_path(self):
+        """Gera o PDF anonimizado da versão atual e devolve o caminho.
+
+        É o PDF original com as palavras mascaradas apagadas e um ``*`` no
+        lugar (ver ``pdf_output.py``). Nunca devolve um PDF que a verificação
+        não confirme.
+        """
+        with self.lock:
+            if self.source_pdf is None or self.result is None:
+                raise ReviewError(404, NO_PDF)
+            out = Path(self.storage.name) / (
+                "anonymized_%d.pdf" % self.attempt)
+            try:
+                pdf_output.anonymize_pdf(
+                    self.source_pdf, self.lines, self.result["masked"], out)
+            except pdf_output.PdfOutputError:
+                raise ReviewError(502, PDF_FAILED) from None
+            return out
 
     def load_audio(self, body, suffix, initial=None):
         """Começa uma revisão nova com um áudio.
@@ -500,6 +530,7 @@ class ReviewSession:
                 "status": self.status,
                 "progress": dict(self.progress),
                 "audio_url": AUDIO_URL if self._censored else None,
+                "pdf_url": PDF_URL if self.source_pdf else None,
                 "audio_ranges": (
                     len(result["ranges"])
                     if self.kind == "audio" and result else 0),
@@ -725,7 +756,10 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
                 request.headers.get("x-file-name", "media"), initial)
             return session.snapshot()
         lines = lines_from_upload(content_type, body)
-        await run_in_threadpool(session.load, lines, initial)
+        is_pdf = content_type.split(";")[0].strip().lower() == (
+            "application/pdf")
+        await run_in_threadpool(
+            session.load, lines, initial, body if is_pdf else None)
         return session.snapshot()
 
     @app.post("/api/audio")
@@ -736,6 +770,14 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
         suffix = audio_suffix(request.headers.get("content-type", ""), body)
         await run_in_threadpool(session.load_audio, body, suffix, initial)
         return session.snapshot()
+
+    @app.get("/api/pdf/current")
+    async def current_pdf():
+        path = await run_in_threadpool(session.pdf_path)
+        return FileResponse(
+            path, media_type="application/pdf",
+            filename="documento_anonimizado.pdf",
+            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/audio/current")
     def current_audio():

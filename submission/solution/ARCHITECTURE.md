@@ -127,6 +127,7 @@ tocar.
 
 | Extra | Ficheiros | Estado |
 |---|---|---|
+| Saída em PDF | `src/pdf_output.py` | feito e testado, ver [PDF.md](PDF.md) |
 | Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | feito e testado com a API real do ElevenLabs, ver [AUDIO.md](AUDIO.md) |
 | Rota de áudio da revisão | `src/user_validation.py` (`/api/audio`) | feita e testada com a transcrição falsa e o `ffmpeg` real; a UI de áudio existe (visto em modo demonstração), ver [REVIEW.md](REVIEW.md) |
 

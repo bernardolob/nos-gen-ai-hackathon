@@ -1,4 +1,4 @@
-import { MOCK_IMAGE_SIZE, MOCK_IMAGE_URL, MOCK_VIDEO_SIZE, MOCK_VIDEO_URL } from "./mock-media";
+import { MOCK_IMAGE_SIZE, MOCK_IMAGE_URL, MOCK_PDF_URL, MOCK_VIDEO_SIZE, MOCK_VIDEO_URL } from "./mock-media";
 import { ApiError, EMPTY_SNAPSHOT, MAX_REASON_CHARS, type MediaRegion, type Snapshot } from "./types";
 
 /** In-memory mock of the review backend, following the same snapshot contract. */
@@ -97,7 +97,7 @@ export function resetMock() {
   sampleSubstituted = false;
 }
 
-export async function mockUpload(text: string, usedSample = false): Promise<Snapshot> {
+export async function mockUpload(text: string, usedSample = false, fromPdf = false): Promise<Snapshot> {
   if (!text.trim()) throw new ApiError(422, "The document has no text.");
   sampleSubstituted = usedSample;
   source = text;
@@ -108,6 +108,7 @@ export async function mockUpload(text: string, usedSample = false): Promise<Snap
     attempt: 1,
     text: maskWords(source, false),
     original_text: source,
+    pdf_url: fromPdf ? MOCK_PDF_URL : null,
     warnings: 1,
   };
   return structuredClone(state);
