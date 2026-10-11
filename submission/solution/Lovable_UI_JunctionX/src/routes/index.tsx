@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { UploadStep } from "@/components/anonymizer/steps";
 import { ReviewWorkspace } from "@/components/review/workspace";
+import { ThemePicker } from "@/components/theme-picker";
 import {
   approveVersion,
   getCurrent,
@@ -20,6 +21,7 @@ import {
   wasSampleSubstituted,
 } from "@/lib/review/api";
 import { ApiError, type Progress, type Snapshot } from "@/lib/review/types";
+import { useTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -52,23 +54,8 @@ function Index() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState<(() => void) | null>(null);
-  const [dark, setDark] = useState(false);
+  const { dark, toggleDark } = useTheme();
   const [sampleNotice, setSampleNotice] = useState(false);
-
-  // The theme script in <head> already set the class; read it back, then keep both in step.
-  useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
-  }, []);
-  const toggleTheme = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      localStorage.setItem("theme", next ? "dark" : "light");
-    } catch {
-      /* private mode: the choice just is not remembered */
-    }
-  };
 
   const load = async () => {
     setInitialising(true);
@@ -184,11 +171,12 @@ function Index() {
               variant="outline"
               size="icon"
               className="rounded-full bg-card"
-              onClick={toggleTheme}
+              onClick={toggleDark}
               aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
             >
               {dark ? <Sun aria-hidden /> : <Moon aria-hidden />}
             </Button>
+            <ThemePicker />
           </div>
         </div>
       </header>

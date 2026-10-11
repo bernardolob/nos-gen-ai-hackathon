@@ -14,10 +14,10 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { themeBootScript } from "../lib/theme";
 
-/** Sets the theme before the first paint (saved choice, else the system one) so it never flashes. */
-const THEME_SCRIPT =
-  "try{var t=localStorage.getItem('theme');if(t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches)document.documentElement.classList.add('dark')}catch(e){}";
+/** Sets the theme and mode before the first paint (saved choice, else the system one) so it never flashes. */
+const THEME_SCRIPT = themeBootScript();
 
 function NotFoundComponent() {
   return (

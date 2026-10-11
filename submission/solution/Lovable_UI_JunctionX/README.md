@@ -35,6 +35,23 @@ cp .env.example .env
 VITE_API_URL=http://127.0.0.1:8000
 ```
 
+## Themes
+
+The palette button in the header opens an **Appearance** panel with the mode
+(light, dark or system) and six color themes: Indigo & Pink (the default),
+Ocean, Forest, Sunset, Grape and Graphite. The choice applies at once and is
+remembered in `localStorage` (`theme` for the mode, `palette` for the theme).
+
+- The palettes are in `src/themes.css`; they only replace the brand tokens
+  (`--brand`, `--brand-2`, `--glow`, `--ring`, `--accent`).
+- The logic is in `src/lib/theme.ts` and the panel in
+  `src/components/theme-picker.tsx`.
+- To add a theme: copy a block in `src/themes.css`, add it to `THEMES` in
+  `src/lib/theme.ts` and run `npx vitest run`. The contrast test fails if a
+  color is too light or too dark.
+
+See [REVIEW.md](../REVIEW.md) for how it works and how it was verified.
+
 ## Built with
 
 - TanStack Start
