@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
-import { Shield, User, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Shield, Sparkles, Trash2, User } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import type {
   Confidence,
   MediaRegion,
@@ -201,6 +202,53 @@ export function getActiveKeyframe(
   };
 }
 
+export function updateRegionBoxAtTime(
+  region: MediaRegion,
+  newBox: RegionBox,
+  currentTimeMs: number,
+  isImage: boolean,
+): MediaRegion {
+  if (isImage) {
+    return {
+      ...region,
+      keyframes: [
+        {
+          time_ms: 0,
+          box: { ...newBox },
+          polygon: null,
+        },
+      ],
+    };
+  }
+
+  const kfs = [...region.keyframes];
+  const existingIdx = kfs.findIndex((k) => k.time_ms === currentTimeMs);
+  if (existingIdx >= 0) {
+    kfs[existingIdx] = {
+      time_ms: currentTimeMs,
+      box: { ...newBox },
+      polygon: null,
+    };
+  } else {
+    kfs.push({
+      time_ms: currentTimeMs,
+      box: { ...newBox },
+      polygon: null,
+    });
+    kfs.sort((a, b) => a.time_ms - b.time_ms);
+  }
+
+  const start_ms = Math.min(region.start_ms, currentTimeMs);
+  const end_ms = Math.max(region.end_ms, currentTimeMs);
+
+  return {
+    ...region,
+    start_ms,
+    end_ms,
+    keyframes: kfs,
+  };
+}
+
 /* ---------------- Media Center Card Viewer ---------------- */
 
 export function MediaViewer({
@@ -210,16 +258,31 @@ export function MediaViewer({
   selectedRegionId,
   onSelectRegion,
   videoRef,
+  regions,
+  onUpdateRegionBox,
+  onAddRegion,
+  onRemoveRegion,
+  isDrawing = false,
+  onToggleDrawMode,
 }: {
   snapshot: Snapshot;
   currentTimeMs: number;
   onTimeUpdate: (ms: number) => void;
   selectedRegionId: string | null;
-  onSelectRegion: (id: string) => void;
+  onSelectRegion: (id: string | null) => void;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
+  regions?: MediaRegion[];
+  onUpdateRegionBox?: (regionId: string, newBox: RegionBox) => void;
+  onAddRegion?: (newRegion: MediaRegion) => void;
+  onRemoveRegion?: (regionId: string) => void;
+  isDrawing?: boolean;
+  onToggleDrawMode?: () => void;
 }) {
   const isImage = snapshot.kind === "image";
   const sourceUrl = mediaSourceUrl(snapshot);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const activeRegions = regions ?? snapshot.regions;
 
   const aspectRatio =
     snapshot.media.width && snapshot.media.height
@@ -293,19 +356,269 @@ export function MediaViewer({
   }, [videoRef, isImage, onTimeUpdate]);
 
   const renderedRegions = useMemo(() => {
-    return snapshot.regions
+    return activeRegions
       .map((region) => {
         const active = getActiveRenderRegion(region, currentTimeMs, isImage);
         return active ? { region, ...active } : null;
       })
       .filter((item): item is { region: MediaRegion; box: RegionBox; polygon: RegionPoint[] | null } => item !== null);
-  }, [snapshot.regions, currentTimeMs, isImage]);
+  }, [activeRegions, currentTimeMs, isImage]);
+
+  // Keyboard navigation & controls for selected box:
+  // Arrow keys nudge by 0.5% (Shift = 2%), Delete removes, Escape deselects
+  useEffect(() => {
+    if (!selectedRegionId) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) {
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onSelectRegion(null);
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        onRemoveRegion?.(selectedRegionId);
+        return;
+      }
+
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        const step = e.shiftKey ? 0.02 : 0.005;
+        const currentActive = renderedRegions.find((r) => r.region.id === selectedRegionId);
+        if (!currentActive) return;
+        const b = currentActive.box;
+
+        let newX = b.x;
+        let newY = b.y;
+
+        if (e.key === "ArrowLeft") newX = Math.max(0, Math.min(1 - b.width, b.x - step));
+        if (e.key === "ArrowRight") newX = Math.max(0, Math.min(1 - b.width, b.x + step));
+        if (e.key === "ArrowUp") newY = Math.max(0, Math.min(1 - b.height, b.y - step));
+        if (e.key === "ArrowDown") newY = Math.max(0, Math.min(1 - b.height, b.y + step));
+
+        onUpdateRegionBox?.(selectedRegionId, {
+          x: Number(newX.toFixed(6)),
+          y: Number(newY.toFixed(6)),
+          width: b.width,
+          height: b.height,
+        });
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedRegionId, renderedRegions, onSelectRegion, onRemoveRegion, onUpdateRegionBox]);
+
+  // Drawing state
+  const [drawingPreview, setDrawingPreview] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const drawStartRef = useRef<{ x: number; y: number } | null>(null);
+
+    const getNormCoords = (e: PointerEvent | React.PointerEvent) => {
+    if (!containerRef.current) return { x: 0, y: 0 };
+    const rect = containerRef.current.getBoundingClientRect();
+    const width = rect.width || 1;
+    const height = rect.height || 1;
+    const clientX =
+      typeof e.clientX === "number"
+        ? e.clientX
+        : typeof (e as any).nativeEvent?.clientX === "number"
+        ? (e as any).nativeEvent.clientX
+        : 0;
+    const clientY =
+      typeof e.clientY === "number"
+        ? e.clientY
+        : typeof (e as any).nativeEvent?.clientY === "number"
+        ? (e as any).nativeEvent.clientY
+        : 0;
+    const x = Math.max(0, Math.min(1, (clientX - rect.left) / width));
+    const y = Math.max(0, Math.min(1, (clientY - rect.top) / height));
+    return { x, y };
+  };
+
+  const handlePointerDownContainer = (e: React.PointerEvent) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const { x, y } = getNormCoords(e);
+    drawStartRef.current = { x, y };
+    setDrawingPreview({ x, y, width: 0, height: 0 });
+
+    const onPointerMove = (ev: PointerEvent) => {
+            if (!drawStartRef.current) return;
+      const cur = getNormCoords(ev);
+      const x1 = Math.min(drawStartRef.current.x, cur.x);
+      const y1 = Math.min(drawStartRef.current.y, cur.y);
+      const w = Math.abs(cur.x - drawStartRef.current.x);
+      const h = Math.abs(cur.y - drawStartRef.current.y);
+      setDrawingPreview({ x: x1, y: y1, width: w, height: h });
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      if (!drawStartRef.current) return;
+
+      const cur = getNormCoords(ev);
+      const x1 = Math.min(drawStartRef.current.x, cur.x);
+      const y1 = Math.min(drawStartRef.current.y, cur.y);
+      const w = Math.max(0.02, Math.abs(cur.x - drawStartRef.current.x));
+      const h = Math.max(0.02, Math.abs(cur.y - drawStartRef.current.y));
+      const clampedX = Math.max(0, Math.min(1 - w, x1));
+      const clampedY = Math.max(0, Math.min(1 - h, y1));
+
+      const newId =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `region-${Date.now()}`;
+
+      const newRegion: MediaRegion = {
+        id: newId,
+        kind: "other",
+        category: "identificacao",
+        confidence: "certo",
+        source: "user",
+        reason: "Added by the reviewer",
+        start_ms: isImage ? 0 : currentTimeMs,
+        end_ms: isImage ? 0 : currentTimeMs,
+        keyframes: [
+          {
+            time_ms: isImage ? 0 : currentTimeMs,
+            box: {
+              x: Number(clampedX.toFixed(6)),
+              y: Number(clampedY.toFixed(6)),
+              width: Number(w.toFixed(6)),
+              height: Number(h.toFixed(6)),
+            },
+            polygon: null,
+          },
+        ],
+      };
+
+      drawStartRef.current = null;
+      setDrawingPreview(null);
+      onAddRegion?.(newRegion);
+      onSelectRegion(newId);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  };
+
+  // Dragging and resizing box
+  const startDragBox = (e: React.PointerEvent, regionId: string, currentBox: RegionBox) => {
+        e.stopPropagation();
+    e.preventDefault();
+    onSelectRegion(regionId);
+    const startCoords = getNormCoords(e);
+    const origBox = { ...currentBox };
+
+    const onPointerMove = (ev: PointerEvent) => {
+            const cur = getNormCoords(ev);
+      const dx = cur.x - startCoords.x;
+      const dy = cur.y - startCoords.y;
+
+      const newX = Math.max(0, Math.min(1 - origBox.width, origBox.x + dx));
+      const newY = Math.max(0, Math.min(1 - origBox.height, origBox.y + dy));
+
+            onUpdateRegionBox?.(regionId, {
+        x: Number(newX.toFixed(6)),
+        y: Number(newY.toFixed(6)),
+        width: origBox.width,
+        height: origBox.height,
+      });
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  };
+
+  const startResizeBox = (e: React.PointerEvent, regionId: string, currentBox: RegionBox, dir: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startCoords = getNormCoords(e);
+    const origBox = { ...currentBox };
+    const minSize = 0.02;
+
+    const onPointerMove = (ev: PointerEvent) => {
+            const cur = getNormCoords(ev);
+      const dx = cur.x - startCoords.x;
+      const dy = cur.y - startCoords.y;
+
+      let newX = origBox.x;
+      let newY = origBox.y;
+      let newW = origBox.width;
+      let newH = origBox.height;
+
+      if (dir.includes("w")) {
+        const rightEdge = origBox.x + origBox.width;
+        newX = Math.max(0, Math.min(rightEdge - minSize, origBox.x + dx));
+        newW = rightEdge - newX;
+      }
+      if (dir.includes("e")) {
+        const candRight = Math.min(1, Math.max(origBox.x + minSize, origBox.x + origBox.width + dx));
+        newW = candRight - origBox.x;
+      }
+      if (dir.includes("n")) {
+        const bottomEdge = origBox.y + origBox.height;
+        newY = Math.max(0, Math.min(bottomEdge - minSize, origBox.y + dy));
+        newH = bottomEdge - newY;
+      }
+      if (dir.includes("s")) {
+        const candBottom = Math.min(1, Math.max(origBox.y + minSize, origBox.y + origBox.height + dy));
+        newH = candBottom - origBox.y;
+      }
+
+            onUpdateRegionBox?.(regionId, {
+        x: Number(newX.toFixed(6)),
+        y: Number(newY.toFixed(6)),
+        width: Number(newW.toFixed(6)),
+        height: Number(newH.toFixed(6)),
+      });
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  };
 
   return (
     <div
-      className="relative w-full overflow-hidden rounded-2xl border border-border bg-black/90 shadow-inner"
+      ref={containerRef}
+      className={`relative w-full overflow-hidden rounded-2xl border border-border bg-black/90 shadow-inner ${
+        isDrawing ? "cursor-crosshair" : ""
+      }`}
       style={{ aspectRatio }}
       data-testid="media-container"
+      onPointerDown={handlePointerDownContainer}
+      onClick={() => {
+        if (!isDrawing) onSelectRegion(null);
+      }}
     >
       {isImage ? (
         <img
@@ -360,6 +673,19 @@ export function MediaViewer({
           })}
         </svg>
 
+        {/* Live drawing preview */}
+        {drawingPreview && (
+          <div
+            className="absolute border-2 border-dashed border-primary bg-primary/20 pointer-events-none"
+            style={{
+              left: `${drawingPreview.x * 100}%`,
+              top: `${drawingPreview.y * 100}%`,
+              width: `${drawingPreview.width * 100}%`,
+              height: `${drawingPreview.height * 100}%`,
+            }}
+          />
+        )}
+
         {/* Bounding box divs & labels */}
         {renderedRegions.map(({ region, box, polygon }) => {
           const isSelected = selectedRegionId === region.id;
@@ -391,6 +717,17 @@ export function MediaViewer({
             );
           }
 
+          const handles = [
+            { dir: "nw", style: { top: -4, left: -4 }, cursor: "nwse-resize" },
+            { dir: "n", style: { top: -4, left: "calc(50% - 4px)" }, cursor: "ns-resize" },
+            { dir: "ne", style: { top: -4, right: -4 }, cursor: "nesw-resize" },
+            { dir: "w", style: { top: "calc(50% - 4px)", left: -4 }, cursor: "ew-resize" },
+            { dir: "e", style: { top: "calc(50% - 4px)", right: -4 }, cursor: "ew-resize" },
+            { dir: "sw", style: { bottom: -4, left: -4 }, cursor: "nesw-resize" },
+            { dir: "s", style: { bottom: -4, left: "calc(50% - 4px)" }, cursor: "ns-resize" },
+            { dir: "se", style: { bottom: -4, right: -4 }, cursor: "nwse-resize" },
+          ];
+
           return (
             <div
               key={`box-${region.id}`}
@@ -398,6 +735,9 @@ export function MediaViewer({
               onClick={(e) => {
                 e.stopPropagation();
                 onSelectRegion(region.id);
+              }}
+              onPointerDown={(e) => {
+                startDragBox(e, region.id, box);
               }}
               style={{
                 position: "absolute",
@@ -410,11 +750,12 @@ export function MediaViewer({
                   ? `color-mix(in srgb, ${catVar} 32%, transparent)`
                   : `color-mix(in srgb, ${catVar} 16%, transparent)`,
                 boxShadow: isSelected ? `0 0 0 2px ${catVar}` : undefined,
+                cursor: isSelected ? "move" : "pointer",
               }}
-              className="pointer-events-auto cursor-pointer border-2 border-dashed transition-all"
+              className="pointer-events-auto border-2 border-dashed transition-colors"
             >
               <span
-                className="absolute -top-5 left-0 rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap pointer-events-none"
+                className="absolute -top-5 left-0 rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap pointer-events-none select-none"
                 style={{
                   backgroundColor: "var(--background)",
                   color: catVar,
@@ -423,6 +764,26 @@ export function MediaViewer({
               >
                 {formatKind(region.kind)}
               </span>
+
+              {/* 8 resize handles when selected */}
+              {isSelected &&
+                handles.map((h) => (
+                  <div
+                    key={h.dir}
+                    data-testid={`handle-${h.dir}-${region.id}`}
+                    style={{
+                      position: "absolute",
+                      width: 8,
+                      height: 8,
+                      backgroundColor: "var(--background)",
+                      borderColor: catVar,
+                      cursor: h.cursor,
+                      ...h.style,
+                    }}
+                    className="rounded-xs border-2 z-20 pointer-events-auto shadow-sm"
+                    onPointerDown={(e) => startResizeBox(e, region.id, box, h.dir)}
+                  />
+                ))}
             </div>
           );
         })}
@@ -437,19 +798,131 @@ export function VideoTimeline({
   snapshot,
   currentTimeMs,
   onSeek,
+  regions,
+  onUpdateRegion,
 }: {
   snapshot: Snapshot;
   currentTimeMs: number;
   onSeek: (ms: number) => void;
+  regions?: MediaRegion[];
+  onUpdateRegion?: (regionId: string, updates: Partial<MediaRegion>) => void;
 }) {
   const durationMs = snapshot.media.duration_ms || 1;
   const currentPercent = Math.min(100, Math.max(0, (currentTimeMs / durationMs) * 100));
+  const activeRegions = regions ?? snapshot.regions;
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   const formatMs = (ms: number) => {
     const s = Math.floor(ms / 1000);
     const m = Math.floor(s / 60);
     const rem = s % 60;
     return `${m}:${rem.toString().padStart(2, "0")}`;
+  };
+
+  const handleTrimStart = (e: React.PointerEvent, r: MediaRegion) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!barRef.current) return;
+    const rect = barRef.current.getBoundingClientRect();
+    const origStart = r.start_ms;
+    const origEnd = r.end_ms;
+    const origX = e.clientX;
+
+    const onPointerMove = (ev: PointerEvent) => {
+            const dx = ev.clientX - origX;
+      const dMs = (dx / (rect.width || 1)) * durationMs;
+      const raw = origStart + dMs;
+      const snapped = Math.round(raw / 100) * 100;
+      const clamped = Math.max(0, Math.min(origEnd, snapped));
+      onUpdateRegion?.(r.id, { start_ms: clamped });
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  };
+
+  const handleTrimEnd = (e: React.PointerEvent, r: MediaRegion) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!barRef.current) return;
+    const rect = barRef.current.getBoundingClientRect();
+    const origStart = r.start_ms;
+    const origEnd = r.end_ms;
+    const origX = e.clientX;
+
+    const onPointerMove = (ev: PointerEvent) => {
+            const dx = ev.clientX - origX;
+      const dMs = (dx / (rect.width || 1)) * durationMs;
+      const raw = origEnd + dMs;
+      const snapped = Math.round(raw / 100) * 100;
+      const clamped = Math.max(origStart, Math.min(durationMs, snapped));
+      onUpdateRegion?.(r.id, { end_ms: clamped });
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  };
+
+  const handleShift = (e: React.PointerEvent, r: MediaRegion) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!barRef.current) return;
+    const rect = barRef.current.getBoundingClientRect();
+    const origStart = r.start_ms;
+    const origEnd = r.end_ms;
+    const origX = e.clientX;
+    const span = origEnd - origStart;
+
+    const onPointerMove = (ev: PointerEvent) => {
+            const dx = ev.clientX - origX;
+      const dMs = (dx / (rect.width || 1)) * durationMs;
+      const raw = origStart + dMs;
+      const snapped = Math.round(raw / 100) * 100;
+      const clampedStart = Math.max(0, Math.min(durationMs - span, snapped));
+      const clampedEnd = clampedStart + span;
+      const delta = clampedStart - origStart;
+
+      const shiftedKfs = r.keyframes.map((kf) => ({
+        ...kf,
+        time_ms: Math.max(0, Math.min(durationMs, kf.time_ms + delta)),
+      }));
+
+      onUpdateRegion?.(r.id, {
+        start_ms: clampedStart,
+        end_ms: clampedEnd,
+        keyframes: shiftedKfs,
+      });
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
   };
 
   return (
@@ -462,6 +935,7 @@ export function VideoTimeline({
       </div>
 
       <div
+        ref={barRef}
         className="relative h-16 w-full cursor-pointer rounded-lg bg-muted/70 p-2 overflow-hidden select-none"
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
@@ -472,7 +946,7 @@ export function VideoTimeline({
         {/* Playhead marker */}
         <div
           data-testid="playhead-marker"
-          className="absolute top-0 bottom-0 z-20 w-0.5 bg-primary shadow-sm"
+          className="absolute top-0 bottom-0 z-20 w-0.5 bg-primary shadow-sm pointer-events-none"
           style={{ left: `${currentPercent}%` }}
         >
           <div className="absolute -top-1 -left-1.5 h-3.5 w-3.5 rounded-full bg-primary border-2 border-background" />
@@ -480,16 +954,17 @@ export function VideoTimeline({
 
         {/* Region tracks */}
         <div className="flex h-full flex-col justify-around gap-1">
-          {snapshot.regions.map((region) => {
+          {activeRegions.map((region) => {
             const startPct = Math.max(0, (region.start_ms / durationMs) * 100);
             const endPct = Math.min(100, (region.end_ms / durationMs) * 100);
             const widthPct = Math.max(0.5, endPct - startPct);
             const catVar = getCategoryVar(region.category);
 
             return (
-              <div key={`track-${region.id}`} className="relative h-2 w-full rounded bg-background/50">
+              <div key={`track-${region.id}`} className="relative h-2.5 w-full rounded bg-background/50">
                 <div
-                  className="absolute top-0 bottom-0 rounded border border-dashed opacity-90"
+                  data-testid={`span-track-${region.id}`}
+                  className="absolute top-0 bottom-0 rounded border border-dashed opacity-90 flex items-center justify-between overflow-hidden"
                   style={{
                     left: `${startPct}%`,
                     width: `${widthPct}%`,
@@ -497,7 +972,31 @@ export function VideoTimeline({
                     borderColor: catVar,
                   }}
                   title={`${formatKind(region.kind)} (${formatMs(region.start_ms)} - ${formatMs(region.end_ms)})`}
-                />
+                >
+                  {/* Trim start handle */}
+                  <div
+                    data-testid={`trim-start-${region.id}`}
+                    onPointerDown={(e) => handleTrimStart(e, region)}
+                    className="h-full w-2 cursor-ew-resize bg-background/60 hover:bg-background z-10"
+                    title="Trim start"
+                  />
+
+                  {/* Shift span */}
+                  <div
+                    data-testid={`span-shift-${region.id}`}
+                    onPointerDown={(e) => handleShift(e, region)}
+                    className="h-full flex-1 cursor-grab active:cursor-grabbing"
+                    title="Shift span"
+                  />
+
+                  {/* Trim end handle */}
+                  <div
+                    data-testid={`trim-end-${region.id}`}
+                    onPointerDown={(e) => handleTrimEnd(e, region)}
+                    className="h-full w-2 cursor-ew-resize bg-background/60 hover:bg-background z-10"
+                    title="Trim end"
+                  />
+                </div>
               </div>
             );
           })}
@@ -513,10 +1012,24 @@ export function MediaRegionsList({
   regions,
   selectedRegionId,
   onSelectRegion,
+  onUpdateRegion,
+  onRemoveRegion,
+  onTrackRegion,
+  trackingRegionId,
+  isAudioOrImage = false,
+  durationMs = 0,
+  validationErrors,
 }: {
   regions: MediaRegion[];
   selectedRegionId: string | null;
   onSelectRegion: (id: string) => void;
+  onUpdateRegion?: (id: string, updates: Partial<MediaRegion>) => void;
+  onRemoveRegion?: (id: string) => void;
+  onTrackRegion?: ((region: MediaRegion) => void) | undefined;
+  trackingRegionId?: string | null;
+  isAudioOrImage?: boolean;
+  durationMs?: number;
+  validationErrors?: Record<string, string>;
 }) {
   const grouped = useMemo(() => {
     const map = new Map<string, MediaRegion[]>();
@@ -535,6 +1048,29 @@ export function MediaRegionsList({
       </div>
     );
   }
+
+  const categoryOptions = [
+    "identificacao",
+    "biometrico",
+    "saude",
+    "financeiro",
+    "genetico",
+    "origem",
+    "familia",
+    "comportamento",
+    "quasi",
+  ];
+
+  const kindOptions: RegionKind[] = [
+    "face",
+    "text",
+    "identity_document",
+    "plate",
+    "signature",
+    "biometric",
+    "code",
+    "other",
+  ];
 
   return (
     <div className="space-y-4" data-testid="regions-grouped-list">
@@ -560,10 +1096,11 @@ export function MediaRegionsList({
               </span>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {list.map((r) => {
                 const isSelected = selectedRegionId === r.id;
                 const rCatVar = getCategoryVar(r.category);
+                const isInvalid = Boolean(validationErrors?.[r.id]);
 
                 return (
                   <div
@@ -579,37 +1116,164 @@ export function MediaRegionsList({
                           }
                         : undefined
                     }
-                    className={`cursor-pointer rounded-lg border p-2.5 transition-all ${
-                      isSelected
-                        ? ""
-                        : "border-border bg-background hover:bg-muted/50"
+                    className={`cursor-pointer rounded-lg border p-3 transition-all ${
+                      isSelected ? "" : "border-border bg-background hover:bg-muted/50"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span
-                          className="inline-block h-2 w-2 rounded-full border border-dashed"
+                          className="inline-block h-2 w-2 rounded-full border border-dashed shrink-0"
                           style={{ backgroundColor: rCatVar, borderColor: rCatVar }}
                           aria-hidden
                         />
-                        {formatKind(r.kind)}
-                      </span>
-                      <span
-                        className="rounded px-1.5 py-0.5 text-[10px] font-medium border border-dashed"
-                        style={{
-                          borderColor: `color-mix(in srgb, ${rCatVar} 45%, transparent)`,
-                          backgroundColor: `color-mix(in srgb, ${rCatVar} 12%, transparent)`,
-                          color: rCatVar,
-                        }}
-                      >
-                        {formatConfidence(r.confidence)}
-                      </span>
+
+                        {/* Kind select */}
+                        {onUpdateRegion ? (
+                          <select
+                            value={r.kind}
+                            aria-label="Region kind"
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => onUpdateRegion(r.id, { kind: e.target.value as RegionKind })}
+                            className="h-7 rounded border border-border bg-background px-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            {kindOptions.map((k) => (
+                              <option key={k} value={k}>
+                                Kind: {formatKind(k)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-sm font-semibold text-foreground">
+                            {formatKind(r.kind)}
+                          </span>
+                        )}
+
+                        {/* Category select */}
+                        {onUpdateRegion && (
+                          <select
+                            value={r.category}
+                            aria-label="Region category"
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => onUpdateRegion(r.id, { category: e.target.value })}
+                            className="h-7 max-w-[130px] truncate rounded border border-border bg-background px-1.5 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            {categoryOptions.map((c) => (
+                              <option key={c} value={c}>
+                                {c}: {categoryLabel(c)}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className="rounded px-1.5 py-0.5 text-[10px] font-medium border border-dashed"
+                          style={{
+                            borderColor: `color-mix(in srgb, ${rCatVar} 45%, transparent)`,
+                            backgroundColor: `color-mix(in srgb, ${rCatVar} 12%, transparent)`,
+                            color: rCatVar,
+                          }}
+                        >
+                          {formatConfidence(r.confidence)}
+                        </span>
+
+                        {onRemoveRegion && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Remove region"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveRegion(r.id);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
                     {r.reason && (
                       <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
                         {r.reason}
                       </p>
+                    )}
+
+                    {/* For video: start/end fields in seconds and track button */}
+                    {!isAudioOrImage && (
+                      <div className="mt-2.5 pt-2 border-t border-border/60 flex flex-col gap-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1 text-muted-foreground">
+                              <span>Start</span>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max={durationMs ? (durationMs / 1000).toFixed(1) : undefined}
+                                value={(r.start_ms / 1000).toFixed(1)}
+                                aria-label="Start time in seconds"
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  if (!isNaN(val)) {
+                                    onUpdateRegion?.(r.id, { start_ms: Math.round(val * 1000) });
+                                  }
+                                }}
+                                className="w-14 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground tabular-nums"
+                              />
+                              <span>s</span>
+                            </label>
+
+                            <label className="flex items-center gap-1 text-muted-foreground">
+                              <span>End</span>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max={durationMs ? (durationMs / 1000).toFixed(1) : undefined}
+                                value={(r.end_ms / 1000).toFixed(1)}
+                                aria-label="End time in seconds"
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  if (!isNaN(val)) {
+                                    onUpdateRegion?.(r.id, { end_ms: Math.round(val * 1000) });
+                                  }
+                                }}
+                                className="w-14 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground tabular-nums"
+                              />
+                              <span>s</span>
+                            </label>
+                          </div>
+
+                          {onTrackRegion && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[11px] px-2 ml-auto"
+                              disabled={trackingRegionId === r.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onTrackRegion(r);
+                              }}
+                              title="Follows the box forwards and backwards from the current frame"
+                            >
+                              Track
+                            </Button>
+                          )}
+                        </div>
+
+                        {isInvalid && (
+                          <p className="text-[11px] font-medium text-destructive" role="alert">
+                            {validationErrors?.[r.id]}
+                          </p>
+                        )}
+                      </div>
                     )}
 
                     <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
@@ -624,7 +1288,7 @@ export function MediaRegionsList({
                         {formatSource(r.source)}
                       </span>
 
-                      {r.end_ms > 0 && (
+                      {isAudioOrImage && r.end_ms > 0 && (
                         <span className="tabular-nums">
                           {(r.start_ms / 1000).toFixed(1)}s - {(r.end_ms / 1000).toFixed(1)}s
                         </span>

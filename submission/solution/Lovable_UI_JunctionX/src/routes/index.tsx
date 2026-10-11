@@ -289,6 +289,7 @@ function Index() {
                   setRetry(null);
                   setSampleNotice(false);
                 }}
+                onSnapshotChange={setSnapshot}
               />
             </section>
           )
