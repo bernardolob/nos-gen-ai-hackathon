@@ -131,6 +131,20 @@ locais. Sem esta variável, a aplicação continua a funcionar com caixas.
 - O áudio do vídeo é preservado. Dados pessoais falados não são censurados
   nesta versão.
 
+## Uma cara, uma região
+
+A mesma cara costuma voltar de vários detetores (o modelo, o detetor local, uma
+pista partida em pedaços), cada um com a sua caixa, e isso aparecia como duas ou
+três "caras" na mesma pessoa. `_merge_face_regions` junta-as: duas regiões de
+rosto são a mesma cara quando, nos instantes que partilham (ou quase,
+300 ms), a caixa mais pequena está em grande parte (60%) dentro da maior, em
+pelo menos um terço desses instantes (o fim de um pedaço pode já ter derivado
+da cara). O resultado é uma só região cuja caixa, em cada instante, é a **união**
+das caixas do grupo: a máscara só pode crescer, nunca perde parte da cara. Duas
+caras diferentes, ou a mesma zona em instantes muito afastados, não se juntam.
+Corre nas fotografias e nos vídeos (antes e depois do alisamento das caixas), e
+só toca em rostos. Num vídeo real passou de 5 pistas de rosto para 1.
+
 ## Verificação real
 
 Com o Worker de produção, o Gemini (`gemini-3.5-flash-lite`) e o `ffmpeg`:

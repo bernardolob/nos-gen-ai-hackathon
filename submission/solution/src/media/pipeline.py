@@ -174,7 +174,11 @@ class MediaProcessor:
         combined = self._recover_video_objects(
             path, combined, llm_regions, face_regions, samples, info,
             scene_cuts, instructions, report)
-        combined = [_smooth_region(track) for track in combined]
+        combined = _merge_face_regions(combined)
+        # Smoothing moves the face boxes a little, so a join that was just
+        # short of the threshold can be found afterwards.
+        combined = _merge_face_regions(
+            [_smooth_region(track) for track in combined])
         return kind, info, combined, model
 
     def _recover_video_objects(self, path, combined, observations, faces,
@@ -1553,6 +1557,120 @@ def _flow_box(previous, current, box, cv2, np):
     )
 
 
+# One face usually comes back from several detectors (the model, the local
+# detector, a track that was split in pieces), each with its own box, and that
+# showed up as two or three "faces" on the same person.
+FACE_MERGE_CONTAINMENT = 0.6   # how much of the smaller box must lie inside
+FACE_MERGE_GAP_MS = 300        # tracks this close in time can be one face
+
+
+def _box_area(box):
+    return box.width * box.height
+
+
+def _containment(first, second):
+    """The part of the smaller box that lies inside the other one (0 to 1)."""
+    left, top = max(first.x, second.x), max(first.y, second.y)
+    right = min(first.x + first.width, second.x + second.width)
+    bottom = min(first.y + first.height, second.y + second.height)
+    if right <= left or bottom <= top:
+        return 0.0
+    smaller = min(_box_area(first), _box_area(second))
+    return (right - left) * (bottom - top) / smaller if smaller else 0.0
+
+
+def _box_near(region, time_ms):
+    """The region's box at ``time_ms``, or at its nearest end."""
+    return region.box_at(min(region.end_ms, max(region.start_ms, time_ms)))
+
+
+def _same_face(first, second):
+    low = max(first.start_ms, second.start_ms) - FACE_MERGE_GAP_MS
+    high = min(first.end_ms, second.end_ms) + FACE_MERGE_GAP_MS
+    if low > high:
+        return False
+    times = {key.time_ms for key in first.keyframes + second.keyframes
+             if low <= key.time_ms <= high} or {first.start_ms}
+    matches = sum(
+        _containment(_box_near(first, t), _box_near(second, t))
+        >= FACE_MERGE_CONTAINMENT for t in times)
+    # A third is enough: where two pieces of one track meet, the earlier one
+    # may already have drifted off the face for a few frames.
+    return matches * 3 >= len(times)
+
+
+def _union_box(boxes):
+    left = min(box.x for box in boxes)
+    top = min(box.y for box in boxes)
+    right = max(box.x + box.width for box in boxes)
+    bottom = max(box.y + box.height for box in boxes)
+    return Box(x=left, y=top, width=right - left, height=bottom - top)
+
+
+def _merge_face_regions(regions):
+    """Join the face regions that are the same face; leave the rest alone.
+
+    Two face tracks are the same face when, around the times they share (or
+    nearly share), the smaller box mostly lies inside the larger one. A group
+    becomes one region whose box is, at each instant, the union of its boxes:
+    the mask can only grow, never lose part of the face.
+    """
+    faces = [region for region in regions if region.kind == "face"]
+    others = [region for region in regions if region.kind != "face"]
+    parent = list(range(len(faces)))
+
+    def find(index):
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for first in range(len(faces)):
+        for second in range(first + 1, len(faces)):
+            if _same_face(faces[first], faces[second]):
+                parent[find(second)] = find(first)
+    groups = {}
+    for index, region in enumerate(faces):
+        groups.setdefault(find(index), []).append(region)
+    merged = []
+    for members in groups.values():
+        if len(members) == 1:
+            merged.append(members[0])
+            continue
+        merged.append(_join_face_group(members))
+    # Keep the original order of first appearance.
+    return others + sorted(merged, key=lambda region: region.start_ms)
+
+
+def _join_face_group(members):
+    best = next((m for m in members if m.source == "gemini"), members[0])
+    start = min(member.start_ms for member in members)
+    end = max(member.end_ms for member in members)
+    times = sorted({key.time_ms for member in members
+                    for key in member.keyframes})
+    keyframes = []
+    for time_ms in times:
+        active = [member for member in members
+                  if member.start_ms - FACE_MERGE_GAP_MS <= time_ms
+                  <= member.end_ms + FACE_MERGE_GAP_MS]
+        boxes = [_box_near(member, time_ms) for member in active]
+        polygon = None
+        if len(active) == 1:
+            polygon = active[0].polygon_at(
+                min(active[0].end_ms, max(active[0].start_ms, time_ms)))
+        keyframes.append(RegionKeyframe(
+            time_ms=time_ms, box=_union_box(boxes), polygon=polygon))
+    result = best.model_copy(deep=True)
+    result.start_ms, result.end_ms = start, end
+    result.keyframes = keyframes
+    ranking = {"certo": 0, "provavel": 1, "incerto": 2}
+    result.confidence = min(
+        (member.confidence for member in members),
+        key=lambda value: ranking.get(value, 3))
+    result.reason = max((member.reason for member in members), key=len)
+    return result
+
+
 def _merge_image_regions(regions):
     output = []
     for region in regions:
@@ -1563,7 +1681,7 @@ def _merge_image_regions(regions):
                               region.keyframes[0].box) >= 0.55), None)
         if duplicate is None:
             output.append(region)
-    return output
+    return _merge_face_regions(output)
 
 
 # Faces are not covered with a block mosaic: the crop is reduced to a handful
