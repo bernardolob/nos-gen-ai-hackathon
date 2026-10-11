@@ -181,16 +181,68 @@ O arranque diz se o Gemini e o áudio estão ligados.
 
 ## Testes
 
-- Backend de texto: `tests/test_user_validation.py` (21 testes).
+- Backend de texto: `tests/test_user_validation.py` (29 testes).
 - Rota de áudio: `tests/test_audio_route.py`, com a transcrição, o modelo e o
-  `ffmpeg` falsos (26 testes). Um teste usa o `ffmpeg` a sério e só corre se
+  `ffmpeg` falsos (29 testes). Um teste usa o `ffmpeg` a sério e só corre se
   ele estiver instalado.
-- UI: `npx tsc --noEmit`, `npx vitest run` (24 testes: o contrato do áudio
-  e os componentes de áudio) e `npm run build`, na pasta da UI.
+- UI: `npx tsc --noEmit`, `npx vitest run` (76 testes em 9 ficheiros) e
+  `npm run build`, na pasta da UI.
+- **Instruções iniciais:** `tests/test_initial_instructions.py` (30 testes:
+  fronteiras do tamanho, codificação, falhas, segurança e CORS), mais os
+  casos de texto em `test_user_validation.py`, de áudio em
+  `test_audio_route.py` e de imagem/vídeo em `test_media.py`. Na UI,
+  `src/test/initial-instructions.test.tsx` (o campo e o cabeçalho) e
+  `src/test/instructions-requests.test.ts` (o pedido real, com o `fetch`
+  falso, para documento, áudio, imagem e vídeo). Ver "Instruções iniciais:
+  como se verifica" abaixo.
 - **Contrato backend-UI:** `tests/test_ui_contract.py` (7 testes) lê os tipos
   e as chamadas em `src/lib/review/` e confirma que os campos do estado, do
   histórico, as rotas chamadas, os tipos de áudio e os limites coincidem com
   o backend. Se um lado mudar sem o outro, falha aqui.
+
+## Instruções iniciais: como se verifica
+
+O que os testes automáticos garantem:
+
+| Garantia | Onde |
+|---|---|
+| O limite de 1500 conta caracteres (não bytes) depois de tirar os espaços; 1501 dá 422 e o texto nunca volta no erro | `test_initial_instructions.py` |
+| Cabeçalho em branco, ausente ou com codificação inválida (`%ZZ`, `%E7`) não deita o servidor abaixo | idem |
+| Um pedido recusado, um tipo não suportado ou uma falha do modelo **não** mudam as instruções da sessão | idem |
+| Enviar um novo ficheiro, sem instruções, esquece as anteriores | idem |
+| As instruções não fecham nem abrem os blocos do pedido (`</user_instructions>`, `<document>`) | idem |
+| As instruções iniciais ficam sempre no pedido, em primeiro lugar, mesmo com muitas rejeições, e o total respeita as 2000 letras | idem |
+| O preflight de CORS aceita o cabeçalho a partir da UI e não o abre a outras origens | idem |
+| O cabeçalho sai no pedido real para documento, áudio, imagem e vídeo, codificado, nunca na URL nem no corpo | `instructions-requests.test.ts` |
+
+Os testes foram verificados por **mutação**: com quatro erros plantados no
+backend (a rejeição esquece a instrução, o CORS sem o cabeçalho, o limite
+desligado, um novo envio que herda as instruções antigas) e dois na UI (o
+áudio sem o cabeçalho, o texto na URL sem codificar) falham sempre.
+
+**Verificação manual de ponta a ponta** (feita no browser, contra o backend
+real e o Gemini). A repetir quando se mexer no envio:
+
+1. Arrancar o backend (`python src/user_validation.py`, com
+   `GEMINI_GATEWAY_URL` e `GEMINI_GATEWAY_ORIGIN`) e a UI com `VITE_API_URL`.
+2. Escolher um ficheiro, escrever no campo "Instructions" (com acentos e uma
+   quebra de linha) e carregar em "Analyze document".
+3. Ver no separador de rede que o `POST /api/document` leva o cabeçalho
+   `X-User-Instructions` codificado e que a URL não tem o texto.
+4. Confirmar que o resultado respeita a instrução e que o campo ficou vazio.
+5. Rejeitar com uma observação e confirmar que a versão 2 respeita **as
+   duas**: a observação e a instrução inicial.
+
+Resultado da última repetição: com "Mascara também a palavra Firebase. Não
+mascares o nome da faculdade", a versão 1 mascarou "Firebase" e deixou a
+faculdade visível; depois de rejeitar com "Mascara também a palavra Python",
+a versão 2 mascarou "Python" e continuou a mascarar "Firebase" e a deixar a
+faculdade visível.
+
+**O que isto não cobre:** o cumprimento das instruções depende do Gemini e
+não é determinístico; um pedido para deixar algo visível pode não ser
+cumprido à letra em todas as execuções. Não se testou em ecrã estreito nem em
+modo escuro.
 
 ## Verificado e não verificado
 
