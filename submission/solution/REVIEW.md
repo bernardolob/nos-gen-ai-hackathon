@@ -66,6 +66,12 @@ npm run dev
 A UI procura o backend em `http://127.0.0.1:8000`; muda-se com
 `VITE_API_URL`.
 
+Se aparecer `ERR_CONNECTION_REFUSED`, confirma que o backend está a correr
+na porta 8000. Copia `Lovable_UI_JunctionX/.env.example` para `.env.local`
+na mesma pasta e reinicia `npm run dev`. Uma variável `VITE_API_URL`
+definida no terminal tem prioridade sobre esse ficheiro; remove-a ou
+corrige-a antes de iniciar a UI.
+
 ## Verificado a correr
 
 Com o backend só em regras (sem Gemini) e a UI em `npm run dev`

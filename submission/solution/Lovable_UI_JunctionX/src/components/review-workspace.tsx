@@ -17,11 +17,16 @@ type Snapshot = {
   media?: MediaInfo; regions?: MediaRegion[]; model?: MediaModel | null; error?: string;
 };
 
-const API = import.meta.env["VITE_API_URL"] ?? "http://127.0.0.1:8000";
+const API = (import.meta.env["VITE_API_URL"]?.trim() || "http://127.0.0.1:8000").replace(/\/+$/, "");
 const ACCEPT = ".txt,.pdf,.jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,text/plain,application/pdf,image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm";
 
 async function callApi(path: string, init?: RequestInit): Promise<Snapshot> {
-  const res = await fetch(`${API}${path}`, init);
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, init);
+  } catch {
+    throw new Error(`Não foi possível ligar ao servidor em ${API}. Confirme que o backend está iniciado e que VITE_API_URL usa a mesma porta.`);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Não foi possível contactar o servidor.");
   return data as Snapshot;
@@ -98,6 +103,7 @@ export function ReviewWorkspace() {
       const headers: Record<string, string> = { "Content-Type": type };
       if (pendingFile) headers["X-File-Name"] = encodeURIComponent(pendingFile.name);
       setSnapshot(await callApi("/api/document", { method: "POST", headers, body }));
+      setError("");
       setNewOpen(false); setPendingFile(null);
     } catch (err) { setFileError(err instanceof Error ? err.message : "Erro desconhecido."); }
     finally { setBusy(false); }

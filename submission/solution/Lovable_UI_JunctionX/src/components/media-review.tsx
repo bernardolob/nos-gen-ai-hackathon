@@ -94,7 +94,7 @@ function transformPolygon(polygon: Point[] | null, source: Box, target: Box): Po
 
 function withKeyframe(region: MediaRegion, timeMs: number, box: Box, polygon?: Point[] | null): MediaRegion {
   const keep = region.keyframes.filter(key => Math.abs(key.time_ms - timeMs) > 60);
-  return { ...region, keyframes: [...keep, { time_ms: timeMs, box, polygon }].sort((a, b) => a.time_ms - b.time_ms) };
+  return { ...region, keyframes: [...keep, { time_ms: timeMs, box, polygon: polygon ?? null }].sort((a, b) => a.time_ms - b.time_ms) };
 }
 
 function paintPixelatedPreview(
