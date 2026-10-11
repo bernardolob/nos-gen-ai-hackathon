@@ -78,13 +78,27 @@ const emptyState = (): Snapshot => ({ ...EMPTY_SNAPSHOT, audio_enabled: true });
 let state: Snapshot = emptyState();
 let source = "";
 
+/**
+ * True right after an upload whose result is the canned sample, not the
+ * file the person actually chose (demo mode cannot read a PDF client-side,
+ * and the audio mock always "hears" the same transcript). The UI uses this
+ * to warn that what is shown is not their document.
+ */
+let sampleSubstituted = false;
+
+export function wasSampleSubstituted(): boolean {
+  return sampleSubstituted;
+}
+
 export function resetMock() {
   state = emptyState();
   source = "";
+  sampleSubstituted = false;
 }
 
-export async function mockUpload(text: string): Promise<Snapshot> {
+export async function mockUpload(text: string, usedSample = false): Promise<Snapshot> {
   if (!text.trim()) throw new ApiError(422, "The document has no text.");
+  sampleSubstituted = usedSample;
   source = text;
   state = {
     ...emptyState(),
@@ -99,6 +113,7 @@ export async function mockUpload(text: string): Promise<Snapshot> {
 
 /** The mock audio is always the same sample: it "says" SAMPLE_TRANSCRIPT. */
 export async function mockUploadAudio(): Promise<Snapshot> {
+  sampleSubstituted = true;
   source = SAMPLE_TRANSCRIPT;
   const text = maskWords(source, false);
   state = {

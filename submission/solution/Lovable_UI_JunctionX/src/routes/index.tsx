@@ -1,11 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
-import { Loader2, LockKeyhole, Moon, ShieldCheck, Sun } from "lucide-react";
+import { Info, Loader2, LockKeyhole, Moon, ShieldCheck, Sun } from "lucide-react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { UploadStep } from "@/components/anonymizer/steps";
 import { ReviewWorkspace } from "@/components/review/workspace";
-import { approveVersion, getCurrent, isAudioFile, isMockMode, rejectVersion, uploadFile } from "@/lib/review/api";
+import {
+  approveVersion,
+  getCurrent,
+  isAudioFile,
+  isMockMode,
+  rejectVersion,
+  uploadFile,
+  wasSampleSubstituted,
+} from "@/lib/review/api";
 import { ApiError, type Snapshot } from "@/lib/review/types";
 
 export const Route = createFileRoute("/")({
@@ -38,6 +47,7 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState<(() => void) | null>(null);
   const [dark, setDark] = useState(false);
+  const [sampleNotice, setSampleNotice] = useState(false);
 
   // The theme script in <head> already set the class; read it back, then keep both in step.
   useEffect(() => {
@@ -74,7 +84,9 @@ function Index() {
     setUploading(true);
     setError(null);
     try {
-      setSnapshot(await uploadFile(file));
+      const result = await uploadFile(file);
+      setSnapshot(result);
+      setSampleNotice(isMockMode && wasSampleSubstituted());
       setFile(null);
       setWantsNew(false);
     } catch (e) {
@@ -211,6 +223,16 @@ function Index() {
                   {isMockMode ? "Demo mode" : snapshot.mode === "rules" ? "Connected · rules only" : "Connected to server"}
                 </span>
               </div>
+              {sampleNotice && (
+                <Alert className="mb-6">
+                  <Info className="h-4 w-4" aria-hidden />
+                  <AlertDescription>
+                    Demo mode cannot read this file's content in the browser, so this is a sample
+                    result, not your document. Connect <code>VITE_API_URL</code> to a real backend
+                    to analyze actual files.
+                  </AlertDescription>
+                </Alert>
+              )}
               <ReviewWorkspace
                 snapshot={snapshot}
                 busy={busy}
@@ -219,7 +241,12 @@ function Index() {
                 onRetry={retry}
                 onReject={reject}
                 onApprove={approve}
-                onNewDocument={() => { setWantsNew(true); setError(null); setRetry(null); }}
+                onNewDocument={() => {
+                  setWantsNew(true);
+                  setError(null);
+                  setRetry(null);
+                  setSampleNotice(false);
+                }}
               />
             </section>
           )

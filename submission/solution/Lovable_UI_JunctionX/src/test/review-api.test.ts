@@ -7,7 +7,9 @@ import {
   isAudioFile,
   parseError,
   uploadAudio,
+  uploadDocument,
   uploadFile,
+  wasSampleSubstituted,
 } from "@/lib/review/api";
 import { mockApprove, mockReject, mockUpload, mockUploadAudio, resetMock, SAMPLE_TRANSCRIPT } from "@/lib/review/mock";
 import { EMPTY_SNAPSHOT, MAX_AUDIO_BYTES } from "@/lib/review/types";
@@ -147,5 +149,31 @@ describe("audio contract", () => {
     // a PDF: the demo does not read it (jsdom files have no .text())
     const doc = await uploadFile(new File(["x"], "a.pdf"));
     expect(doc.kind).toBe("text");
+  }, 15000);
+});
+
+describe("sample substitution notice", () => {
+  beforeEach(() => resetMock());
+
+  it("flags a PDF in demo mode as the sample, not the file's content", async () => {
+    await uploadDocument(new File(["x"], "cv.pdf"));
+    expect(wasSampleSubstituted()).toBe(true);
+  }, 15000);
+
+  it("does not flag a text file: its own content is used", async () => {
+    await mockUpload("Utente Maria Santos.");
+    expect(wasSampleSubstituted()).toBe(false);
+  });
+
+  it("audio is always the sample transcript, never the real file", async () => {
+    await mockUploadAudio();
+    expect(wasSampleSubstituted()).toBe(true);
+  });
+
+  it("resetMock clears the flag", async () => {
+    await uploadDocument(new File(["x"], "cv.pdf"));
+    expect(wasSampleSubstituted()).toBe(true);
+    resetMock();
+    expect(wasSampleSubstituted()).toBe(false);
   }, 15000);
 });
