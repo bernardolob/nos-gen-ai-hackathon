@@ -4,7 +4,8 @@
  * The default theme (indigo to pink) is the one in styles.css and needs no
  * block here. Each other theme only replaces the brand tokens, so the rest of
  * the interface (neutrals, status and category colors) is the same in all of
- * them. A theme is the `data-theme` attribute on <html>; light and dark are
+ * them. `data-swatch="<id>"` gives the same colors to a preview element in the
+ * theme picker, whatever theme the page uses. A theme is the `data-theme` attribute on <html>; light and dark are
  * the `.dark` class, and every theme has both. The contrast of these colors
  * is checked by src/test/theme-contrast.test.ts, which reads this file: keep
  * the `--brand`, `--brand-2` and `--accent` lines in the format below.
@@ -13,8 +14,16 @@
  * src/lib/theme.ts and run the tests.
  */
 
+/* Indigo & Pink: the default. Only the picker's preview needs these values;
+   they must equal the brand tokens in styles.css (a test checks it). */
+[data-swatch="indigo"] {
+  --brand: oklch(0.585 0.233 277);
+  --brand-2: oklch(0.656 0.241 354);
+}
+
 /* Ocean */
-:root[data-theme="ocean"] {
+:root[data-theme="ocean"],
+[data-swatch="ocean"] {
   --brand: oklch(0.55 0.125 240);
   --brand-2: oklch(0.6 0.095 200);
   --glow: oklch(0.55 0.125 240 / 16%);
@@ -22,13 +31,15 @@
   --sidebar-ring: oklch(0.55 0.125 240);
   --accent: oklch(0.955 0.025 240);
 }
-:root.dark[data-theme="ocean"] {
+:root.dark[data-theme="ocean"],
+.dark [data-swatch="ocean"] {
   --glow: oklch(0.55 0.125 240 / 22%);
   --accent: oklch(0.28 0.06 240);
 }
 
 /* Forest */
-:root[data-theme="forest"] {
+:root[data-theme="forest"],
+[data-swatch="forest"] {
   --brand: oklch(0.52 0.13 150);
   --brand-2: oklch(0.6 0.14 125);
   --glow: oklch(0.52 0.13 150 / 16%);
@@ -36,13 +47,15 @@
   --sidebar-ring: oklch(0.52 0.13 150);
   --accent: oklch(0.955 0.025 150);
 }
-:root.dark[data-theme="forest"] {
+:root.dark[data-theme="forest"],
+.dark [data-swatch="forest"] {
   --glow: oklch(0.52 0.13 150 / 22%);
   --accent: oklch(0.28 0.06 150);
 }
 
 /* Sunset */
-:root[data-theme="sunset"] {
+:root[data-theme="sunset"],
+[data-swatch="sunset"] {
   --brand: oklch(0.56 0.16 45);
   --brand-2: oklch(0.6 0.18 10);
   --glow: oklch(0.56 0.16 45 / 16%);
@@ -50,13 +63,15 @@
   --sidebar-ring: oklch(0.56 0.16 45);
   --accent: oklch(0.955 0.025 45);
 }
-:root.dark[data-theme="sunset"] {
+:root.dark[data-theme="sunset"],
+.dark [data-swatch="sunset"] {
   --glow: oklch(0.56 0.16 45 / 22%);
   --accent: oklch(0.28 0.06 45);
 }
 
 /* Grape */
-:root[data-theme="grape"] {
+:root[data-theme="grape"],
+[data-swatch="grape"] {
   --brand: oklch(0.52 0.2 305);
   --brand-2: oklch(0.58 0.24 335);
   --glow: oklch(0.52 0.2 305 / 16%);
@@ -64,13 +79,15 @@
   --sidebar-ring: oklch(0.52 0.2 305);
   --accent: oklch(0.955 0.025 305);
 }
-:root.dark[data-theme="grape"] {
+:root.dark[data-theme="grape"],
+.dark [data-swatch="grape"] {
   --glow: oklch(0.52 0.2 305 / 22%);
   --accent: oklch(0.28 0.06 305);
 }
 
 /* Graphite */
-:root[data-theme="graphite"] {
+:root[data-theme="graphite"],
+[data-swatch="graphite"] {
   --brand: oklch(0.5 0.02 260);
   --brand-2: oklch(0.6 0.03 260);
   --glow: oklch(0.5 0.02 260 / 16%);
@@ -78,7 +95,8 @@
   --sidebar-ring: oklch(0.5 0.02 260);
   --accent: oklch(0.955 0.008 260);
 }
-:root.dark[data-theme="graphite"] {
+:root.dark[data-theme="graphite"],
+.dark [data-swatch="graphite"] {
   --glow: oklch(0.5 0.02 260 / 22%);
   --accent: oklch(0.28 0.019 260);
 }
