@@ -127,6 +127,12 @@ interface está **em inglês** (decisão da equipa).
   `src/lib/review/` (`uploadAudio`, `uploadFile`, `censoredAudioUrl`, os 4
   campos novos do estado e os dados de demonstração); a UI de áudio tem
   testes próprios (`src/test/audio-ui.test.tsx`).
+- **O contrato de imagem e vídeo** (já feito, sem parte visual): `uploadMedia`,
+  `waitUntilSettled` (a análise e a exportação correm em segundo plano; o
+  estado traz `status` e `progress`), `updateRegions`, `trackRegion`,
+  `mediaSourceUrl`, `mediaOutputUrl`, os tipos das regiões e um modo de
+  demonstração com uma fotografia e um vídeo falsos. Os testes de contrato
+  verificam os campos, os limites e o vocabulário das regiões contra o backend.
 - O trabalho do Lovable vem pelo branch `lovable/ui`, nunca diretamente para
   a `main`, e revê-se o diff antes de juntar.
 - Gestor de pacotes: a UI traz `bun.lock`; `npm install` funciona, mas não se

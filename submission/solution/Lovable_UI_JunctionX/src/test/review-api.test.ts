@@ -1,18 +1,30 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  approveVersion,
   audioContentTypeFor,
   censoredAudioUrl,
   contentTypeFor,
+  getCurrent,
   isAudioFile,
+  isMediaFile,
+  isVideoFile,
+  mediaContentTypeFor,
+  mediaOutputUrl,
+  mediaSourceUrl,
   parseError,
+  rejectVersion,
+  trackRegion,
+  updateRegions,
   uploadAudio,
   uploadDocument,
   uploadFile,
+  uploadMedia,
+  waitUntilSettled,
   wasSampleSubstituted,
 } from "@/lib/review/api";
 import { mockApprove, mockReject, mockUpload, mockUploadAudio, resetMock, SAMPLE_TRANSCRIPT } from "@/lib/review/mock";
-import { EMPTY_SNAPSHOT, MAX_AUDIO_BYTES } from "@/lib/review/types";
+import { EMPTY_SNAPSHOT, MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, type Snapshot } from "@/lib/review/types";
 
 describe("review contract", () => {
   beforeEach(() => resetMock());
@@ -176,4 +188,91 @@ describe("sample substitution notice", () => {
     resetMock();
     expect(wasSampleSubstituted()).toBe(false);
   }, 15000);
+});
+
+describe("image and video contract (demo mode)", () => {
+  beforeEach(() => resetMock());
+
+  const image = () => new File(["x"], "photo.JPG", { type: "" });
+  const video = () => new File(["x"], "clip.mov", { type: "video/quicktime" });
+
+  it("maps files to the content types the backend accepts", () => {
+    expect(mediaContentTypeFor(image())).toBe("image/jpeg");
+    expect(mediaContentTypeFor(new File(["x"], "a.png"))).toBe("image/png");
+    expect(mediaContentTypeFor(new File(["x"], "a.webp"))).toBe("image/webp");
+    expect(mediaContentTypeFor(video())).toBe("video/quicktime");
+    expect(mediaContentTypeFor(new File(["x"], "a.webm"))).toBe("video/webm");
+    expect(mediaContentTypeFor(new File(["x"], "a.pdf"))).toBeNull();
+    expect(isMediaFile(image())).toBe(true);
+    expect(isVideoFile(video())).toBe(true);
+    expect(isVideoFile(image())).toBe(false);
+  });
+
+  it("refuses unsupported, empty and oversize files before sending", async () => {
+    await expect(uploadMedia(new File(["x"], "a.gif"))).rejects.toMatchObject({ status: 415 });
+    await expect(uploadMedia(new File([], "a.png"))).rejects.toMatchObject({ status: 422 });
+    const big = new File(["x"], "big.png", { type: "image/png" });
+    Object.defineProperty(big, "size", { value: MAX_IMAGE_BYTES + 1 });
+    await expect(uploadMedia(big)).rejects.toMatchObject({ status: 413 });
+  });
+
+  it("starts processing, reports progress and settles with the regions", async () => {
+    const first = await uploadFile(image());
+    expect(first).toMatchObject({ kind: "image", status: "processing", mode: "multimodal", attempt: 1 });
+    expect(first.regions).toEqual([]);
+    const seen: Snapshot[] = [];
+    const done = await waitUntilSettled((s) => seen.push(s));
+    expect(done.status).toBe("ready");
+    expect(done.regions.map((r) => r.kind)).toEqual(["face", "identity_document", "plate"]);
+    expect(seen.some((s) => s.status === "processing" && s.progress.completed > 0)).toBe(true);
+    expect(mediaSourceUrl(done)).toMatch(/^data:image/);
+    expect(mediaOutputUrl(done)).toBeNull();
+  });
+
+  it("saves edited regions, rejecting a stale attempt or a bad interval", async () => {
+    await uploadMedia(image());
+    const ready = await waitUntilSettled(() => {});
+    const [first, ...rest] = ready.regions;
+    const saved = await updateRegions(1, rest);
+    expect(saved.regions).toHaveLength(2);
+    await expect(updateRegions(9, rest)).rejects.toMatchObject({ status: 409 });
+    await expect(updateRegions(1, [{ ...first!, start_ms: 5, end_ms: 1 }])).rejects.toMatchObject({ status: 422 });
+    await expect(updateRegions(1, [{ ...first!, end_ms: 100 }])).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("tracks a manual box through a video", async () => {
+    await uploadMedia(video());
+    const ready = await waitUntilSettled(() => {});
+    expect(ready.kind).toBe("video");
+    const manual = { ...ready.regions[0]!, source: "user" as const, start_ms: 1000, end_ms: 1000 };
+    const tracked = await trackRegion(1, 1000, manual);
+    expect(tracked.keyframes.length).toBeGreaterThan(1);
+    expect(tracked.end_ms).toBe(ready.media.duration_ms);
+    await expect(trackRegion(1, 99_999, manual)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("reject re-analyses with the next attempt and keeps the region count in the history", async () => {
+    await uploadMedia(image());
+    await waitUntilSettled(() => {});
+    const next = await rejectVersion(1, "", "also hide the sign");
+    expect(next).toMatchObject({ attempt: 2, status: "processing" });
+    expect(next.history).toEqual([{ attempt: 1, text: "", reason: "also hide the sign", regions: 3 }]);
+    expect((await waitUntilSettled(() => {})).status).toBe("ready");
+  });
+
+  it("approve exports in the background and then offers the download", async () => {
+    await uploadMedia(image());
+    await waitUntilSettled(() => {});
+    const exporting = await approveVersion();
+    expect(exporting.status).toBe("exporting");
+    expect(exporting.approved).toBe(false);
+    const done = await waitUntilSettled(() => {});
+    expect(done).toMatchObject({ status: "ready", approved: true });
+    expect(mediaOutputUrl(done)).not.toBeNull();
+    expect((await getCurrent()).approved).toBe(true);
+    // Editing the regions again withdraws the approval and the exported file.
+    const edited = await updateRegions(done.attempt, done.regions.slice(1));
+    expect(edited.approved).toBe(false);
+    expect(mediaOutputUrl(edited)).toBeNull();
+  });
 });
