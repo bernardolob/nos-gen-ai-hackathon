@@ -1585,14 +1585,16 @@ def _blur_face(image, box, cv2, np):
     box_w, box_h = right - left, bottom - top
     if min(box_w, box_h) < FACE_MIN_SIDE:
         return False
-    # Work on a crop a bit larger than the box: the ellipse is larger too.
-    pad_x = int(round(box_w * (FACE_ELLIPSE_MARGIN - 1) / 2)) + 2
-    pad_y = int(round(box_h * (FACE_ELLIPSE_MARGIN - 1) / 2)) + 2
+    short = min(box_w, box_h)
+    sigma = max(1.5, short * FACE_EDGE_SOFTNESS)
+    # Work on a crop larger than the box: the ellipse is larger too, plus its
+    # soft edge, and a crop that cut it would leave a flat edge to the blur.
+    pad_x = int(round(box_w * (FACE_ELLIPSE_MARGIN - 1) / 2 + 3 * sigma)) + 2
+    pad_y = int(round(box_h * (FACE_ELLIPSE_MARGIN - 1) / 2 + 3 * sigma)) + 2
     x0, y0 = max(0, left - pad_x), max(0, top - pad_y)
     x1, y1 = min(width, right + pad_x), min(height, bottom + pad_y)
     area = image[y0:y1, x0:x1]
     area_h, area_w = area.shape[:2]
-    short = min(box_w, box_h)
     cell = max(4.0, short / FACE_BLUR_CELLS)
     columns = max(1, int(math.ceil(area_w / cell)))
     rows = max(1, int(math.ceil(area_h / cell)))
@@ -1600,7 +1602,6 @@ def _blur_face(image, box, cv2, np):
     blurred = cv2.resize(
         coarse, (area_w, area_h), interpolation=cv2.INTER_CUBIC)
     blurred = cv2.GaussianBlur(blurred, (0, 0), cell * 0.5)
-    sigma = max(1.5, short * FACE_EDGE_SOFTNESS)
     mask = np.zeros((area_h, area_w), dtype=np.float32)
     center = (int(round((left + right) / 2 - x0)),
               int(round((top + bottom) / 2 - y0)))

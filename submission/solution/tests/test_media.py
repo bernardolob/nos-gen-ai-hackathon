@@ -725,9 +725,10 @@ def test_a_face_blur_follows_the_face_not_the_whole_box():
     # The corners of the box are outside the face ellipse: untouched.
     for row, column in ((32, 42), (32, 158), (168, 42), (168, 158)):
         assert np.array_equal(frame[row, column], original[row, column])
-    # And nothing outside the box (plus the small margin) changes.
-    assert np.array_equal(frame[:20], original[:20])
-    assert np.array_equal(frame[:, :25], original[:, :25])
+    # And nothing far outside the box changes (the ellipse is a little larger
+    # than the box, and its soft edge reaches a few pixels more).
+    assert np.array_equal(frame[:8], original[:8])
+    assert np.array_equal(frame[:, :18], original[:, :18])
 
 
 def test_a_face_blur_removes_the_fine_detail():

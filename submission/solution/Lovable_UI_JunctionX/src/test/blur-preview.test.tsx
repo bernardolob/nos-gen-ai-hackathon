@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Snapshot } from "@/lib/review/types";
@@ -78,5 +78,34 @@ describe("Blur preview", () => {
     expect(await screen.findByText(/Blur preview unavailable: Não foi possível/)).toBeInTheDocument();
     expect(screen.queryByTestId("blur-preview")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /approve version/i })).toBeEnabled();
+  });
+
+  it("hides the outlines and the labels while the blur is shown, except on the selected region", async () => {
+    previewMedia.mockResolvedValue("blob:redacted");
+    show(await readySnapshot("image"));
+    await screen.findByTestId("blur-preview");
+    const picture = screen.getByTestId("media-container");
+    // Nothing is outlined or labelled over the picture...
+    expect(within(picture).queryByText("Face")).not.toBeInTheDocument();
+    expect(within(picture).queryByText("ID document")).not.toBeInTheDocument();
+    expect(screen.getByTestId("box-r-face")).toHaveAttribute("data-outlined", "false");
+    expect(screen.getByTestId("box-r-id")).toHaveAttribute("data-outlined", "false");
+    // ...but a region can still be picked, and then it shows its outline and label.
+    fireEvent.click(screen.getByTestId("box-r-face"));
+    expect(within(picture).getByText("Face")).toBeInTheDocument();
+    expect(screen.getByTestId("box-r-face")).toHaveAttribute("data-outlined", "true");
+    expect(screen.getByTestId("box-r-id")).toHaveAttribute("data-outlined", "false");
+    expect(within(picture).queryByText("ID document")).not.toBeInTheDocument();
+  });
+
+  it("shows every outline again when the blur preview is off", async () => {
+    previewMedia.mockResolvedValue("blob:redacted");
+    show(await readySnapshot("image"));
+    await screen.findByTestId("blur-preview");
+    fireEvent.click(screen.getByRole("button", { name: /blur preview/i }));
+    await waitFor(() => expect(screen.queryByTestId("blur-preview")).not.toBeInTheDocument());
+    const picture = screen.getByTestId("media-container");
+    expect(within(picture).getByText("Face")).toBeInTheDocument();
+    expect(within(picture).getByText("ID document")).toBeInTheDocument();
   });
 });

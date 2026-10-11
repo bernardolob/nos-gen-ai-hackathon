@@ -177,7 +177,11 @@ interface está **em inglês** (decisão da equipa).
   resultado tal como a exportação o vai fazer: a UI pede-o ao backend com as
   regiões do rascunho, por isso as edições por guardar também se veem. Com o
   vídeo a tocar mostra só os contornos, e a tira de baixo fica para os
-  controlos do leitor. No modo de demonstração não existe (só o backend a
+  controlos do leitor. Com a pré-visualização ligada **não se vê nenhum
+  contorno nem etiqueta** por cima da imagem, só o resultado: uma região
+  continua a poder escolher-se (clicando onde está) e só então mostra o contorno,
+  a etiqueta e as pegas de redimensionar; ao desenhar uma região nova vêem-se
+  todos. Com o botão desligado vêem-se todos os contornos, como antes. No modo de demonstração não existe (só o backend a
   desenha). Sem ela, o desfoque só se via depois de aprovar e descarregar.
 - **Descarregar o PDF.** Num documento que veio de um PDF, "Download PDF" ao
   lado de "Download .txt" gera o PDF anonimizado da versão em revisão (ver

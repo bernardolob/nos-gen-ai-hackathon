@@ -378,6 +378,11 @@ export function MediaViewer({
     };
   }, [videoRef, isImage, onPlayingChange]);
 
+  // With the blur preview on, the picture is shown as the export will look:
+  // no dashed outlines or labels, except on the region being edited (and while
+  // drawing a new one). The regions stay clickable.
+  const quiet = Boolean(previewUrl) && !isDrawing;
+
   const renderedRegions = useMemo(() => {
     return activeRegions
       .map((region) => {
@@ -683,6 +688,7 @@ export function MediaViewer({
             if (!polygon || polygon.length === 0) return null;
             const isSelected = selectedRegionId === region.id;
             const catVar = getCategoryVar(region.category);
+            const outlined = !quiet || isSelected;
             const pointsStr = polygon.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
 
             return (
@@ -692,10 +698,12 @@ export function MediaViewer({
                 points={pointsStr}
                 strokeDasharray="4 2"
                 style={{
-                  stroke: catVar,
-                  fill: isSelected
-                    ? `color-mix(in srgb, ${catVar} 32%, transparent)`
-                    : `color-mix(in srgb, ${catVar} 16%, transparent)`,
+                  stroke: outlined ? catVar : "transparent",
+                  fill: !outlined
+                    ? "transparent"
+                    : isSelected
+                      ? `color-mix(in srgb, ${catVar} 32%, transparent)`
+                      : `color-mix(in srgb, ${catVar} 16%, transparent)`,
                 }}
                 className="pointer-events-auto cursor-pointer stroke-2 transition-colors"
                 onClick={(e) => {
@@ -725,8 +733,10 @@ export function MediaViewer({
           const isSelected = selectedRegionId === region.id;
           const catVar = getCategoryVar(region.category);
           const hasPolygon = Boolean(polygon && polygon.length > 0);
+          const outlined = !quiet || isSelected;
 
           if (hasPolygon) {
+            if (!outlined) return null;
             return (
               <div
                 key={`label-${region.id}`}
@@ -766,6 +776,7 @@ export function MediaViewer({
             <div
               key={`box-${region.id}`}
               data-testid={`box-${region.id}`}
+              data-outlined={outlined}
               onClick={(e) => {
                 e.stopPropagation();
                 onSelectRegion(region.id);
@@ -779,25 +790,29 @@ export function MediaViewer({
                 top: `${box.y * 100}%`,
                 width: `${box.width * 100}%`,
                 height: `${box.height * 100}%`,
-                borderColor: catVar,
-                backgroundColor: isSelected
-                  ? `color-mix(in srgb, ${catVar} 32%, transparent)`
-                  : `color-mix(in srgb, ${catVar} 16%, transparent)`,
+                borderColor: outlined ? catVar : "transparent",
+                backgroundColor: !outlined
+                  ? "transparent"
+                  : isSelected
+                    ? `color-mix(in srgb, ${catVar} 32%, transparent)`
+                    : `color-mix(in srgb, ${catVar} 16%, transparent)`,
                 boxShadow: isSelected ? `0 0 0 2px ${catVar}` : undefined,
                 cursor: isSelected ? "move" : "pointer",
               }}
               className="pointer-events-auto border-2 border-dashed transition-colors"
             >
-              <span
-                className="absolute -top-5 left-0 rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap pointer-events-none select-none"
-                style={{
-                  backgroundColor: "var(--background)",
-                  color: catVar,
-                  borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
-                }}
-              >
-                {formatKind(region.kind)}
-              </span>
+              {outlined && (
+                <span
+                  className="absolute -top-5 left-0 rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap pointer-events-none select-none"
+                  style={{
+                    backgroundColor: "var(--background)",
+                    color: catVar,
+                    borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
+                  }}
+                >
+                  {formatKind(region.kind)}
+                </span>
+              )}
 
               {/* 8 resize handles when selected */}
               {isSelected &&
