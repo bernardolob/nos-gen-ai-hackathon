@@ -43,7 +43,7 @@ Pontos do pipeline, pela ordem do fluxo:
 | 8 | Avaliação própria | **fora de âmbito** (decisão da equipa): as execuções comparam-se à mão |
 | | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), ligado ao Gemini pelo gateway (`src/gateway.py`), testado com o Gemini real |
 | | `submission/submission.txt` | refeito com o prompt atual e as instruções iniciais (`user_instructions.txt`), ver "A submissão" abaixo |
-| | `submission/prompt.txt` | preenchido: o pedido exato (prompt interno, documento e instruções iniciais); falta confirmar com a NOS que é isto que lá vai |
+| | `submission/prompt.txt` | preenchido: o pedido exato (prompt interno, documento e instruções iniciais); a NOS confirmou que é aceitável |
 | | Resposta do modelo em JSON obrigada | feito: um só esquema (`detection_schema.json`) para o Worker e para o SDK, ver [DETECTION.md](DETECTION.md) |
 | Extra | Saída em PDF | feito e testado com o Gemini real, ver [PDF.md](PDF.md) |
 | Extra | Imagem e vídeo | feito e testado com o Gemini real e um vídeo real, ver [MEDIA.md](MEDIA.md) |
@@ -317,9 +317,6 @@ linha de comandos, que não tem esse limite de 1500 mas sim o de 2000.
 
 ## Pontos em aberto
 
-- Confirmar com a NOS que `submission/prompt.txt` pode conter o pedido exato
-  (prompt interno, documento e instruções iniciais), uma vez que o documento
-  final é produzido pelo código a partir do JSON. Está preenchido assim.
 - Confirmar com a NOS onde entregar o relatório explicativo: o guia de
   submissão só pede `submission.txt`, `prompt.txt` e o código.
 - Decisões da taxonomia (exames e sintomas, sexo ou género, nome da

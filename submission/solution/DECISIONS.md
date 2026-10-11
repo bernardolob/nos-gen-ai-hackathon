@@ -15,8 +15,8 @@ escritos pelo código (`src/masking.py`).
   isolada e visível.
 - **Alternativa rejeitada:** pedir ao modelo o documento já anonimizado. É mais
   simples, mas o modelo reescreve, troca palavras e conta mal.
-- **Consequência:** a prompt devolve itens e não o documento final. Falta
-  confirmar com a NOS que `submission/prompt.txt` pode conter esta prompt.
+- **Consequência:** a prompt devolve itens e não o documento final. A NOS confirmou que
+  `submission/prompt.txt` pode conter esta prompt.
 
 ### 2. Linhas numeradas e procura na linha
 
