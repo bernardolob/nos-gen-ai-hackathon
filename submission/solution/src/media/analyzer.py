@@ -51,6 +51,8 @@ sensitive text itself. Images are labelled with a numeric frame_id. Inspect
 each frame independently: moving objects need new bounds in each frame, even
 when it is the same object. Never copy coordinates from a previous frame.
 box_2d is [ymin, xmin, ymax, xmax], using integers from 0 to 1000.
+Write every reason in English, as one short generic sentence (what kind of
+item it is and why it identifies a person), never quoting the sensitive text.
 """
 
 RESIDUAL_PROMPT = MEDIA_PROMPT + """

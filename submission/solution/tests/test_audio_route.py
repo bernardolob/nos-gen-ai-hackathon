@@ -277,7 +277,7 @@ def test_a_transcription_failure_is_a_clean_error(fake_redact):
     response = upload(client(scribe))
     assert response.status_code == 502
     assert "segredo" not in response.text
-    assert "transcrever" in response.json()["detail"]
+    assert "transcribed" in response.json()["detail"]
 
 
 def test_audio_without_speech_is_refused(fake_redact):
@@ -315,7 +315,7 @@ def test_an_alignment_failure_censors_nothing(fake_redact, monkeypatch):
     api = client(FakeScribe())
     response = upload(api)
     assert response.status_code == 502
-    assert "nada foi censurado" in response.json()["detail"]
+    assert "nothing was censored" in response.json()["detail"]
     assert api.get("/api/audio/current").status_code == 404
 
 
