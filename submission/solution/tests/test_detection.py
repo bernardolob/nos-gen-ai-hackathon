@@ -124,6 +124,26 @@ class BuildRequestTest(unittest.TestCase):
         self.assertIn('Wrong: "text": "Nome: Rui Pinto"', prompt)
         self.assertIn('Right: "text": "Rui Pinto"', prompt)
 
+    def test_prompt_uses_the_reidentification_principle(self):
+        """O critério é a reidentificação; as categorias só o ilustram."""
+        prompt = detection.load_internal_prompt()
+        self.assertIn("## Core principle: re-identification", prompt)
+        self.assertIn("identify a person", prompt)
+        self.assertIn("they are not its limits", prompt)
+
+    def test_prompt_makes_sensitivity_depend_on_context(self):
+        """Os mesmos termos só são sensíveis se descreverem uma pessoa."""
+        prompt = detection.load_internal_prompt()
+        self.assertIn("## Context decides", prompt)
+        self.assertIn("generic or institutional text", prompt)
+        self.assertIn("Combinations also count.", prompt)
+
+    def test_prompt_keeps_the_issuing_institution_visible(self):
+        """Como no exemplo oficial, o título e a instituição ficam."""
+        prompt = detection.load_internal_prompt()
+        self.assertIn("The institution that produced the document", prompt)
+        self.assertIn("Flag the sensitive fact itself", prompt)
+
     def test_prompt_forbids_null_fields(self):
         """A prompt proíbe campos null (reason e occurrence)."""
         prompt = detection.load_internal_prompt()
