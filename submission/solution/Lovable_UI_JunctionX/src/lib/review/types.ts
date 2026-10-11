@@ -125,6 +125,8 @@ export interface Snapshot {
   progress: Progress;
   warnings: number;
   issues: number;
+  /** Path of the anonymized PDF of the current version (documents that came from a PDF), or null. */
+  pdf_url: string | null;
   /** Path of the censored audio (e.g. "/api/audio/current"), or null. */
   audio_url: string | null;
   /** How many stretches of the audio were replaced by a sound (0 for text). */
@@ -152,6 +154,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   mode: "model",
   warnings: 0,
   issues: 0,
+  pdf_url: null,
   audio_url: null,
   audio_ranges: 0,
   audio_enabled: false,
