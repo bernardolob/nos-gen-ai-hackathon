@@ -151,7 +151,12 @@ def test_gemini_adapter_make_cached_generate(settings, fake_sdk):
     assert text == "Hi from Gemini!"
     gen_call = fake_sdk.models.generate_calls[0]
     assert gen_call["config"].response_mime_type == "application/json"
-    assert gen_call["config"].response_schema is None
+    # The detection schema is on by default, so the prompt needs no
+    # "output format" section.
+    schema = gen_call["config"].response_schema
+    assert schema is not None
+    assert "category" in schema["items"]["properties"]
+    assert "visible" in schema["items"]["properties"]
 
 
 def test_gemini_adapter_returns_none_without_env(monkeypatch):
