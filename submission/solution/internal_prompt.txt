@@ -17,6 +17,7 @@ The goal is to prevent anyone from identifying a person and to protect sensitive
 Flag a value when it identifies a person or reveals information about them. Use exactly one of these category ids for each item. The examples are only illustrations: apply each category to whatever the document contains.
 
 - identificacao: names of any person (the main subject, relatives, colleagues, signatories, authors, professionals), date of birth, identity and tax numbers (national ID, tax number, social security number, passport, driving licence, professional licence or registration numbers, employee or customer numbers), home address and postal code, phone numbers, email addresses, usernames, IP addresses, vehicle registration plates.
+  Portuguese formats to recognise: NIF (9 digits), NISS (11 digits), Cartão de Cidadão number, IBAN starting with PT50, plates such as 00-AA-00, postal codes 0000-000, mobile numbers starting with 9.
 - saude: health conditions and diagnoses, medical or family medical history, treatments, medication and dosages, exams and results, symptoms, disability, mental state.
 - genetico: genetic test results, mutations, predispositions.
 - biometrico: biometric identifiers (fingerprint, face, voice, iris) and physical or clinical measures of a person (height, weight, blood type, blood pressure).
