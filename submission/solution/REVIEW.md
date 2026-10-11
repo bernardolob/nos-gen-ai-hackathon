@@ -8,8 +8,9 @@ redimensionar e limitar no tempo regiões pixelizadas (ver
 ("Mascara também o nome do centro") ou menos ("Não mascares a informação
 médica"): o utilizador tem a palavra final. Essas observações passam a ser a
 **prompt do utilizador** (ver [DETECTION.md](DETECTION.md)) e a análise corre
-outra vez, gerando a tentativa seguinte. As versões rejeitadas ficam no
-histórico da sessão.
+outra vez, gerando a tentativa seguinte. O utilizador pode também escrever
+**instruções iniciais** ao enviar o ficheiro, num campo opcional, e elas valem
+logo na primeira versão. As versões rejeitadas ficam no histórico da sessão.
 
 ```
 texto:  UI <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)
@@ -25,8 +26,8 @@ de um: enviar um novo ficheiro substitui o anterior.
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`, até 10 MB), ou imagem/vídeo (ver [MEDIA.md](MEDIA.md)); começa a revisão |
-| `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta e censura; começa a revisão |
+| `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`, até 10 MB), ou imagem/vídeo (ver [MEDIA.md](MEDIA.md)); começa a revisão. Aceita o cabeçalho opcional `X-User-Instructions` (ver abaixo) |
+| `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta e censura; começa a revisão. Aceita o cabeçalho opcional `X-User-Instructions` |
 | `GET /api/audio/current` | o áudio **censurado** da versão atual (`audio/mp4`, sem cache); 404 se ainda não há. Nunca devolve o original |
 | `GET /api/current` | o estado (ver abaixo) |
 | `POST /api/reject` | `{attempt, text, reason}`: guarda a versão, junta `reason` às instruções e gera a seguinte |
@@ -44,9 +45,18 @@ O **estado** (o mesmo em todas as rotas, e o que a UI mostra) tem os campos
 
 Comportamento:
 
+- **Instruções iniciais.** O cabeçalho `X-User-Instructions` leva o texto que
+  o utilizador escreveu ao enviar o ficheiro, em percent-encoding (como o
+  `X-File-Name`), até **1500 caracteres** (mais dá 422 sem chamar o modelo, e
+  o texto nunca vem na mensagem de erro). Valem na primeira versão (texto,
+  áudio, imagem e vídeo) e **em todas as seguintes**: vão sempre no pedido,
+  em primeiro lugar, e nunca são descartadas. Enviar um novo ficheiro
+  esquece-as. Vão num cabeçalho, e não na URL, para não aparecerem no registo
+  de acessos. Em branco ou ausente, nada muda.
 - **As observações acumulam-se.** Cada pedido ao modelo leva todas as
-  observações anteriores, até 2000 caracteres (ficam as mais recentes). Uma
-  só observação com mais de 2000 dá erro 422.
+  observações anteriores, até 2000 caracteres no total, contando as
+  instruções iniciais (das observações ficam as mais recentes). Uma só
+  observação que, com as instruções iniciais, passe das 2000 dá erro 422.
 - **Uma rejeição que falha não muda nada.** Se o modelo, o gateway ou a
   censura do áudio falham, a resposta é 502 com uma mensagem fixa, a versão
   (e o seu áudio) continuam em revisão e a observação não fica guardada.
@@ -99,7 +109,7 @@ interface está **em inglês** (decisão da equipa).
 |---|---|
 | `src/routes/index.tsx` | a página e os estados (arranque, envio, revisão) |
 | `src/components/review/workspace.tsx` | o espaço de revisão: texto mascarado, contadores, aprovar/rejeitar, histórico, diálogo de feedback |
-| `src/components/anonymizer/steps.tsx` | só o `UploadStep` (escolher ou largar o ficheiro) |
+| `src/components/anonymizer/steps.tsx` | só o `UploadStep` (escolher ou largar o ficheiro e, opcionalmente, escrever as instruções iniciais) |
 | `src/lib/review/api.ts`, `types.ts`, `mock.ts` | a camada de serviço: **o contrato com o backend** |
 | `src/routes/__root.tsx`, `src/styles.css` | o esqueleto, o aviso de demonstração e os estilos |
 | `src/components/ui/` | componentes shadcn genéricos |
@@ -118,6 +128,12 @@ interface está **em inglês** (decisão da equipa).
   (`wasSampleSubstituted`, em `src/lib/review/mock.ts`) para ninguém confundir
   o exemplo com o resultado real. O mesmo vale sempre para o áudio em modo
   demonstração (a transcrição é sempre a mesma amostra).
+- **Instruções iniciais.** O `UploadStep` tem um campo opcional "Instructions",
+  com contador (1500 caracteres, `MAX_INSTRUCTIONS`). `uploadFile(file,
+  instructions)` envia-as no cabeçalho `X-User-Instructions`
+  (`instructionHeaders`, em `api.ts`) com o ficheiro, e a página limpa o campo
+  depois de enviar. Em modo demonstração o campo avisa que as instruções não
+  se aplicam. Testes em `src/test/initial-instructions.test.tsx`.
 - **A UI do áudio.** Aceita mp3, m4a e wav no mesmo envio dos documentos e,
   antes de enviar um áudio, mostra o **aviso de privacidade** (o áudio
   original vai para o ElevenLabs) e exige marcar "I understand". Se o
@@ -165,22 +181,78 @@ O arranque diz se o Gemini e o áudio estão ligados.
 
 ## Testes
 
-- Backend de texto: `tests/test_user_validation.py` (21 testes).
+- Backend de texto: `tests/test_user_validation.py` (29 testes).
 - Rota de áudio: `tests/test_audio_route.py`, com a transcrição, o modelo e o
-  `ffmpeg` falsos (26 testes). Um teste usa o `ffmpeg` a sério e só corre se
+  `ffmpeg` falsos (29 testes). Um teste usa o `ffmpeg` a sério e só corre se
   ele estiver instalado.
-- UI: `npx tsc --noEmit`, `npx vitest run` (24 testes: o contrato do áudio
-  e os componentes de áudio) e `npm run build`, na pasta da UI.
-- **Contrato backend-UI:** `tests/test_ui_contract.py` (7 testes) lê os tipos
+- UI: `npx tsc --noEmit`, `npx vitest run` (76 testes em 9 ficheiros) e
+  `npm run build`, na pasta da UI.
+- **Instruções iniciais:** `tests/test_initial_instructions.py` (30 testes:
+  fronteiras do tamanho, codificação, falhas, segurança e CORS), mais os
+  casos de texto em `test_user_validation.py`, de áudio em
+  `test_audio_route.py` e de imagem/vídeo em `test_media.py`. Na UI,
+  `src/test/initial-instructions.test.tsx` (o campo e o cabeçalho) e
+  `src/test/instructions-requests.test.ts` (o pedido real, com o `fetch`
+  falso, para documento, áudio, imagem e vídeo). Ver "Instruções iniciais:
+  como se verifica" abaixo.
+- **Contrato backend-UI:** `tests/test_ui_contract.py` (13 testes) lê os tipos
   e as chamadas em `src/lib/review/` e confirma que os campos do estado, do
   histórico, as rotas chamadas, os tipos de áudio e os limites coincidem com
   o backend. Se um lado mudar sem o outro, falha aqui.
+
+## Instruções iniciais: como se verifica
+
+O que os testes automáticos garantem:
+
+| Garantia | Onde |
+|---|---|
+| O limite de 1500 conta caracteres (não bytes) depois de tirar os espaços; 1501 dá 422 e o texto nunca volta no erro | `test_initial_instructions.py` |
+| Cabeçalho em branco, ausente ou com codificação inválida (`%ZZ`, `%E7`) não deita o servidor abaixo | idem |
+| Um pedido recusado, um tipo não suportado ou uma falha do modelo **não** mudam as instruções da sessão | idem |
+| Enviar um novo ficheiro, sem instruções, esquece as anteriores | idem |
+| As instruções não fecham nem abrem os blocos do pedido (`</user_instructions>`, `<document>`) | idem |
+| As instruções iniciais ficam sempre no pedido, em primeiro lugar, mesmo com muitas rejeições, e o total respeita as 2000 letras | idem |
+| O preflight de CORS aceita o cabeçalho a partir da UI e não o abre a outras origens | idem |
+| O cabeçalho sai no pedido real para documento, áudio, imagem e vídeo, codificado, nunca na URL nem no corpo | `instructions-requests.test.ts` |
+| O nome do cabeçalho e o limite de 1500 são os mesmos na UI e no backend, e o CORS aceita o cabeçalho | `test_ui_contract.py` |
+
+Os testes foram verificados por **mutação**: com quatro erros plantados no
+backend (a rejeição esquece a instrução, o CORS sem o cabeçalho, o limite
+desligado, um novo envio que herda as instruções antigas) e dois na UI (o
+áudio sem o cabeçalho, o texto na URL sem codificar) falham sempre.
+
+**Verificação manual de ponta a ponta** (feita no browser, contra o backend
+real e o Gemini). A repetir quando se mexer no envio:
+
+1. Arrancar o backend (`python src/user_validation.py`, com
+   `GEMINI_GATEWAY_URL` e `GEMINI_GATEWAY_ORIGIN`) e a UI com `VITE_API_URL`.
+2. Escolher um ficheiro, escrever no campo "Instructions" (com acentos e uma
+   quebra de linha) e carregar em "Analyze document".
+3. Ver no separador de rede que o `POST /api/document` leva o cabeçalho
+   `X-User-Instructions` codificado e que a URL não tem o texto.
+4. Confirmar que o resultado respeita a instrução e que o campo ficou vazio.
+5. Rejeitar com uma observação e confirmar que a versão 2 respeita **as
+   duas**: a observação e a instrução inicial.
+
+Resultado da última repetição: com "Mascara também a palavra Firebase. Não
+mascares o nome da faculdade", a versão 1 mascarou "Firebase" e deixou a
+faculdade visível; depois de rejeitar com "Mascara também a palavra Python",
+a versão 2 mascarou "Python" e continuou a mascarar "Firebase" e a deixar a
+faculdade visível.
+
+**O que isto não cobre:** o cumprimento das instruções depende do Gemini e
+não é determinístico; um pedido para deixar algo visível pode não ser
+cumprido à letra em todas as execuções. Não se testou em ecrã estreito nem em
+modo escuro.
 
 ## Verificado e não verificado
 
 Verificado:
 - O fluxo de texto de ponta a ponta, no browser, contra o backend real e o
   Gemini: enviar, rejeitar com um pedido (a tentativa 2 respeita-o), aprovar.
+- As instruções iniciais de ponta a ponta, no browser: o cabeçalho sai
+  codificado, a versão 1 respeita-as e a versão 2, depois de rejeitar,
+  respeita-as e à observação (ver "Instruções iniciais: como se verifica").
 - A rota de áudio com a transcrição falsa: estado, ficheiros temporários,
   uma só transcrição, falhas que não mudam nada, tipos e tamanhos.
 - A rota de áudio com o **`ffmpeg` real**: o troço da palavra censurada é

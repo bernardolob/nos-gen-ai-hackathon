@@ -164,6 +164,8 @@ export const EMPTY_SNAPSHOT: Snapshot = {
 };
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** Longest instruction text the backend accepts when a file is sent (characters). */
+export const MAX_INSTRUCTIONS = 1500;
 export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
