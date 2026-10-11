@@ -191,38 +191,38 @@
   background: transparent !important;
 }
 
-/* Light mode thumb: dark slate / charcoal pill */
+/* Light mode thumb: distinctly dark charcoal / graphite pill */
 .clean-scrollbar::-webkit-scrollbar-thumb,
 .document-paper > div[tabindex="0"]::-webkit-scrollbar-thumb {
-  background-color: oklch(0.2 0.005 285.8 / 30%);
+  background-color: oklch(0.18 0.005 285.8 / 65%);
   border-radius: 9999px;
   transition: background-color 0.25s ease;
 }
 
 .clean-scrollbar:hover::-webkit-scrollbar-thumb,
 .document-paper > div[tabindex="0"]:hover::-webkit-scrollbar-thumb {
-  background-color: oklch(0.2 0.005 285.8 / 50%);
+  background-color: oklch(0.141 0.005 285.8 / 80%);
 }
 
 .clean-scrollbar::-webkit-scrollbar-thumb:hover,
 .document-paper > div[tabindex="0"]::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.141 0.005 285.8 / 85%);
+  background-color: oklch(0.1 0.005 285.8 / 95%);
 }
 
-/* Dark mode thumb: crisp light pearl / white pill (matches dark mode buttons) */
+/* Dark mode thumb: distinctly bright / luminous white pill */
 .dark .clean-scrollbar::-webkit-scrollbar-thumb,
 .dark .document-paper > div[tabindex="0"]::-webkit-scrollbar-thumb {
-  background-color: oklch(0.985 0 0 / 28%);
+  background-color: oklch(0.99 0 0 / 70%);
 }
 
 .dark .clean-scrollbar:hover::-webkit-scrollbar-thumb,
 .dark .document-paper > div[tabindex="0"]:hover::-webkit-scrollbar-thumb {
-  background-color: oklch(0.985 0 0 / 50%);
+  background-color: oklch(1 0 0 / 85%);
 }
 
 .dark .clean-scrollbar::-webkit-scrollbar-thumb:hover,
 .dark .document-paper > div[tabindex="0"]::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.985 0 0 / 85%);
+  background-color: oklch(1 0 0 / 100%);
 }
 
 .clean-scrollbar::-webkit-scrollbar-button,
@@ -242,19 +242,19 @@
   .clean-scrollbar,
   .document-paper > div[tabindex="0"] {
     scrollbar-width: thin;
-    scrollbar-color: oklch(0.2 0.005 285.8 / 32%) transparent;
+    scrollbar-color: oklch(0.18 0.005 285.8 / 65%) transparent;
   }
   .clean-scrollbar:hover,
   .document-paper > div[tabindex="0"]:hover {
-    scrollbar-color: oklch(0.141 0.005 285.8 / 70%) transparent;
+    scrollbar-color: oklch(0.141 0.005 285.8 / 90%) transparent;
   }
   .dark .clean-scrollbar,
   .dark .document-paper > div[tabindex="0"] {
-    scrollbar-color: oklch(0.985 0 0 / 28%) transparent;
+    scrollbar-color: oklch(0.99 0 0 / 70%) transparent;
   }
   .dark .clean-scrollbar:hover,
   .dark .document-paper > div[tabindex="0"]:hover {
-    scrollbar-color: oklch(0.985 0 0 / 75%) transparent;
+    scrollbar-color: oklch(1 0 0 / 95%) transparent;
   }
 }
 
