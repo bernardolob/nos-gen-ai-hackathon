@@ -8,6 +8,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
@@ -169,6 +170,41 @@ def test_a_rejection_turns_the_feedback_into_a_new_censored_audio(
     second = api.get("/api/audio/current").content
     assert second != first
     assert fake_redact[-1]["ranges"] == [(0.5, 1.5), (1.8, 2.3)]
+
+
+def test_initial_instructions_censor_the_first_audio_version(fake_redact):
+    model = FakeModel()
+    api = client(FakeScribe(), model)
+    data = api.post("/api/audio", content=b"audio-de-teste", headers={
+        "Content-Type": "audio/mpeg",
+        "X-User-Instructions": quote("Mascara também a ação."),
+    }).json()
+    assert "Mascara também a ação." in model.requests[0]
+    assert data["text"] == "Contacto * para *."
+    assert data["audio_ranges"] == 2
+
+
+def test_initial_instructions_stay_after_an_audio_rejection(fake_redact):
+    model = FakeModel()
+    api = client(FakeScribe(), model)
+    api.post("/api/audio", content=b"audio-de-teste", headers={
+        "Content-Type": "audio/mpeg",
+        "X-User-Instructions": quote("Instrução inicial.")})
+    api.post("/api/reject", json={
+        "attempt": 1, "text": "", "reason": "Outra observação."})
+    assert "Instrução inicial." in model.requests[-1]
+    assert "Outra observação." in model.requests[-1]
+
+
+def test_audio_initial_instructions_over_the_limit_are_refused(fake_redact):
+    scribe = FakeScribe()
+    api = client(scribe, FakeModel())
+    response = api.post("/api/audio", content=b"audio-de-teste", headers={
+        "Content-Type": "audio/mpeg",
+        "X-User-Instructions": "x" * (
+            user_validation.MAX_INITIAL_INSTRUCTIONS + 1)})
+    assert response.status_code == 422
+    assert scribe.calls == 0
 
 
 def test_old_censored_files_are_deleted(fake_redact):
