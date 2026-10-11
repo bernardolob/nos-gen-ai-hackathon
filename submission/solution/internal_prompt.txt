@@ -57,31 +57,4 @@ When in doubt between flagging and not flagging, flag it, and set the confidence
 
 ## Output format
 
-Return ONLY a JSON array, with no text before or after it and no code fences. Each element has these fields:
-
-{
-  "line": the line number, as an integer,
-  "text": "exact text copied from that line",
-  "category": "one of the category ids above",
-  "reason": optional string, one short sentence in Portuguese, only when the confidence is "incerto" (rule 10),
-  "confidence": "certo | provavel | incerto",
-  "occurrence": optional integer, only as described in rule 5,
-  "visible": optional, true only as described in rule 9
-}
-
-Never write a key with the value null: leave the key out (rules 5 and 11).
-
-Example. For the lines:
-
-[3] Funcionário: Rui Pinto, NIF 123456789
-[4] Salário mensal: 2.350 EUR
-
-return:
-
-[
-  {"line": 3, "text": "Rui Pinto", "category": "identificacao", "confidence": "certo"},
-  {"line": 3, "text": "123456789", "category": "identificacao", "confidence": "certo"},
-  {"line": 4, "text": "2.350 EUR", "category": "financeiro", "confidence": "certo"}
-]
-
-If the document has no sensitive information, return [].
+Return the items as a JSON array in the order of rule 8, or [] when the document has nothing sensitive. The answer format is enforced separately; never write a key with the value null.
