@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Shield, Sparkles, Trash2, User } from "lucide-react";
+import { Crosshair, Loader2, Plus, Shield, Sparkles, Trash2, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type {
@@ -1096,7 +1096,7 @@ export function MediaRegionsList({
               </span>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {list.map((r) => {
                 const isSelected = selectedRegionId === r.id;
                 const rCatVar = getCategoryVar(r.category);
@@ -1116,156 +1116,143 @@ export function MediaRegionsList({
                           }
                         : undefined
                     }
-                    className={`cursor-pointer rounded-lg border p-3 transition-all ${
+                    className={`cursor-pointer rounded-lg border p-3 transition-all flex flex-col gap-2.5 ${
                       isSelected ? "" : "border-border bg-background hover:bg-muted/50"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {/* Line 1: kind label as plain text on the left, confidence badge on the right */}
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           className="inline-block h-2 w-2 rounded-full border border-dashed shrink-0"
                           style={{ backgroundColor: rCatVar, borderColor: rCatVar }}
                           aria-hidden
                         />
+                        <span className="text-xs font-semibold text-foreground truncate">
+                          {formatKind(r.kind)}
+                        </span>
+                      </div>
+                      <span
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium border border-dashed"
+                        style={{
+                          borderColor: `color-mix(in srgb, ${rCatVar} 45%, transparent)`,
+                          backgroundColor: `color-mix(in srgb, ${rCatVar} 12%, transparent)`,
+                          color: rCatVar,
+                        }}
+                      >
+                        {formatConfidence(r.confidence)}
+                      </span>
+                    </div>
 
-                        {/* Kind select */}
-                        {onUpdateRegion ? (
+                    {/* Line 2: reason text */}
+                    {r.reason ? (
+                      <p className="text-xs text-muted-foreground line-clamp-2 break-words leading-relaxed">
+                        {r.reason}
+                      </p>
+                    ) : null}
+
+                    {/* Line 3: kind select and category select stacked vertically (full width each, small visible label) */}
+                    {onUpdateRegion && (
+                      <div className="flex flex-col gap-2 pt-1 border-t border-border/50">
+                        <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+                          <span>Kind</span>
                           <select
                             value={r.kind}
                             aria-label="Region kind"
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => onUpdateRegion(r.id, { kind: e.target.value as RegionKind })}
-                            className="h-7 rounded border border-border bg-background px-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                            className="w-full h-8 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                           >
                             {kindOptions.map((k) => (
                               <option key={k} value={k}>
-                                Kind: {formatKind(k)}
+                                {"\u200B" + formatKind(k)}
                               </option>
                             ))}
                           </select>
-                        ) : (
-                          <span className="text-sm font-semibold text-foreground">
-                            {formatKind(r.kind)}
-                          </span>
-                        )}
+                        </label>
 
-                        {/* Category select */}
-                        {onUpdateRegion && (
+                        <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+                          <span>Category</span>
                           <select
                             value={r.category}
                             aria-label="Region category"
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => onUpdateRegion(r.id, { category: e.target.value })}
-                            className="h-7 max-w-[130px] truncate rounded border border-border bg-background px-1.5 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                            className="w-full h-8 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                           >
                             {categoryOptions.map((c) => (
                               <option key={c} value={c}>
-                                {c}: {categoryLabel(c)}
+                                {"\u200B" + categoryLabel(c)}
                               </option>
                             ))}
                           </select>
-                        )}
+                        </label>
                       </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span
-                          className="rounded px-1.5 py-0.5 text-[10px] font-medium border border-dashed"
-                          style={{
-                            borderColor: `color-mix(in srgb, ${rCatVar} 45%, transparent)`,
-                            backgroundColor: `color-mix(in srgb, ${rCatVar} 12%, transparent)`,
-                            color: rCatVar,
-                          }}
-                        >
-                          {formatConfidence(r.confidence)}
-                        </span>
-
-                        {onRemoveRegion && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Remove region"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRemoveRegion(r.id);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {r.reason && (
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                        {r.reason}
-                      </p>
                     )}
 
-                    {/* For video: start/end fields in seconds and track button */}
+                    {/* For image: Remove button */}
+                    {isAudioOrImage && onRemoveRegion && (
+                      <div className="flex items-center justify-end pt-0.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-label="Remove region"
+                          className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/40 gap-1.5"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveRegion(r.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span>Remove</span>
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* For video: Start and End number inputs side by side on one row, then Track and Remove buttons on a row below */}
                     {!isAudioOrImage && (
-                      <div className="mt-2.5 pt-2 border-t border-border/60 flex flex-col gap-1.5">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                          <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-1 text-muted-foreground">
-                              <span>Start</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max={durationMs ? (durationMs / 1000).toFixed(1) : undefined}
-                                value={(r.start_ms / 1000).toFixed(1)}
-                                aria-label="Start time in seconds"
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  if (!isNaN(val)) {
-                                    onUpdateRegion?.(r.id, { start_ms: Math.round(val * 1000) });
-                                  }
-                                }}
-                                className="w-14 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground tabular-nums"
-                              />
-                              <span>s</span>
-                            </label>
-
-                            <label className="flex items-center gap-1 text-muted-foreground">
-                              <span>End</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                max={durationMs ? (durationMs / 1000).toFixed(1) : undefined}
-                                value={(r.end_ms / 1000).toFixed(1)}
-                                aria-label="End time in seconds"
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  if (!isNaN(val)) {
-                                    onUpdateRegion?.(r.id, { end_ms: Math.round(val * 1000) });
-                                  }
-                                }}
-                                className="w-14 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground tabular-nums"
-                              />
-                              <span>s</span>
-                            </label>
-                          </div>
-
-                          {onTrackRegion && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-6 text-[11px] px-2 ml-auto"
-                              disabled={trackingRegionId === r.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onTrackRegion(r);
+                      <div className="flex flex-col gap-2 pt-1 border-t border-border/50">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+                            <span>Start (s)</span>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max={durationMs ? (durationMs / 1000).toFixed(1) : undefined}
+                              value={(r.start_ms / 1000).toFixed(1)}
+                              aria-label="Start time in seconds"
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (!isNaN(val)) {
+                                  onUpdateRegion?.(r.id, { start_ms: Math.round(val * 1000) });
+                                }
                               }}
-                              title="Follows the box forwards and backwards from the current frame"
-                            >
-                              Track
-                            </Button>
-                          )}
+                              className="w-full h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </label>
+
+                          <label className="flex flex-col gap-1 text-[11px] font-medium text-muted-foreground">
+                            <span>End (s)</span>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max={durationMs ? (durationMs / 1000).toFixed(1) : undefined}
+                              value={(r.end_ms / 1000).toFixed(1)}
+                              aria-label="End time in seconds"
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (!isNaN(val)) {
+                                  onUpdateRegion?.(r.id, { end_ms: Math.round(val * 1000) });
+                                }
+                              }}
+                              className="w-full h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </label>
                         </div>
 
                         {isInvalid && (
@@ -1273,19 +1260,61 @@ export function MediaRegionsList({
                             {validationErrors?.[r.id]}
                           </p>
                         )}
+
+                        <div className="flex items-center gap-2 pt-0.5">
+                          {onTrackRegion && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 flex-1 text-xs gap-1.5"
+                              disabled={trackingRegionId === r.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onTrackRegion(r);
+                              }}
+                              title="Follows the box forwards and backwards from the current frame"
+                            >
+                              {trackingRegionId === r.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Crosshair className="h-3.5 w-3.5" />
+                              )}
+                              Track
+                            </Button>
+                          )}
+
+                          {onRemoveRegion && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              aria-label="Remove region"
+                              className="h-8 px-2.5 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/40 gap-1.5"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemoveRegion(r.id);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Remove</span>
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     )}
 
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span className="flex items-center gap-1">
+                    {/* Bottom: source (AI, Face detector, You) */}
+                    <div className="pt-1.5 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                      <span className="flex items-center gap-1.5">
                         {r.source === "gemini" ? (
-                          <Sparkles className="h-3 w-3 text-brand" />
+                          <Sparkles className="h-3 w-3 text-brand shrink-0" />
                         ) : r.source === "user" ? (
-                          <User className="h-3 w-3" />
+                          <User className="h-3 w-3 shrink-0" />
                         ) : (
-                          <Shield className="h-3 w-3" />
+                          <Shield className="h-3 w-3 shrink-0" />
                         )}
-                        {formatSource(r.source)}
+                        <span>{formatSource(r.source)}</span>
                       </span>
 
                       {isAudioOrImage && r.end_ms > 0 && (
