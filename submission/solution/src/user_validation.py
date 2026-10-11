@@ -762,8 +762,48 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
     return app
 
 
+def _load_env_file(path: Path) -> None:
+    """Carrega variáveis de um ficheiro .env se ainda não existirem."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def _ensure_media_tools_in_path() -> None:
+    """Garante que binários do ffmpeg/ffprobe do WinGet são encontrados."""
+    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+        return
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if not local_app_data:
+        return
+    packages = Path(local_app_data) / "Microsoft" / "WinGet" / "Packages"
+    if not packages.is_dir():
+        return
+    for bin_dir in packages.glob("**/ffmpeg-*-full_build/bin"):
+        if (bin_dir / "ffprobe.exe").is_file():
+            os.environ["PATH"] = (
+                str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+            )
+            return
+
+
 def main():
     import uvicorn
+    _ensure_media_tools_in_path()
+    for candidate in (
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parent / ".env",
+        Path(__file__).resolve().parent.parent / ".env",
+    ):
+        _load_env_file(candidate)
     try:
         scribe = scribe_from_env()
     except ConfigurationError:
