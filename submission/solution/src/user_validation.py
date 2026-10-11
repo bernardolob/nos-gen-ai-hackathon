@@ -97,6 +97,12 @@ INSTRUCTIONS_HEADER = (
     "O revisor rejeitou a versão anterior e pediu o seguinte (os pedidos mais "
     "recentes prevalecem):"
 )
+# A instrução inicial fica sempre no pedido; o resto das 2000 letras é para
+# as observações das rejeições.
+MAX_INITIAL_INSTRUCTIONS = 1500
+INITIAL_TOO_LONG = (
+    "As instruções iniciais são demasiado compridas (máximo %d caracteres)."
+    % MAX_INITIAL_INSTRUCTIONS)
 MODEL_FAILED = "Não foi possível gerar a nova versão. Tente outra vez."
 AUDIO_OFF = ("A censura de áudio não está disponível: falta a "
              "ELEVENLABS_API_KEY ou o ffmpeg.")
@@ -184,6 +190,7 @@ class ReviewSession:
         self.text = ""
         self.history = []
         self.reasons = []
+        self.initial = None
         self.result = None
         self.approved = False
 
@@ -206,19 +213,22 @@ class ReviewSession:
                     # decoder on Windows. Its result is discarded by job id.
                     pass
 
-    def load(self, lines, pdf=None):
+    def load(self, lines, initial=None, pdf=None):
         """Começa uma revisão nova com o documento dado.
 
+        ``initial`` são as instruções que o utilizador escreveu ao enviar o
+        ficheiro; valem na primeira versão e em todas as seguintes.
         ``pdf`` são os bytes do PDF de onde vêm as linhas, para se poder
         devolver o PDF anonimizado (ver ``pdf_path``).
         """
         if not any(line.strip() for line in lines):
             raise ReviewError(422, "O documento não tem texto.")
         with self.lock:
-            result = self._run(lines, [])
+            result = self._run(lines, [], initial)
             self.job_number += 1
             self._clear_files()
             self._reset()
+            self.initial = initial
             self.lines = lines
             if pdf is not None:
                 source = Path(self.storage.name) / "source.pdf"
@@ -246,7 +256,7 @@ class ReviewSession:
                 raise ReviewError(502, PDF_FAILED) from None
             return out
 
-    def load_audio(self, body, suffix):
+    def load_audio(self, body, suffix, initial=None):
         """Começa uma revisão nova com um áudio.
 
         Transcreve **uma só vez** (o áudio vai para o ElevenLabs); as
@@ -263,10 +273,11 @@ class ReviewSession:
             lines, times = self._transcribe(original)
             with self.lock:
                 result, censored = self._run_audio(
-                    original, lines, times, [], folder, 1)
+                    original, lines, times, [], folder, 1, initial)
                 self.job_number += 1
                 self._clear_files()
                 self._reset()
+                self.initial = initial
                 self.kind = "audio"
                 self._folder = folder
                 self._original = original
@@ -285,7 +296,7 @@ class ReviewSession:
                 raise ReviewError(404, "Ainda não há áudio censurado.")
             return self._censored
 
-    def load_media(self, body, content_type, filename="media"):
+    def load_media(self, body, content_type, filename="media", initial=None):
         """Start fail-closed media analysis in a background thread."""
 
         if self.media_processor is None:
@@ -304,6 +315,7 @@ class ReviewSession:
             job = self.job_number
             self._clear_files()
             self._reset()
+            self.initial = initial
             self.kind = kind
             self.status = "processing"
             self.content_type = content_type.split(";", 1)[0].lower()
@@ -320,7 +332,8 @@ class ReviewSession:
             }
         thread = threading.Thread(
             target=self._analyze_media,
-            args=(job, source, self.content_type, None), daemon=True)
+            args=(job, source, self.content_type,
+                  build_instructions([], initial)), daemon=True)
         thread.start()
 
     def _analyze_media(self, job, source, content_type, instructions):
@@ -422,9 +435,9 @@ class ReviewSession:
             if self.kind == "audio":
                 result, censored = self._run_audio(
                     self._original, self.lines, self._word_times, reasons,
-                    self._folder, self.attempt + 1)
+                    self._folder, self.attempt + 1, self.initial)
             else:
-                result = self._run(self.lines, reasons)
+                result = self._run(self.lines, reasons, self.initial)
             self.history.append(RejectedVersion(
                 attempt=self.attempt, text=self.text,
                 reason=version.reason.strip()))
@@ -444,7 +457,7 @@ class ReviewSession:
             reasons = list(self.reasons)
             if version.reason.strip():
                 reasons.append(version.reason.strip())
-            instructions = build_instructions(reasons)
+            instructions = build_instructions(reasons, self.initial)
             self.history.append(RejectedVersion(
                 attempt=self.attempt, reason=version.reason.strip(),
                 regions=len(self.regions)))
@@ -559,8 +572,8 @@ class ReviewSession:
         self.result = result
         self.text = "\n".join(result["masked"])
 
-    def _run(self, lines, reasons):
-        instructions = build_instructions(reasons)
+    def _run(self, lines, reasons, initial=None):
+        instructions = build_instructions(reasons, initial)
         try:
             return pipeline.run(lines, self.generate, instructions)
         except (detection.DetectionError, gateway.GatewayError):
@@ -577,9 +590,10 @@ class ReviewSession:
             raise ReviewError(422, NO_SPEECH)
         return lines, times
 
-    def _run_audio(self, original, lines, times, reasons, folder, number):
+    def _run_audio(self, original, lines, times, reasons, folder, number,
+                   initial=None):
         """Deteta e censura. Devolve ``(resultado, áudio_censurado)``."""
-        instructions = build_instructions(reasons)
+        instructions = build_instructions(reasons, initial)
         try:
             result = audio_pipeline.run_transcript(
                 lines, times, self.generate, instructions)
@@ -595,26 +609,51 @@ class ReviewSession:
         return result, out
 
 
-def build_instructions(reasons):
-    """Junta as observações do revisor num texto para o modelo.
+def build_instructions(reasons, initial=None):
+    """Junta as instruções do utilizador num texto para o modelo.
 
-    Cabem no máximo ``pipeline.MAX_INSTRUCTIONS`` caracteres: se não couberem
-    todas, ficam as mais recentes. Devolve ``None`` sem observações.
+    ``initial`` é o que o utilizador escreveu ao enviar o ficheiro e vai
+    sempre, em primeiro lugar. Depois vêm as observações do revisor
+    (``reasons``): cabem no máximo ``pipeline.MAX_INSTRUCTIONS`` caracteres no
+    total e, se não couberem todas, ficam as mais recentes. Devolve ``None``
+    sem nenhuma das duas.
     """
     kept = []
     size = len(INSTRUCTIONS_HEADER)
+    if initial:
+        size += len(initial) + 2
     for reason in reversed(reasons):
         size += len(reason) + 3
         if size > pipeline.MAX_INSTRUCTIONS:
             if not kept:
                 raise ReviewError(
-                    422, "As observações são demasiado compridas "
-                    "(máximo %d caracteres)." % pipeline.MAX_INSTRUCTIONS)
+                    422, "As observações são demasiado compridas para as "
+                    "instruções iniciais e o limite de %d caracteres."
+                    % pipeline.MAX_INSTRUCTIONS)
             break
         kept.append(reason)
-    if not kept:
+    parts = []
+    if initial:
+        parts.append(initial)
+    if kept:
+        parts.append("\n- ".join(
+            [INSTRUCTIONS_HEADER] + list(reversed(kept))))
+    return "\n\n".join(parts) or None
+
+
+def initial_instructions(header):
+    """As instruções iniciais do cabeçalho ``X-User-Instructions``.
+
+    Vêm em percent-encoding (como o nome do ficheiro) para caberem num
+    cabeçalho. Devolve ``None`` se faltarem ou estiverem em branco; levanta
+    ``ReviewError`` (422) se passarem de ``MAX_INITIAL_INSTRUCTIONS``.
+    """
+    text = unquote(header or "").strip()
+    if not text:
         return None
-    return "\n- ".join([INSTRUCTIONS_HEADER] + list(reversed(kept)))
+    if len(text) > MAX_INITIAL_INSTRUCTIONS:
+        raise ReviewError(422, INITIAL_TOO_LONG)
+    return text
 
 
 def lines_from_upload(content_type, body):
@@ -694,7 +733,8 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
         CORSMiddleware,
         allow_origins=origins or allowed_origins(),
         allow_methods=["GET", "POST", "PUT"],
-        allow_headers=["Content-Type", "X-File-Name"],
+        allow_headers=[
+            "Content-Type", "X-File-Name", "X-User-Instructions"],
     )
     app.state.session = session
     atexit.register(session.close)
@@ -706,25 +746,29 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
 
     @app.post("/api/document")
     async def upload(request: Request):
+        initial = initial_instructions(
+            request.headers.get("x-user-instructions"))
         body = await request.body()
         content_type = request.headers.get("content-type", "")
         if supported_media_kind(content_type):
             session.load_media(
                 body, content_type,
-                request.headers.get("x-file-name", "media"))
+                request.headers.get("x-file-name", "media"), initial)
             return session.snapshot()
         lines = lines_from_upload(content_type, body)
         is_pdf = content_type.split(";")[0].strip().lower() == (
             "application/pdf")
         await run_in_threadpool(
-            session.load, lines, body if is_pdf else None)
+            session.load, lines, initial, body if is_pdf else None)
         return session.snapshot()
 
     @app.post("/api/audio")
     async def upload_audio(request: Request):
+        initial = initial_instructions(
+            request.headers.get("x-user-instructions"))
         body = await request.body()
         suffix = audio_suffix(request.headers.get("content-type", ""), body)
-        await run_in_threadpool(session.load_audio, body, suffix)
+        await run_in_threadpool(session.load_audio, body, suffix, initial)
         return session.snapshot()
 
     @app.get("/api/pdf/current")

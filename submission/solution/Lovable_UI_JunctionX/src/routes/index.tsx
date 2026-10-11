@@ -45,6 +45,7 @@ function Index() {
   const [initialising, setInitialising] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [instructions, setInstructions] = useState("");
   const [wantsNew, setWantsNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
@@ -90,7 +91,7 @@ function Index() {
     setError(null);
     setProgress(null);
     try {
-      let result = await uploadFile(file);
+      let result = await uploadFile(file, instructions);
       if (isWorking(result)) {
         if (result.progress) setProgress(result.progress);
         result = await waitUntilSettled((s) => {
@@ -103,6 +104,7 @@ function Index() {
       setSnapshot(result);
       setSampleNotice(isMockMode && wasSampleSubstituted());
       setFile(null);
+      setInstructions("");
       setWantsNew(false);
     } catch (e) {
       setError(message(e));
@@ -219,6 +221,8 @@ function Index() {
                   <UploadStep
                     file={file}
                     onFile={(f) => { setFile(f); setError(null); }}
+                    instructions={instructions}
+                    onInstructions={setInstructions}
                     onAnalyze={upload}
                     loading={uploading}
                     status={

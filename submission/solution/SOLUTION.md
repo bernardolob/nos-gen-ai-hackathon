@@ -253,10 +253,13 @@ sempre mascaradas. Sem as instruções, o mesmo documento deu entre 182 e 204
 `*` e deixava anos como "desde 2018" visíveis. O modelo não é determinístico:
 outra execução pode diferir em poucas palavras (por exemplo "mulher").
 
-**Limites:** o backend de revisão arranca a primeira versão sem instruções (só
-as rejeições seguintes as levam), por isso esta submissão sai da linha de
-comandos e não da UI. O pedido real ao gateway leva ainda o esquema JSON de
-resposta (`response_format`), que não está em `prompt.txt`.
+**Na UI:** as mesmas instruções podem ser coladas no campo "Instructions" ao
+enviar o ficheiro (o backend aceita-as no cabeçalho `X-User-Instructions`, até
+1500 caracteres; o texto do ficheiro tem 740). Esta submissão foi gerada pela
+linha de comandos, que não tem esse limite de 1500 mas sim o de 2000.
+
+**Limites:** o pedido real ao gateway leva ainda o esquema JSON de resposta
+(`response_format`), que não está em `prompt.txt`.
 
 ## Pontos em aberto
 

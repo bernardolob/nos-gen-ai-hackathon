@@ -15,6 +15,7 @@ import {
   ApiError,
   MAX_AUDIO_BYTES,
   MAX_IMAGE_BYTES,
+  MAX_INSTRUCTIONS,
   MAX_UPLOAD_BYTES,
   MAX_VIDEO_BYTES,
   type MediaRegion,
@@ -118,7 +119,21 @@ export async function getCurrent(): Promise<Snapshot> {
   return request("/api/current");
 }
 
-export async function uploadDocument(file: File): Promise<Snapshot> {
+/**
+ * The optional instructions the user typed when choosing the file, as the
+ * `X-User-Instructions` header (percent-encoded, like `X-File-Name`). They
+ * apply to the first version and to every later one. Nothing is sent when blank.
+ */
+export function instructionHeaders(instructions?: string): Record<string, string> {
+  const text = instructions?.trim();
+  if (!text) return {};
+  if (text.length > MAX_INSTRUCTIONS) {
+    throw new ApiError(422, `The instructions are longer than ${MAX_INSTRUCTIONS} characters.`);
+  }
+  return { "X-User-Instructions": encodeURIComponent(text) };
+}
+
+export async function uploadDocument(file: File, instructions?: string): Promise<Snapshot> {
   const type = contentTypeFor(file);
   if (!type) throw new ApiError(415, "Unsupported format. Use PDF or text.");
   if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(413, "The document is larger than 10 MB.");
@@ -127,7 +142,11 @@ export async function uploadDocument(file: File): Promise<Snapshot> {
     if (type === "text/plain") return mockUpload(await file.text());
     return mockUpload(SAMPLE_TEXT, true, true);
   }
-  return request("/api/document", { method: "POST", headers: { "Content-Type": type }, body: file });
+  return request("/api/document", {
+    method: "POST",
+    headers: { "Content-Type": type, ...instructionHeaders(instructions) },
+    body: file,
+  });
 }
 
 /**
@@ -135,7 +154,7 @@ export async function uploadDocument(file: File): Promise<Snapshot> {
  * with the sensitive data, goes to ElevenLabs), masks the transcript and
  * replaces each masked word in the audio with a sound.
  */
-export async function uploadAudio(file: File): Promise<Snapshot> {
+export async function uploadAudio(file: File, instructions?: string): Promise<Snapshot> {
   const type = audioContentTypeFor(file);
   if (!type) throw new ApiError(415, "Unsupported format. Use mp3, m4a or wav.");
   if (file.size > MAX_AUDIO_BYTES) throw new ApiError(413, "The audio is larger than 25 MB.");
@@ -144,7 +163,11 @@ export async function uploadAudio(file: File): Promise<Snapshot> {
     await wait(2500);
     return mockUploadAudio();
   }
-  return request("/api/audio", { method: "POST", headers: { "Content-Type": type }, body: file });
+  return request("/api/audio", {
+    method: "POST",
+    headers: { "Content-Type": type, ...instructionHeaders(instructions) },
+    body: file,
+  });
 }
 
 /**
@@ -153,7 +176,7 @@ export async function uploadAudio(file: File): Promise<Snapshot> {
  * `waitUntilSettled` to follow its `progress` until it is "ready" or "failed".
  * Sampled frames go to a third-party AI model (Gemini).
  */
-export async function uploadMedia(file: File): Promise<Snapshot> {
+export async function uploadMedia(file: File, instructions?: string): Promise<Snapshot> {
   const type = mediaContentTypeFor(file);
   if (!type) throw new ApiError(415, "Unsupported format. Use a JPEG, PNG or WebP image or an MP4, MOV or WebM video.");
   const limit = type.startsWith("video/") ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
@@ -167,15 +190,22 @@ export async function uploadMedia(file: File): Promise<Snapshot> {
   }
   return request("/api/document", {
     method: "POST",
-    headers: { "Content-Type": type, "X-File-Name": encodeURIComponent(file.name) },
+    headers: {
+      "Content-Type": type,
+      "X-File-Name": encodeURIComponent(file.name),
+      ...instructionHeaders(instructions),
+    },
     body: file,
   });
 }
 
-/** Sends a document, an audio file, an image or a video, whichever it is. */
-export function uploadFile(file: File): Promise<Snapshot> {
-  if (isMediaFile(file)) return uploadMedia(file);
-  return isAudioFile(file) ? uploadAudio(file) : uploadDocument(file);
+/**
+ * Sends a document, an audio file, an image or a video, whichever it is,
+ * with the optional instructions the user typed for this file.
+ */
+export function uploadFile(file: File, instructions?: string): Promise<Snapshot> {
+  if (isMediaFile(file)) return uploadMedia(file, instructions);
+  return isAudioFile(file) ? uploadAudio(file, instructions) : uploadDocument(file, instructions);
 }
 
 /** True while the backend is still working in the background (image/video analysis or export). */

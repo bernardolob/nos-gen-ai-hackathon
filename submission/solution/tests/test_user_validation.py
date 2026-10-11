@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
@@ -120,6 +121,82 @@ def test_reject_turns_the_observations_into_instructions():
     assert data["text"].split("\n")[2] == "Cidade: *"
     assert "Mascara também a cidade." in model.requests[-1]
     assert "<user_instructions>" in model.requests[-1]
+
+
+def upload_with(api, instructions, text=DOCUMENT):
+    return api.post("/api/document", content=text.encode("utf-8"), headers={
+        "Content-Type": "text/plain",
+        "X-User-Instructions": quote(instructions)})
+
+
+def test_initial_instructions_reach_the_first_version():
+    model = FakeModel(item(3, "Porto"))
+    response = upload_with(client(model), "Mascara também a cidade (ç).")
+    assert response.status_code == 200
+    assert "<user_instructions>" in model.requests[0]
+    assert "Mascara também a cidade (ç)." in model.requests[0]
+
+
+def test_without_the_header_nothing_changes():
+    model = FakeModel(item(1, "Ana Silva"))
+    upload(client(model))
+    assert "<user_instructions>" not in model.requests[0]
+
+
+def test_blank_initial_instructions_are_ignored():
+    model = FakeModel(item(1, "Ana Silva"))
+    assert upload_with(client(model), "  \n ").status_code == 200
+    assert "<user_instructions>" not in model.requests[0]
+
+
+def test_initial_instructions_over_the_limit_are_refused():
+    model = FakeModel()
+    too_long = "x" * (user_validation.MAX_INITIAL_INSTRUCTIONS + 1)
+    response = upload_with(client(model), too_long)
+    assert response.status_code == 422
+    assert response.json()["detail"] == user_validation.INITIAL_TOO_LONG
+    assert model.requests == []
+    assert too_long not in response.text
+
+
+def test_initial_instructions_at_the_limit_fit_the_header():
+    model = FakeModel()
+    text = "ç" * user_validation.MAX_INITIAL_INSTRUCTIONS
+    assert upload_with(client(model), text).status_code == 200
+
+
+def test_initial_instructions_stay_after_a_rejection():
+    model = FakeModel(item(3, "Porto"))
+    api = client(model)
+    upload_with(api, "Trata o Porto como sensível.")
+    api.post("/api/reject", json={
+        "attempt": 1, "text": "x", "reason": "Mascara também a cidade."})
+    request = model.requests[-1]
+    assert "Trata o Porto como sensível." in request
+    assert "Mascara também a cidade." in request
+    assert request.index("Trata o Porto") < request.index("Mascara também")
+
+
+def test_a_new_document_forgets_the_previous_initial_instructions():
+    model = FakeModel()
+    api = client(model)
+    upload_with(api, "Instrução antiga.")
+    upload(api)
+    assert "Instrução antiga." not in model.requests[-1]
+    api.post("/api/reject", json={
+        "attempt": 1, "text": "x", "reason": "Outra observação."})
+    assert "Instrução antiga." not in model.requests[-1]
+
+
+def test_a_long_rejection_still_keeps_the_initial_instructions():
+    model = FakeModel()
+    api = client(model)
+    upload_with(api, "Instrução inicial.")
+    for number in range(1, 8):
+        api.post("/api/reject", json={
+            "attempt": number, "text": "x", "reason": "r%d " % number * 90})
+    assert "Instrução inicial." in model.requests[-1]
+    assert len(model.requests[-1]) < 3000 + len(DOCUMENT) + 200
 
 
 def test_the_rejected_version_is_kept_as_it_was():
