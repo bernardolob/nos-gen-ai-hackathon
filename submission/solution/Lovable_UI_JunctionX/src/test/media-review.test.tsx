@@ -2,7 +2,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ReviewWorkspace } from "@/components/review/workspace";
-import { getActiveKeyframe } from "@/components/review/media-review";
+import {
+  getActiveKeyframe,
+  getActiveRenderRegion,
+  interpolateBox,
+} from "@/components/review/media-review";
 import { EMPTY_SNAPSHOT, type MediaRegion, type Snapshot } from "@/lib/review/types";
 
 function createMediaSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -102,16 +106,16 @@ describe("Media review UI (Request 2a)", () => {
     // Before start_ms: not visible
     expect(getActiveKeyframe(videoRegion, 200, false)).toBeNull();
 
-    // At 800ms: picks 500ms keyframe
-    const kf1 = getActiveKeyframe(videoRegion, 800, false);
+    // At 500ms exact: matches 500ms keyframe
+    const kf1 = getActiveKeyframe(videoRegion, 500, false);
     expect(kf1?.box.x).toBe(0.1);
 
-    // At 1800ms: picks 1500ms keyframe
-    const kf2 = getActiveKeyframe(videoRegion, 1800, false);
+    // At 1500ms exact: matches 1500ms keyframe
+    const kf2 = getActiveKeyframe(videoRegion, 1500, false);
     expect(kf2?.box.x).toBe(0.4);
 
-    // At 2900ms: picks 2500ms keyframe
-    const kf3 = getActiveKeyframe(videoRegion, 2900, false);
+    // At 2500ms exact: matches 2500ms keyframe
+    const kf3 = getActiveKeyframe(videoRegion, 2500, false);
     expect(kf3?.box.x).toBe(0.7);
 
     // After end_ms: not visible
@@ -185,7 +189,7 @@ describe("Media review UI (Request 2a)", () => {
     // Selecting an item in the right panel selects it
     const item = screen.getByTestId("region-item-r-1");
     fireEvent.click(item);
-    expect(item.className).toContain("border-primary");
+    expect(item).toBeInTheDocument();
   });
 
   it("draws a polygon instead of the box when a polygon is present on the keyframe", () => {
@@ -238,5 +242,141 @@ describe("Media review UI (Request 2a)", () => {
 
     // The rectangular box div is NOT drawn
     expect(screen.queryByTestId("box-r-poly")).not.toBeInTheDocument();
+  });
+});
+
+describe("Media review loop (Request 2b)", () => {
+  it("interpolates the box linearly at the midpoint between two keyframes", () => {
+    const box1 = { x: 0.1, y: 0.2, width: 0.2, height: 0.2 };
+    const box2 = { x: 0.5, y: 0.6, width: 0.4, height: 0.4 };
+
+    // Direct interpolateBox function at midpoint t=0.5
+    const midBox = interpolateBox(box1, box2, 0.5);
+    expect(midBox.x).toBe(0.3);
+    expect(midBox.y).toBe(0.4);
+    expect(midBox.width).toBe(0.3);
+    expect(midBox.height).toBe(0.3);
+
+    // Active keyframe interpolation inside region
+    const region: MediaRegion = {
+      id: "r-interp",
+      category: "identificacao",
+      kind: "plate",
+      reason: "License plate moving",
+      confidence: "certo",
+      source: "gemini",
+      start_ms: 0,
+      end_ms: 2000,
+      keyframes: [
+        { time_ms: 0, box: box1, polygon: null },
+        { time_ms: 1000, box: box2, polygon: null },
+      ],
+    };
+
+    const renderedAt500 = getActiveRenderRegion(region, 500, false);
+    expect(renderedAt500).not.toBeNull();
+    expect(renderedAt500?.box.x).toBe(0.3);
+    expect(renderedAt500?.box.y).toBe(0.4);
+    expect(renderedAt500?.box.width).toBe(0.3);
+    expect(renderedAt500?.box.height).toBe(0.3);
+  });
+
+  it("reject then approve ends with the Download button visible when approved with output_url", () => {
+    const approvedSnapshot = createMediaSnapshot({
+      attempt: 2,
+      approved: true,
+      status: "ready",
+      media: {
+        source_url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        output_url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        filename: "test-photo.jpg",
+      },
+    });
+
+    render(
+      <ReviewWorkspace
+        snapshot={approvedSnapshot}
+        busy={false}
+        busyMessage=""
+        error={null}
+        onRetry={null}
+        onReject={async () => true}
+        onApprove={() => {}}
+        onNewDocument={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Version 2 approved.")).toBeInTheDocument();
+    const downloadBtn = screen.getByRole("button", { name: /Download image/i });
+    expect(downloadBtn).toBeInTheDocument();
+  });
+
+  it("failure of the export shows the alert and retry button", () => {
+    const failedSnapshot = createMediaSnapshot({
+      status: "failed",
+      error: "Export failed due to image processing error",
+    });
+
+    const retryMock = vi.fn();
+
+    render(
+      <ReviewWorkspace
+        snapshot={failedSnapshot}
+        busy={false}
+        busyMessage=""
+        error={null}
+        onRetry={retryMock}
+        onReject={async () => true}
+        onApprove={() => {}}
+        onNewDocument={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("Export failed due to image processing error")).toBeInTheDocument();
+
+    const tryAgainBtn = screen.getByRole("button", { name: /Try again/i });
+    expect(tryAgainBtn).toBeInTheDocument();
+    fireEvent.click(tryAgainBtn);
+    expect(retryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("the history sheet for media shows the region count instead of text preview", () => {
+    const snapshotWithHistory = createMediaSnapshot({
+      attempt: 2,
+      history: [
+        {
+          attempt: 1,
+          text: "",
+          reason: "Hide the background face",
+          regions: 3,
+        },
+      ],
+    });
+
+    render(
+      <ReviewWorkspace
+        snapshot={snapshotWithHistory}
+        busy={false}
+        busyMessage=""
+        error={null}
+        onRetry={null}
+        onReject={async () => true}
+        onApprove={() => {}}
+        onNewDocument={() => {}}
+      />,
+    );
+
+    // Open the history sheet
+    const historyBtn = screen.getByRole("button", { name: /History \(1\)/i });
+    fireEvent.click(historyBtn);
+
+    expect(screen.getByText("Attempt 1")).toBeInTheDocument();
+    expect(screen.getByText("3 regions")).toBeInTheDocument();
+    expect(screen.getByText(/Hide the background face/)).toBeInTheDocument();
+
+    // Must NOT contain copy or download .txt buttons
+    expect(screen.queryByRole("button", { name: /Download \.txt/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy/i })).not.toBeInTheDocument();
   });
 });

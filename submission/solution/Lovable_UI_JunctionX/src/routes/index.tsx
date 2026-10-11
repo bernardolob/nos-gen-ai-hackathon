@@ -118,7 +118,20 @@ function Index() {
     setError(null);
     setRetry(null);
     try {
-      setSnapshot(await fn());
+      let result = await fn();
+      setSnapshot(result);
+      if (isWorking(result)) {
+        result = await waitUntilSettled((s) => {
+          setSnapshot(s);
+        });
+      }
+      if (result.status === "failed") {
+        setRetry(() => again);
+        setError(result.error || "The action failed.");
+        setSnapshot(result);
+        return false;
+      }
+      setSnapshot(result);
       return true;
     } catch (e) {
       setError(message(e));

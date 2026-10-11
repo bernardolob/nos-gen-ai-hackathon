@@ -1,11 +1,13 @@
-import { useMemo } from "react";
-import { Check, Shield, User, Sparkles } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { Shield, User, Sparkles } from "lucide-react";
 
 import type {
   Confidence,
   MediaRegion,
+  RegionBox,
   RegionKeyframe,
   RegionKind,
+  RegionPoint,
   RegionSource,
   Snapshot,
 } from "@/lib/review/types";
@@ -14,16 +16,53 @@ import { mediaSourceUrl } from "@/lib/review/api";
 export const CATEGORY_LABELS: Record<string, string> = {
   identificacao: "Personal identification",
   biometrico: "Biometric",
+  biometricos: "Biometric",
   saude: "Health",
   financeiro: "Financial",
+  financeiros: "Financial",
   genetico: "Genetic",
+  geneticos: "Genetic",
+  origem: "Origin, religion, politics or orientation",
   origem_religiao_politica: "Origin, religion, politics or orientation",
   familia: "Family life",
   comportamento: "Personal behaviour",
+  comportamentos: "Personal behaviour",
+  quasi: "Quasi-identifiers",
   quasi_identificador: "Quasi-identifiers",
 };
 
 export const categoryLabel = (cat: string): string => CATEGORY_LABELS[cat] ?? cat;
+
+export function getCategoryVar(category: string): string {
+  switch (category) {
+    case "identificacao":
+      return "var(--cat-identificacao)";
+    case "saude":
+      return "var(--cat-saude)";
+    case "genetico":
+    case "geneticos":
+      return "var(--cat-geneticos)";
+    case "biometrico":
+    case "biometricos":
+      return "var(--cat-biometricos)";
+    case "origem":
+    case "origem_religiao_politica":
+      return "var(--cat-origem)";
+    case "financeiro":
+    case "financeiros":
+      return "var(--cat-financeiros)";
+    case "familia":
+      return "var(--cat-familia)";
+    case "comportamento":
+    case "comportamentos":
+      return "var(--cat-comportamentos)";
+    case "quasi":
+    case "quasi_identificador":
+      return "var(--cat-quasi)";
+    default:
+      return "var(--cat-identificacao)";
+  }
+}
 
 export const KIND_LABELS: Record<RegionKind | string, string> = {
   face: "Face",
@@ -54,83 +93,112 @@ export const SOURCE_LABELS: Record<RegionSource | string, string> = {
 
 export const formatSource = (src: string): string => SOURCE_LABELS[src] ?? src;
 
-export function getCategoryClasses(category: string, isSelected: boolean) {
-  switch (category) {
-    case "identificacao":
-      return {
-        box: isSelected
-          ? "border-primary bg-primary/30 ring-2 ring-primary"
-          : "border-primary/80 bg-primary/15 hover:bg-primary/25",
-        text: "text-primary",
-        border: "border-primary/40",
-        polygon: isSelected ? "fill-primary/30 stroke-primary" : "fill-primary/15 stroke-primary/80 hover:fill-primary/25",
-      };
-    case "biometrico":
-      return {
-        box: isSelected
-          ? "border-secondary-foreground bg-accent/40 ring-2 ring-primary"
-          : "border-border bg-accent/20 hover:bg-accent/30",
-        text: "text-foreground",
-        border: "border-border",
-        polygon: isSelected ? "fill-foreground/20 stroke-foreground" : "fill-foreground/10 stroke-foreground/70",
-      };
-    case "saude":
-      return {
-        box: isSelected
-          ? "border-destructive bg-destructive/30 ring-2 ring-destructive"
-          : "border-destructive/80 bg-destructive/15 hover:bg-destructive/25",
-        text: "text-destructive",
-        border: "border-destructive/40",
-        polygon: isSelected ? "fill-destructive/30 stroke-destructive" : "fill-destructive/15 stroke-destructive/80",
-      };
-    case "financeiro":
-      return {
-        box: isSelected
-          ? "border-ok bg-ok/30 ring-2 ring-ok"
-          : "border-ok/80 bg-ok/15 hover:bg-ok/25",
-        text: "text-ok",
-        border: "border-ok/40",
-        polygon: isSelected ? "fill-ok/30 stroke-ok" : "fill-ok/15 stroke-ok/80",
-      };
-    default:
-      return {
-        box: isSelected
-          ? "border-primary bg-primary/30 ring-2 ring-primary"
-          : "border-primary/70 bg-primary/15 hover:bg-primary/25",
-        text: "text-primary",
-        border: "border-primary/30",
-        polygon: isSelected ? "fill-primary/30 stroke-primary" : "fill-primary/15 stroke-primary/70",
-      };
-  }
+export function interpolateBox(b1: RegionBox, b2: RegionBox, t: number): RegionBox {
+  const clampT = Math.max(0, Math.min(1, t));
+  return {
+    x: Number((b1.x + clampT * (b2.x - b1.x)).toFixed(6)),
+    y: Number((b1.y + clampT * (b2.y - b1.y)).toFixed(6)),
+    width: Number((b1.width + clampT * (b2.width - b1.width)).toFixed(6)),
+    height: Number((b1.height + clampT * (b2.height - b1.height)).toFixed(6)),
+  };
 }
 
-/**
- * Returns the keyframe that should be drawn for a region at currentTimeMs.
- * For images: keyframes[0].
- * For videos: latest keyframe where time_ms <= currentTimeMs, only if start_ms <= currentTimeMs <= end_ms.
- */
-export function getActiveKeyframe(
+export interface ActiveRenderRegion {
+  box: RegionBox;
+  polygon: RegionPoint[] | null;
+}
+
+export function getActiveRenderRegion(
   region: MediaRegion,
   currentTimeMs: number,
   isImage: boolean,
-): RegionKeyframe | null {
+): ActiveRenderRegion | null {
   if (!region.keyframes || region.keyframes.length === 0) return null;
+  const firstKf = region.keyframes[0];
+  if (!firstKf) return null;
+
   if (isImage) {
-    return region.keyframes[0] ?? null;
+    return {
+      box: firstKf.box,
+      polygon: firstKf.polygon ?? null,
+    };
   }
 
   if (currentTimeMs < region.start_ms || currentTimeMs > region.end_ms) {
     return null;
   }
 
-  const valid = region.keyframes.filter((kf) => kf.time_ms <= currentTimeMs);
-  if (valid.length === 0) {
-    return region.keyframes[0] ?? null;
+  const sorted = [...region.keyframes].sort((a, b) => a.time_ms - b.time_ms);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  if (!first || !last) return null;
+
+  if (sorted.length === 1 || currentTimeMs <= first.time_ms) {
+    return {
+      box: first.box,
+      polygon: first.polygon ?? null,
+    };
   }
 
-  return valid.reduce((latest, current) =>
-    current.time_ms > latest.time_ms ? current : latest,
-  );
+  if (currentTimeMs >= last.time_ms) {
+    return {
+      box: last.box,
+      polygon: last.polygon ?? null,
+    };
+  }
+
+  let prev: RegionKeyframe = first;
+  let next: RegionKeyframe = last;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const cur = sorted[i];
+    const nxt = sorted[i + 1];
+    if (cur && nxt && cur.time_ms <= currentTimeMs && nxt.time_ms >= currentTimeMs) {
+      prev = cur;
+      next = nxt;
+      break;
+    }
+  }
+
+  if (next.time_ms === prev.time_ms) {
+    return {
+      box: prev.box,
+      polygon: prev.polygon ?? null,
+    };
+  }
+
+  const t = (currentTimeMs - prev.time_ms) / (next.time_ms - prev.time_ms);
+  const box = interpolateBox(prev.box, next.box, t);
+
+  let polygon: RegionPoint[] | null = null;
+  if (prev.polygon && next.polygon && prev.polygon.length === next.polygon.length) {
+    const nextPoly = next.polygon;
+    polygon = prev.polygon.map((p, idx) => {
+      const np = nextPoly[idx];
+      if (!np) return p;
+      return {
+        x: Number((p.x + t * (np.x - p.x)).toFixed(6)),
+        y: Number((p.y + t * (np.y - p.y)).toFixed(6)),
+      };
+    });
+  } else {
+    polygon = t < 0.5 ? prev.polygon ?? null : next.polygon ?? null;
+  }
+
+  return { box, polygon };
+}
+
+export function getActiveKeyframe(
+  region: MediaRegion,
+  currentTimeMs: number,
+  isImage: boolean,
+): RegionKeyframe | null {
+  const active = getActiveRenderRegion(region, currentTimeMs, isImage);
+  if (!active) return null;
+  return {
+    time_ms: currentTimeMs,
+    box: active.box,
+    polygon: active.polygon,
+  };
 }
 
 /* ---------------- Media Center Card Viewer ---------------- */
@@ -158,13 +226,79 @@ export function MediaViewer({
       ? `${snapshot.media.width} / ${snapshot.media.height}`
       : "16 / 9";
 
-  const regionsWithKeyframe = useMemo(() => {
+  // Smooth frame updates during video playback
+  useEffect(() => {
+    const vid = videoRef?.current;
+    if (!vid || isImage) return;
+
+    let frameId: number | null = null;
+    let running = true;
+
+    const hasRvfc = typeof (vid as any).requestVideoFrameCallback === "function";
+
+    const onFrame = () => {
+      if (!running) return;
+      onTimeUpdate(Math.round(vid.currentTime * 1000));
+      if (hasRvfc) {
+        frameId = (vid as any).requestVideoFrameCallback(onFrame);
+      } else if (!vid.paused && !vid.ended) {
+        frameId = requestAnimationFrame(onFrame);
+      }
+    };
+
+    const startLoop = () => {
+      if (frameId !== null) return;
+      if (hasRvfc) {
+        frameId = (vid as any).requestVideoFrameCallback(onFrame);
+      } else {
+        frameId = requestAnimationFrame(onFrame);
+      }
+    };
+
+    const stopLoop = () => {
+      if (frameId !== null) {
+        if (typeof (vid as any).cancelVideoFrameCallback === "function") {
+          (vid as any).cancelVideoFrameCallback(frameId);
+        } else {
+          cancelAnimationFrame(frameId);
+        }
+        frameId = null;
+      }
+      onTimeUpdate(Math.round(vid.currentTime * 1000));
+    };
+
+    const onSeeking = () => {
+      onTimeUpdate(Math.round(vid.currentTime * 1000));
+    };
+
+    vid.addEventListener("play", startLoop);
+    vid.addEventListener("pause", stopLoop);
+    vid.addEventListener("ended", stopLoop);
+    vid.addEventListener("seeking", onSeeking);
+    vid.addEventListener("timeupdate", onSeeking);
+
+    if (!vid.paused && !vid.ended) {
+      startLoop();
+    }
+
+    return () => {
+      running = false;
+      vid.removeEventListener("play", startLoop);
+      vid.removeEventListener("pause", stopLoop);
+      vid.removeEventListener("ended", stopLoop);
+      vid.removeEventListener("seeking", onSeeking);
+      vid.removeEventListener("timeupdate", onSeeking);
+      stopLoop();
+    };
+  }, [videoRef, isImage, onTimeUpdate]);
+
+  const renderedRegions = useMemo(() => {
     return snapshot.regions
       .map((region) => {
-        const kf = getActiveKeyframe(region, currentTimeMs, isImage);
-        return kf ? { region, kf } : null;
+        const active = getActiveRenderRegion(region, currentTimeMs, isImage);
+        return active ? { region, ...active } : null;
       })
-      .filter((item): item is { region: MediaRegion; kf: RegionKeyframe } => item !== null);
+      .filter((item): item is { region: MediaRegion; box: RegionBox; polygon: RegionPoint[] | null } => item !== null);
   }, [snapshot.regions, currentTimeMs, isImage]);
 
   return (
@@ -192,17 +326,17 @@ export function MediaViewer({
 
       {/* Overlay layer for boxes and polygons */}
       <div className="absolute inset-0 pointer-events-none">
-        {/* SVG layer for any polygons */}
+        {/* SVG layer for polygons */}
         <svg
           className="absolute inset-0 h-full w-full pointer-events-none"
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
         >
-          {regionsWithKeyframe.map(({ region, kf }) => {
-            if (!kf.polygon || kf.polygon.length === 0) return null;
+          {renderedRegions.map(({ region, polygon }) => {
+            if (!polygon || polygon.length === 0) return null;
             const isSelected = selectedRegionId === region.id;
-            const styles = getCategoryClasses(region.category, isSelected);
-            const pointsStr = kf.polygon.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
+            const catVar = getCategoryVar(region.category);
+            const pointsStr = polygon.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
 
             return (
               <polygon
@@ -210,7 +344,13 @@ export function MediaViewer({
                 data-testid={`polygon-${region.id}`}
                 points={pointsStr}
                 strokeDasharray="4 2"
-                className={`pointer-events-auto cursor-pointer transition-colors stroke-2 ${styles.polygon}`}
+                style={{
+                  stroke: catVar,
+                  fill: isSelected
+                    ? `color-mix(in srgb, ${catVar} 32%, transparent)`
+                    : `color-mix(in srgb, ${catVar} 16%, transparent)`,
+                }}
+                className="pointer-events-auto cursor-pointer stroke-2 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectRegion(region.id);
@@ -220,25 +360,31 @@ export function MediaViewer({
           })}
         </svg>
 
-        {/* Box divs & labels */}
-        {regionsWithKeyframe.map(({ region, kf }) => {
+        {/* Bounding box divs & labels */}
+        {renderedRegions.map(({ region, box, polygon }) => {
           const isSelected = selectedRegionId === region.id;
-          const styles = getCategoryClasses(region.category, isSelected);
-          const hasPolygon = Boolean(kf.polygon && kf.polygon.length > 0);
+          const catVar = getCategoryVar(region.category);
+          const hasPolygon = Boolean(polygon && polygon.length > 0);
 
           if (hasPolygon) {
-            // Polygon is drawn in the SVG above; show the label near top-left of box
             return (
               <div
                 key={`label-${region.id}`}
                 style={{
                   position: "absolute",
-                  left: `${kf.box.x * 100}%`,
-                  top: `${kf.box.y * 100}%`,
+                  left: `${box.x * 100}%`,
+                  top: `${box.y * 100}%`,
                 }}
                 className="pointer-events-none z-10"
               >
-                <span className="rounded bg-background/90 px-1 py-0.5 text-[10px] font-semibold text-foreground shadow border border-border">
+                <span
+                  className="rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap"
+                  style={{
+                    backgroundColor: "var(--background)",
+                    color: catVar,
+                    borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
+                  }}
+                >
                   {formatKind(region.kind)}
                 </span>
               </div>
@@ -255,14 +401,26 @@ export function MediaViewer({
               }}
               style={{
                 position: "absolute",
-                left: `${kf.box.x * 100}%`,
-                top: `${kf.box.y * 100}%`,
-                width: `${kf.box.width * 100}%`,
-                height: `${kf.box.height * 100}%`,
+                left: `${box.x * 100}%`,
+                top: `${box.y * 100}%`,
+                width: `${box.width * 100}%`,
+                height: `${box.height * 100}%`,
+                borderColor: catVar,
+                backgroundColor: isSelected
+                  ? `color-mix(in srgb, ${catVar} 32%, transparent)`
+                  : `color-mix(in srgb, ${catVar} 16%, transparent)`,
+                boxShadow: isSelected ? `0 0 0 2px ${catVar}` : undefined,
               }}
-              className={`pointer-events-auto cursor-pointer border-2 border-dashed transition-all ${styles.box}`}
+              className="pointer-events-auto cursor-pointer border-2 border-dashed transition-all"
             >
-              <span className="absolute -top-5 left-0 rounded bg-background/90 px-1 py-0.5 text-[10px] font-semibold text-foreground shadow border border-border whitespace-nowrap pointer-events-none">
+              <span
+                className="absolute -top-5 left-0 rounded px-1 py-0.5 text-[10px] font-semibold shadow border whitespace-nowrap pointer-events-none"
+                style={{
+                  backgroundColor: "var(--background)",
+                  color: catVar,
+                  borderColor: `color-mix(in srgb, ${catVar} 45%, transparent)`,
+                }}
+              >
                 {formatKind(region.kind)}
               </span>
             </div>
@@ -285,7 +443,6 @@ export function VideoTimeline({
   onSeek: (ms: number) => void;
 }) {
   const durationMs = snapshot.media.duration_ms || 1;
-
   const currentPercent = Math.min(100, Math.max(0, (currentTimeMs / durationMs) * 100));
 
   const formatMs = (ms: number) => {
@@ -327,15 +484,17 @@ export function VideoTimeline({
             const startPct = Math.max(0, (region.start_ms / durationMs) * 100);
             const endPct = Math.min(100, (region.end_ms / durationMs) * 100);
             const widthPct = Math.max(0.5, endPct - startPct);
-            const styles = getCategoryClasses(region.category, false);
+            const catVar = getCategoryVar(region.category);
 
             return (
               <div key={`track-${region.id}`} className="relative h-2 w-full rounded bg-background/50">
                 <div
-                  className={`absolute top-0 bottom-0 rounded ${styles.box} opacity-90`}
+                  className="absolute top-0 bottom-0 rounded border border-dashed opacity-90"
                   style={{
                     left: `${startPct}%`,
                     width: `${widthPct}%`,
+                    backgroundColor: `color-mix(in srgb, ${catVar} 35%, transparent)`,
+                    borderColor: catVar,
                   }}
                   title={`${formatKind(region.kind)} (${formatMs(region.start_ms)} - ${formatMs(region.end_ms)})`}
                 />
@@ -379,80 +538,105 @@ export function MediaRegionsList({
 
   return (
     <div className="space-y-4" data-testid="regions-grouped-list">
-      {grouped.map(([cat, list]) => (
-        <div key={cat} className="space-y-2">
-          <div className="flex items-center justify-between border-b border-border pb-1">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              {categoryLabel(cat)}
-            </h4>
-            <span className="text-[11px] font-semibold text-muted-foreground">
-              {list.length}
-            </span>
-          </div>
+      {grouped.map(([cat, list]) => {
+        const catVar = getCategoryVar(cat);
 
-          <div className="space-y-1.5">
-            {list.map((r) => {
-              const isSelected = selectedRegionId === r.id;
-              const styles = getCategoryClasses(r.category, isSelected);
+        return (
+          <div key={cat} className="space-y-2">
+            <div className="flex items-center justify-between border-b border-border pb-1">
+              <h4
+                className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
+                style={{ color: catVar }}
+              >
+                <span
+                  className="inline-block h-2 w-2 rounded-full border border-dashed"
+                  style={{ backgroundColor: catVar, borderColor: catVar }}
+                  aria-hidden
+                />
+                {categoryLabel(cat)}
+              </h4>
+              <span className="text-[11px] font-semibold text-muted-foreground">
+                {list.length}
+              </span>
+            </div>
 
-              return (
-                <div
-                  key={r.id}
-                  data-testid={`region-item-${r.id}`}
-                  onClick={() => onSelectRegion(r.id)}
-                  className={`cursor-pointer rounded-lg border p-2.5 transition-all ${
-                    isSelected
-                      ? "border-primary bg-primary/10 ring-1 ring-primary shadow-sm"
-                      : "border-border bg-background hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-semibold text-foreground">
-                      {formatKind(r.kind)}
-                    </span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium border ${
-                        r.confidence === "certo"
-                          ? "border-ok/40 bg-ok/10 text-ok"
-                          : r.confidence === "provavel"
-                          ? "border-warn/40 bg-warn/10 text-warn"
-                          : "border-border bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {formatConfidence(r.confidence)}
-                    </span>
-                  </div>
+            <div className="space-y-1.5">
+              {list.map((r) => {
+                const isSelected = selectedRegionId === r.id;
+                const rCatVar = getCategoryVar(r.category);
 
-                  {r.reason && (
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                      {r.reason}
-                    </p>
-                  )}
-
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      {r.source === "gemini" ? (
-                        <Sparkles className="h-3 w-3 text-brand" />
-                      ) : r.source === "user" ? (
-                        <User className="h-3 w-3" />
-                      ) : (
-                        <Shield className="h-3 w-3" />
-                      )}
-                      {formatSource(r.source)}
-                    </span>
-
-                    {r.end_ms > 0 && (
-                      <span className="tabular-nums">
-                        {(r.start_ms / 1000).toFixed(1)}s - {(r.end_ms / 1000).toFixed(1)}s
+                return (
+                  <div
+                    key={r.id}
+                    data-testid={`region-item-${r.id}`}
+                    onClick={() => onSelectRegion(r.id)}
+                    style={
+                      isSelected
+                        ? {
+                            borderColor: rCatVar,
+                            backgroundColor: `color-mix(in srgb, ${rCatVar} 14%, transparent)`,
+                            boxShadow: `0 0 0 1px ${rCatVar}`,
+                          }
+                        : undefined
+                    }
+                    className={`cursor-pointer rounded-lg border p-2.5 transition-all ${
+                      isSelected
+                        ? ""
+                        : "border-border bg-background hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                        <span
+                          className="inline-block h-2 w-2 rounded-full border border-dashed"
+                          style={{ backgroundColor: rCatVar, borderColor: rCatVar }}
+                          aria-hidden
+                        />
+                        {formatKind(r.kind)}
                       </span>
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[10px] font-medium border border-dashed"
+                        style={{
+                          borderColor: `color-mix(in srgb, ${rCatVar} 45%, transparent)`,
+                          backgroundColor: `color-mix(in srgb, ${rCatVar} 12%, transparent)`,
+                          color: rCatVar,
+                        }}
+                      >
+                        {formatConfidence(r.confidence)}
+                      </span>
+                    </div>
+
+                    {r.reason && (
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                        {r.reason}
+                      </p>
                     )}
+
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        {r.source === "gemini" ? (
+                          <Sparkles className="h-3 w-3 text-brand" />
+                        ) : r.source === "user" ? (
+                          <User className="h-3 w-3" />
+                        ) : (
+                          <Shield className="h-3 w-3" />
+                        )}
+                        {formatSource(r.source)}
+                      </span>
+
+                      {r.end_ms > 0 && (
+                        <span className="tabular-nums">
+                          {(r.start_ms / 1000).toFixed(1)}s - {(r.end_ms / 1000).toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

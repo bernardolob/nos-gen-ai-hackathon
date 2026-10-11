@@ -37,7 +37,7 @@ import {
   type HistoryEntry,
   type Snapshot,
 } from "@/lib/review/types";
-import { censoredAudioUrl } from "@/lib/review/api";
+import { censoredAudioUrl, mediaOutputUrl } from "@/lib/review/api";
 import {
   MediaRegionsList,
   VideoTimeline,
@@ -94,6 +94,7 @@ export function ReviewWorkspace({
   const isVideo = snapshot.kind === "video";
   const isMedia = isImage || isVideo;
   const audioUrl = censoredAudioUrl(snapshot);
+  const mediaUrl = mediaOutputUrl(snapshot);
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -101,6 +102,10 @@ export function ReviewWorkspace({
   const [copied, setCopied] = useState(false);
   const [downloadingAudio, setDownloadingAudio] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+
+  // Media download state
+  const [downloadingMedia, setDownloadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   // Media review state
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
@@ -150,6 +155,48 @@ export function ReviewWorkspace({
     }
   };
 
+  const downloadMedia = async () => {
+    const url = mediaOutputUrl(snapshot);
+    if (!url) {
+      setMediaError(isVideo ? "No video available" : "No image available");
+      return;
+    }
+    setDownloadingMedia(true);
+    setMediaError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+      const blob = await res.blob();
+
+      const defaultExt = isVideo ? "mp4" : "png";
+      let ext: string = defaultExt;
+      if (snapshot.media.filename && snapshot.media.filename.includes(".")) {
+        ext = snapshot.media.filename.split(".").pop()?.toLowerCase() || defaultExt;
+      } else if (snapshot.media.output_url) {
+        const dataMatch = snapshot.media.output_url.match(/^data:(?:image|video)\/([a-zA-Z0-9+]+)/);
+        if (dataMatch?.[1]) {
+          ext = dataMatch[1] === "jpeg" ? "jpg" : dataMatch[1];
+        } else {
+          const urlMatch = snapshot.media.output_url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/);
+          if (urlMatch?.[1]) ext = urlMatch[1].toLowerCase();
+        }
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${isVideo ? "anonymized-video" : "anonymized-image"}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      setMediaError(err instanceof Error ? err.message : "Failed to download media.");
+    } finally {
+      setDownloadingMedia(false);
+    }
+  };
+
   const steps: { title: string; note: string; state: "done" | "now" | "todo" }[] = [
     {
       title: isAudio
@@ -176,7 +223,7 @@ export function ReviewWorkspace({
 
   const hasFailed = snapshot.status === "failed";
   const isWorkingState = snapshot.status === "processing" || snapshot.status === "exporting";
-  const errorMessage = hasFailed ? snapshot.error || "Analysis failed" : error;
+  const errorMessage = snapshot.error || error || "Analysis failed";
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)_280px]">
@@ -265,12 +312,30 @@ export function ReviewWorkspace({
               <h3 className="text-base font-bold text-foreground">
                 {isImage ? "Image preview" : "Video preview"}
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
                   <History aria-hidden /> History ({snapshot.history.length})
                 </Button>
+                {snapshot.approved && mediaUrl && (
+                  <Button
+                    size="sm"
+                    onClick={downloadMedia}
+                    disabled={busy || downloadingMedia}
+                  >
+                    {downloadingMedia ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Download aria-hidden />
+                    )}
+                    {isVideo ? "Download video" : "Download image"}
+                  </Button>
+                )}
               </div>
             </div>
+
+            {mediaError && (
+              <p role="alert" className="text-sm text-destructive">{mediaError}</p>
+            )}
 
             <div className="relative">
               <MediaViewer
@@ -414,7 +479,7 @@ export function ReviewWorkspace({
             <Button
               variant="outline"
               onClick={() => setRejectOpen(true)}
-              disabled={busy || snapshot.approved || isWorkingState}
+              disabled={busy || isWorkingState}
             >
               <ThumbsDown aria-hidden /> Reject
             </Button>
@@ -496,7 +561,7 @@ export function ReviewWorkspace({
               {isAudio
                 ? "The audio is not uploaded again; the transcript is analysed again with your feedback."
                 : isMedia
-                ? "Explain what should change in the detected regions."
+                ? "The file is analysed again with your feedback and the current regions are replaced."
                 : "Explain what should change: hide more, or keep visible something that was hidden."}
             </DialogDescription>
           </DialogHeader>
@@ -529,11 +594,18 @@ export function ReviewWorkspace({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-bold text-foreground">Attempt {h.attempt}</p>
                   {isAudio && <span className="text-xs font-medium text-muted-foreground">Transcript</span>}
+                  {isMedia && (
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {h.regions !== null ? `${h.regions} regions` : "0 regions"}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">“{h.reason}”</p>
-                <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">
-                  <MaskedText text={h.text} className="text-xs leading-6" />
-                </div>
+                {!isMedia && (
+                  <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">
+                    <MaskedText text={h.text} className="text-xs leading-6" />
+                  </div>
+                )}
               </article>
             ))}
           </div>
