@@ -125,7 +125,7 @@ export async function uploadDocument(file: File): Promise<Snapshot> {
   if (isMockMode) {
     await wait(1800);
     if (type === "text/plain") return mockUpload(await file.text());
-    return mockUpload(SAMPLE_TEXT, true);
+    return mockUpload(SAMPLE_TEXT, true, true);
   }
   return request("/api/document", { method: "POST", headers: { "Content-Type": type }, body: file });
 }
@@ -201,6 +201,17 @@ export async function waitUntilSettled(
     onUpdate(snapshot);
   }
   return snapshot;
+}
+
+/**
+ * URL of the anonymized PDF (the uploaded PDF with each sensitive word erased
+ * and a * in its place), or null when the document did not come from a PDF.
+ * It is generated for the version under review, so the attempt is in the URL.
+ */
+export function anonymizedPdfUrl(snapshot: Snapshot): string | null {
+  if (!snapshot.pdf_url) return null;
+  if (isMockMode) return snapshot.pdf_url;
+  return `${API_URL}${snapshot.pdf_url}?v=${snapshot.attempt}`;
 }
 
 /** URL of the original image/video under review (for the preview), or null. */

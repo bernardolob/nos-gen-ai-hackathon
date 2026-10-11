@@ -27,6 +27,7 @@ de um: enviar um novo ficheiro substitui o anterior.
 |---|---|
 | `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`, até 10 MB), ou imagem/vídeo (ver [MEDIA.md](MEDIA.md)); começa a revisão |
 | `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta e censura; começa a revisão |
+| `GET /api/pdf/current` | o **PDF anonimizado** da versão atual (`application/pdf`, sem cache), gerado a partir do PDF enviado, com um `*` no lugar de cada palavra apagada e o layout mantido; 404 se o documento não veio de um PDF; 502 se a verificação falhar (ver [PDF.md](PDF.md)) |
 | `GET /api/audio/current` | o áudio **censurado** da versão atual (`audio/mp4`, sem cache); 404 se ainda não há. Nunca devolve o original |
 | `GET /api/current` | o estado (ver abaixo) |
 | `POST /api/reject` | `{attempt, text, reason}`: guarda a versão, junta `reason` às instruções e gera a seguinte |

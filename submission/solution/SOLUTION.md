@@ -55,6 +55,7 @@ Gemini.
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
 | [REVIEW.md](REVIEW.md) | Revisão manual (texto e áudio): UI, backend, rotas e rejeição com observações |
 | [AUDIO.md](AUDIO.md) | Extra: censura de áudio (linha de comandos e rota do backend) |
+| [PDF.md](PDF.md) | Saída em PDF: o PDF original com as palavras sensíveis apagadas |
 | [GATEWAY.md](GATEWAY.md) | Como o pipeline chama o Gemini pelo Worker Cloudflare |
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
