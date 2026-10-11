@@ -81,7 +81,7 @@ export function ThemePicker() {
               />
               <span className="flex-1 font-medium">{label}</span>
               <RadioGroupPrimitive.Indicator>
-                <Check className="h-4 w-4 text-brand" aria-hidden />
+                <Check className="h-4 w-4 text-foreground" aria-hidden />
               </RadioGroupPrimitive.Indicator>
             </RadioGroupPrimitive.Item>
           ))}
