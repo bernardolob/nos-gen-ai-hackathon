@@ -276,7 +276,8 @@ As instruções iniciais pedem para mascarar também **toda a informação de sa
 fazem parte de um facto sensível ("desde 2018", "há 5 anos", "parou há 3
 anos"), e deixam como estão os cabeçalhos das secções, as etiquetas, o título, a data
 do relatório e a referência, como no exemplo oficial. Só **acrescentam**
-máscaras; o Sexo fica visível porque não consta da lista dos organizadores.
+máscaras. Com o prompt atual (que lê sempre as instruções como pedidos de mascarar ou
+desmascarar) o Sexo também sai mascarado.
 
 Para refazer a submissão, a partir de `submission/solution/src`:
 
@@ -291,11 +292,20 @@ Depois, o `prompt.txt` tem de voltar a ser o pedido exato. O teste
 `tests/test_submission_prompt.py` falha se o prompt interno, o documento ou as
 instruções mudarem e o ficheiro ficar desatualizado.
 
-**Medido (3 execuções):** 95, 96 e 95 itens e 203, 204 e 203 `*`, sem avisos
-nem problemas na verificação, com as datas e durações dos factos sensíveis
-sempre mascaradas. Sem as instruções, o mesmo documento deu entre 182 e 204
-`*` e deixava anos como "desde 2018" visíveis. O modelo não é determinístico:
-outra execução pode diferir em poucas palavras (por exemplo "mulher").
+**Medido (3 execuções, com o prompt atual e o código da `main` a 11 de outubro):**
+98, 95 e 97 itens e 199, 206 e 199 `*`, sem avisos nem problemas na verificação,
+com as datas e durações dos factos sensíveis sempre mascaradas. A
+`submission.txt` é a terceira (199 `*`): é a única em que nem "mulher", nem
+"falecida", nem a especialidade da médica ficaram visíveis. O modelo não é
+determinístico: outra execução pode diferir em poucas palavras.
+
+**Verificado de ponta a ponta nesse dia, com o Worker e o Gemini reais:** o PDF
+do desafio (com as instruções iniciais, rejeição com observações, aprovação e o
+PDF anonimizado); um áudio gravado como `.mp4` (12 intervalos censurados); uma
+fotografia (rosto desfocado); um vídeo (um só rosto detetado, cartão bancário
+em duas regiões, pré-visualização do blur, rastreio de uma região manual,
+nova análise com observações, aprovação e exportação); e a interface em modo
+escuro.
 
 **Na UI:** as mesmas instruções podem ser coladas no campo "Instructions" ao
 enviar o ficheiro (o backend aceita-as no cabeçalho `X-User-Instructions`, até

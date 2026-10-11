@@ -4,7 +4,7 @@ Referência: ADM-2025-04-15-089
 Informações do Paciente:
 Nome: * * * *
 Data de Nascimento: *
-Sexo: Feminino
+Sexo: *
 NIF: *
 Cartão de Cidadão: *
 Morada: * * *, *, * *, *, *
@@ -12,12 +12,12 @@ Telefone: * * * *
 Email: *
 Número da Segurança Social: *
 Histórico Médico:
-A paciente * *, mulher * de * *, compareceu à consulta relatando *
-* *. Tem histórico de * * * * *, diagnosticada * * *. É
-* * * *, atualmente com * * * graças ao * *
+A paciente * *, * * de * *, compareceu à consulta relatando *
+* *. Tem histórico de * e * * *, diagnosticada * * *. É
+* * * *, atualmente com * * * graças ao tratamento com
 *.
-A paciente relatou que sua família tem histórico de * * * (* falecida * * *)
-e * * (* * * *). * * realizados * * indicaram
+A paciente relatou que sua família tem histórico de * * * (* * * * *)
+e * * (* e * *). Exames genéticos realizados em * indicaram
 * * * * * (* * *).
 Informações Sociais e Comportamentais:
 Estado civil: *
