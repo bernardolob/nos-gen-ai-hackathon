@@ -1,12 +1,48 @@
-import { useState } from "react";
-import { AlertTriangle, Check, CheckCircle2, Copy, Download, History, Loader2, RotateCcw, ShieldCheck, ThumbsDown, ThumbsUp } from "lucide-react";
+import { useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Copy,
+  Download,
+  History,
+  Loader2,
+  RotateCcw,
+  ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Progress as ProgressBar } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { MAX_REASON_CHARS, type HistoryEntry, type Snapshot } from "@/lib/review/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  MAX_REASON_CHARS,
+  stageLabel,
+  type HistoryEntry,
+  type Snapshot,
+} from "@/lib/review/types";
 import { censoredAudioUrl } from "@/lib/review/api";
+import {
+  MediaRegionsList,
+  VideoTimeline,
+  MediaViewer,
+} from "./media-review";
 
 export function MaskedText({ text, className = "" }: { text: string; className?: string }) {
   const parts = text.split(/(\*+)/);
@@ -54,6 +90,9 @@ export function ReviewWorkspace({
   onNewDocument: () => void;
 }) {
   const isAudio = snapshot.kind === "audio";
+  const isImage = snapshot.kind === "image";
+  const isVideo = snapshot.kind === "video";
+  const isMedia = isImage || isVideo;
   const audioUrl = censoredAudioUrl(snapshot);
 
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -62,6 +101,11 @@ export function ReviewWorkspace({
   const [copied, setCopied] = useState(false);
   const [downloadingAudio, setDownloadingAudio] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+
+  // Media review state
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+  const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const masks = (snapshot.text.match(/\*+/g) ?? []).length;
 
@@ -107,7 +151,17 @@ export function ReviewWorkspace({
   };
 
   const steps: { title: string; note: string; state: "done" | "now" | "todo" }[] = [
-    { title: isAudio ? "Audio received" : "Document received", note: isAudio ? "Transcribed" : "Analyzed", state: "done" },
+    {
+      title: isAudio
+        ? "Audio received"
+        : isImage
+        ? "Image received"
+        : isVideo
+        ? "Video received"
+        : "Document received",
+      note: isAudio ? "Transcribed" : "Analyzed",
+      state: "done",
+    },
     {
       title: "Manual review",
       note: `Attempt ${snapshot.attempt}`,
@@ -120,8 +174,12 @@ export function ReviewWorkspace({
     },
   ];
 
+  const hasFailed = snapshot.status === "failed";
+  const isWorkingState = snapshot.status === "processing" || snapshot.status === "exporting";
+  const errorMessage = hasFailed ? snapshot.error || "Analysis failed" : error;
+
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)_260px]">
+    <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)_280px]">
       <aside aria-label="Progress" className="lg:sticky lg:top-24">
         <ol className="steps-list rounded-2xl border border-border bg-card p-5 lg:border-0 lg:bg-transparent lg:p-0">
           {steps.map((s) => (
@@ -152,123 +210,226 @@ export function ReviewWorkspace({
       </aside>
 
       <div className="flex min-w-0 flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Attempt" value={snapshot.attempt} />
-        {isAudio ? (
-          <Stat label="Replaced stretches" value={snapshot.audio_ranges} />
-        ) : (
-          <Stat label="Masked words" value={masks} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Attempt" value={snapshot.attempt} />
+          {isMedia ? (
+            <Stat label="Regions" value={snapshot.regions.length} />
+          ) : isAudio ? (
+            <Stat label="Replaced stretches" value={snapshot.audio_ranges} />
+          ) : (
+            <Stat label="Masked words" value={masks} />
+          )}
+          <Stat
+            label="Warnings"
+            value={isMedia ? 0 : snapshot.warnings}
+            tone={!isMedia && snapshot.warnings > 0 ? "warn" : undefined}
+          />
+          <Stat
+            label="Issues"
+            value={isMedia ? 0 : snapshot.issues}
+            tone={!isMedia && snapshot.issues > 0 ? "warn" : undefined}
+          />
+        </div>
+
+        {snapshot.mode === "rules" && (
+          <p className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
+            Rules-only mode: feedback does not change the text.
+          </p>
         )}
-        <Stat label="Warnings" value={snapshot.warnings} tone={snapshot.warnings > 0 ? "warn" : undefined} />
-        <Stat label="Issues" value={snapshot.issues} tone={snapshot.issues > 0 ? "warn" : undefined} />
-      </div>
 
-      {snapshot.mode === "rules" && (
-        <p className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
-          Rules-only mode: feedback does not change the text.
-        </p>
-      )}
-
-      {error && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-card px-4 py-3">
-          <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden />
-          <p className="min-w-0 flex-1 text-sm text-foreground">{error}</p>
-          {onRetry && (
-            <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
-              <RotateCcw aria-hidden /> Try again
-            </Button>
-          )}
-        </div>
-      )}
-
-      {snapshot.approved && (
-        <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-accent px-4 py-3 text-sm font-medium text-foreground">
-          <CheckCircle2 className="h-5 w-5 text-primary" aria-hidden /> Version {snapshot.attempt} approved.
-        </div>
-      )}
-
-      {isAudio && (
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="text-base font-bold text-foreground">Censored audio</h3>
-          <div className="mt-4">
-            {audioUrl ? (
-              <audio
-                key={snapshot.attempt}
-                controls
-                preload="metadata"
-                src={audioUrl}
-                className="w-full"
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">No audio available</p>
-            )}
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">Each masked word was replaced by a sound.</p>
-          {audioError && (
-            <p role="alert" className="mt-2 text-sm text-destructive">{audioError}</p>
-          )}
-        </div>
-      )}
-
-      <section className="relative">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-bold text-foreground">
-            {isAudio ? "Masked transcript" : `Version ${snapshot.attempt}`}
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
-              <History aria-hidden /> History ({snapshot.history.length})
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={async () => {
-                await navigator.clipboard.writeText(snapshot.text);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-            >
-              <Copy aria-hidden /> {copied ? "Copied!" : "Copy"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={download} disabled={busy}>
-              <Download aria-hidden /> Download .txt
-            </Button>
-            {isAudio && (
-              <Button variant="ghost" size="sm" onClick={downloadAudio} disabled={busy || downloadingAudio}>
-                {downloadingAudio ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download aria-hidden />} Download audio
+        {(hasFailed || error) && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-card px-4 py-3"
+          >
+            <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden />
+            <p className="min-w-0 flex-1 text-sm text-foreground">{errorMessage}</p>
+            {onRetry && (
+              <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
+                <RotateCcw aria-hidden /> Try again
               </Button>
             )}
           </div>
-        </div>
-        {/* The frame clips the scan effect; the inner box is the one that scrolls. */}
-        <div key={snapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
-          <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
-            <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
-          </div>
-        </div>
-        {busy && (
-          <div className="absolute inset-0 top-10 grid place-items-center rounded-lg bg-background/60" role="status">
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium text-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden /> {busyMessage}
-            </div>
+        )}
+
+        {snapshot.approved && (
+          <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-accent px-4 py-3 text-sm font-medium text-foreground">
+            <CheckCircle2 className="h-5 w-5 text-primary" aria-hidden /> Version {snapshot.attempt} approved.
           </div>
         )}
-      </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="outline" onClick={onNewDocument} disabled={busy}>New document</Button>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setRejectOpen(true)} disabled={busy || snapshot.approved}>
-            <ThumbsDown aria-hidden /> Reject
+        {/* Media center view: image or video */}
+        {isMedia ? (
+          <section className="relative space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-bold text-foreground">
+                {isImage ? "Image preview" : "Video preview"}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
+                  <History aria-hidden /> History ({snapshot.history.length})
+                </Button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <MediaViewer
+                snapshot={snapshot}
+                currentTimeMs={currentTimeMs}
+                onTimeUpdate={setCurrentTimeMs}
+                selectedRegionId={selectedRegionId}
+                onSelectRegion={setSelectedRegionId}
+                videoRef={videoRef}
+              />
+
+              {/* Progress bar overlay during processing or exporting */}
+              {isWorkingState && (
+                <div
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-2xl bg-background/80 p-6 backdrop-blur-sm"
+                  role="status"
+                >
+                  <div className="w-full max-w-sm space-y-3 rounded-xl border border-border bg-card p-6 shadow-lg">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground">
+                        {stageLabel(snapshot.progress.stage)}
+                      </span>
+                      <span className="tabular-nums font-semibold text-foreground">
+                        {snapshot.progress.total > 0
+                          ? `${Math.min(100, Math.round((snapshot.progress.completed / snapshot.progress.total) * 100))}%`
+                          : ""}
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={
+                        snapshot.progress.total > 0
+                          ? (snapshot.progress.completed / snapshot.progress.total) * 100
+                          : undefined
+                      }
+                      aria-label="Progress"
+                      className="h-2 w-full"
+                    />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>
+                        {snapshot.progress.completed} of {snapshot.progress.total}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" /> Working
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {isVideo && (
+              <VideoTimeline
+                snapshot={snapshot}
+                currentTimeMs={currentTimeMs}
+                onSeek={(ms: number) => {
+                  setCurrentTimeMs(ms);
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = ms / 1000;
+                  }
+                }}
+              />
+            )}
+          </section>
+        ) : (
+          <>
+            {isAudio && (
+              <div className="rounded-lg border border-border bg-card p-6">
+                <h3 className="text-base font-bold text-foreground">Censored audio</h3>
+                <div className="mt-4">
+                  {audioUrl ? (
+                    <audio
+                      key={snapshot.attempt}
+                      controls
+                      preload="metadata"
+                      src={audioUrl}
+                      className="w-full"
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No audio available</p>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">Each masked word was replaced by a sound.</p>
+                {audioError && (
+                  <p role="alert" className="mt-2 text-sm text-destructive">{audioError}</p>
+                )}
+              </div>
+            )}
+
+            <section className="relative">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-base font-bold text-foreground">
+                  {isAudio ? "Masked transcript" : `Version ${snapshot.attempt}`}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
+                    <History aria-hidden /> History ({snapshot.history.length})
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(snapshot.text);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    <Copy aria-hidden /> {copied ? "Copied!" : "Copy"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={download} disabled={busy}>
+                    <Download aria-hidden /> Download .txt
+                  </Button>
+                  {isAudio && (
+                    <Button variant="ghost" size="sm" onClick={downloadAudio} disabled={busy || downloadingAudio}>
+                      {downloadingAudio ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download aria-hidden />} Download audio
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div key={snapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
+                <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
+                  <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
+                </div>
+              </div>
+              {busy && (
+                <div className="absolute inset-0 top-10 grid place-items-center rounded-lg bg-background/60" role="status">
+                  <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium text-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden /> {busyMessage}
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button variant="outline" onClick={onNewDocument} disabled={busy}>
+            New document
           </Button>
-          <Button onClick={onApprove} disabled={busy || snapshot.approved} className="h-10 px-5">
-            <ThumbsUp aria-hidden /> Approve version
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setRejectOpen(true)}
+              disabled={busy || snapshot.approved || isWorkingState}
+            >
+              <ThumbsDown aria-hidden /> Reject
+            </Button>
+            <Button
+              onClick={onApprove}
+              disabled={busy || snapshot.approved || isWorkingState}
+              className="h-10 px-5"
+            >
+              <ThumbsUp aria-hidden /> Approve version
+            </Button>
+          </div>
         </div>
       </div>
-      </div>
 
+      {/* Right panel */}
       <aside aria-label="Review details" className="rounded-2xl border border-border bg-card p-5">
         <div className="mb-4 flex items-center justify-between border-b border-border pb-3.5 font-semibold">
           <span className="flex items-center gap-2.5">
@@ -282,22 +443,44 @@ export function ReviewWorkspace({
             {snapshot.approved ? "Approved" : "In review"}
           </span>
         </div>
-        <div className="relative overflow-hidden rounded-xl border border-border bg-background py-3.5 pl-5 pr-4 text-sm">
-          <span className="brand-gradient absolute inset-y-0 left-0 w-1" aria-hidden />
-          <b>Current version</b>
-          <small className="mt-1 block text-[13px] text-muted-foreground">
-            {isAudio ? "Audio censored" : "Text anonymized"} · {snapshot.history.length} rejected
-          </small>
-        </div>
-        <div className="mt-3.5 divide-y divide-border text-sm text-muted-foreground">
-          <div className="flex justify-between py-3">
-            Type <b className="font-semibold text-foreground">{isAudio ? "Audio" : "Document"}</b>
+
+        {isMedia ? (
+          <div>
+            <div className="relative mb-4 overflow-hidden rounded-xl border border-border bg-background py-3.5 pl-5 pr-4 text-sm">
+              <span className="brand-gradient absolute inset-y-0 left-0 w-1" aria-hidden />
+              <b>Sensitive regions</b>
+              <small className="mt-1 block text-[13px] text-muted-foreground">
+                {snapshot.regions.length} detected · {isImage ? "Photo" : "Video"}
+              </small>
+            </div>
+
+            <MediaRegionsList
+              regions={snapshot.regions}
+              selectedRegionId={selectedRegionId}
+              onSelectRegion={setSelectedRegionId}
+            />
           </div>
-          <div className="flex justify-between py-3">
-            Mode <b className="font-semibold text-foreground">{snapshot.mode === "rules" ? "Rules only" : "AI + rules"}</b>
-          </div>
-        </div>
-        <div className="mt-1.5 border-t border-border pt-4 text-[13px] text-muted-foreground">
+        ) : (
+          <>
+            <div className="relative overflow-hidden rounded-xl border border-border bg-background py-3.5 pl-5 pr-4 text-sm">
+              <span className="brand-gradient absolute inset-y-0 left-0 w-1" aria-hidden />
+              <b>Current version</b>
+              <small className="mt-1 block text-[13px] text-muted-foreground">
+                {isAudio ? "Audio censored" : "Text anonymized"} · {snapshot.history.length} rejected
+              </small>
+            </div>
+            <div className="mt-3.5 divide-y divide-border text-sm text-muted-foreground">
+              <div className="flex justify-between py-3">
+                Type <b className="font-semibold text-foreground">{isAudio ? "Audio" : "Document"}</b>
+              </div>
+              <div className="flex justify-between py-3">
+                Mode <b className="font-semibold text-foreground">{snapshot.mode === "rules" ? "Rules only" : "AI + rules"}</b>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="mt-4 border-t border-border pt-4 text-[13px] text-muted-foreground">
           <b className="mb-1.5 flex items-center gap-2 text-sm text-foreground">
             <ShieldCheck className="h-4 w-4 text-ok" aria-hidden /> Temporary session
           </b>
@@ -312,6 +495,8 @@ export function ReviewWorkspace({
             <DialogDescription>
               {isAudio
                 ? "The audio is not uploaded again; the transcript is analysed again with your feedback."
+                : isMedia
+                ? "Explain what should change in the detected regions."
                 : "Explain what should change: hide more, or keep visible something that was hidden."}
             </DialogDescription>
           </DialogHeader>
