@@ -44,9 +44,32 @@ class FakeModels:
         return self.generate_result
 
 
+class FakeCaches:
+    def __init__(self):
+        self.create_result = SimpleNamespace(
+            name="cachedContents/fake-cache-123"
+        )
+        self.create_error = None
+        self.create_calls = []
+        self.delete_error = None
+        self.delete_calls = []
+
+    def create(self, **kwargs):
+        self.create_calls.append(kwargs)
+        if self.create_error:
+            raise self.create_error
+        return self.create_result
+
+    def delete(self, **kwargs):
+        self.delete_calls.append(kwargs)
+        if self.delete_error:
+            raise self.delete_error
+
+
 class FakeSdkClient:
     def __init__(self):
         self.models = FakeModels()
+        self.caches = FakeCaches()
         self.close_calls = 0
 
     def close(self):

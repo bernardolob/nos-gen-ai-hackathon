@@ -36,6 +36,7 @@ from urllib.parse import unquote
 import audio_pipeline
 import detection
 import gateway
+import gemini_adapter
 import pipeline
 from audio import (
     AlignmentError,
@@ -772,12 +773,16 @@ def main():
         media_processor.verify_model()
     except (MediaConfigurationError, MediaError):
         media_processor = None
-    app = create_app(gateway.from_env(), scribe=scribe,
-                     media_processor=media_processor)
+    generate = (
+        gemini_adapter.make_cached_generate() or gateway.from_env()
+    )
+    app = create_app(generate, scribe=scribe, media_processor=media_processor)
     session = app.state.session
+    text_mode = (
+        "Gemini (cache ativo)" if getattr(generate, "client", None)
+        else "Gemini" if generate else "regras de segurança")
     print("Revisão em http://%s:%d (texto: %s; áudio: %s; multimédia: %s)" % (
-        HOST, PORT,
-        "Gemini" if session.generate else "regras de segurança",
+        HOST, PORT, text_mode,
         "ligado" if session.audio_enabled() else "desligado",
         "Gemini" if media_processor else "indisponível"))
     uvicorn.run(app, host=HOST, port=PORT)

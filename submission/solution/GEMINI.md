@@ -70,14 +70,18 @@ As exceções estão agrupadas pelo que quem chama pode fazer (ver `errors.py`):
 `UpstreamError` é a base dos três primeiros grupos: apanha tudo o que corre mal
 com o Gemini. A tabela de códigos HTTP está em `STATUS_ERRORS` (`client.py`).
 
-## Limitações atuais
+## Context Caching
 
-- `generate_text(prompt)` só envia texto. A deteção vai precisar de enviar a
-  prompt interna como instrução de sistema e pedir resposta em JSON, o que o
-  cliente ainda não suporta (o pipeline usa o gateway, ver
-  [GATEWAY.md](GATEWAY.md)). `temperature` está obsoleta no
-  `gemini-3.5-flash-lite`, por isso já não é preciso fixá-la.
-- O modelo é o `gemini-3.5-flash-lite` (pensamento mínimo por defeito, mais
-  rápido e barato). O nome está fixo no código e no `wrangler.jsonc`
-  (`GEMINI_MODEL`); mudar só um dos dois faz o cliente direto recusar a
-  resposta. O Worker tem de ser publicado de novo para a mudança valer.
+O cliente suporta **context caching** nativo da instrução de sistema através de `PromptCache` (`src/gemini/caching.py`):
+
+```python
+result = client.generate_with_system_instruction(
+    system_instruction=system_prompt,
+    content=document_content,
+)
+```
+
+- A instrução de sistema é enviada e cacheada na primeira chamada via Gemini Context Caching API.
+- Chamadas seguintes reutilizam o cache dentro do TTL configurado (`GEMINI_CACHE_TTL_SECONDS`, por defeito 3600 segundos), reduzindo significativamente custos de tokens de entrada.
+- Se a criação do cache falhar (por exemplo, abaixo do limite mínimo de tokens do modelo), é feito fallback automático transparente para envio inline da instrução de sistema sem falhar a execução.
+- O adaptador `src/gemini_adapter.py` (`make_cached_generate`) liga este cliente com caching diretamente à interface `generate(sistema, conteúdo)` da pipeline.
