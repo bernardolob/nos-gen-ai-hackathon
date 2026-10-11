@@ -195,7 +195,7 @@ O arranque diz se o Gemini e o áudio estão ligados.
   `src/test/instructions-requests.test.ts` (o pedido real, com o `fetch`
   falso, para documento, áudio, imagem e vídeo). Ver "Instruções iniciais:
   como se verifica" abaixo.
-- **Contrato backend-UI:** `tests/test_ui_contract.py` (7 testes) lê os tipos
+- **Contrato backend-UI:** `tests/test_ui_contract.py` (13 testes) lê os tipos
   e as chamadas em `src/lib/review/` e confirma que os campos do estado, do
   histórico, as rotas chamadas, os tipos de áudio e os limites coincidem com
   o backend. Se um lado mudar sem o outro, falha aqui.
@@ -214,6 +214,7 @@ O que os testes automáticos garantem:
 | As instruções iniciais ficam sempre no pedido, em primeiro lugar, mesmo com muitas rejeições, e o total respeita as 2000 letras | idem |
 | O preflight de CORS aceita o cabeçalho a partir da UI e não o abre a outras origens | idem |
 | O cabeçalho sai no pedido real para documento, áudio, imagem e vídeo, codificado, nunca na URL nem no corpo | `instructions-requests.test.ts` |
+| O nome do cabeçalho e o limite de 1500 são os mesmos na UI e no backend, e o CORS aceita o cabeçalho | `test_ui_contract.py` |
 
 Os testes foram verificados por **mutação**: com quatro erros plantados no
 backend (a rejeição esquece a instrução, o CORS sem o cabeçalho, o limite
@@ -249,6 +250,9 @@ modo escuro.
 Verificado:
 - O fluxo de texto de ponta a ponta, no browser, contra o backend real e o
   Gemini: enviar, rejeitar com um pedido (a tentativa 2 respeita-o), aprovar.
+- As instruções iniciais de ponta a ponta, no browser: o cabeçalho sai
+  codificado, a versão 1 respeita-as e a versão 2, depois de rejeitar,
+  respeita-as e à observação (ver "Instruções iniciais: como se verifica").
 - A rota de áudio com a transcrição falsa: estado, ficheiros temporários,
   uma só transcrição, falhas que não mudam nada, tipos e tamanhos.
 - A rota de áudio com o **`ffmpeg` real**: o troço da palavra censurada é
