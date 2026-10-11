@@ -725,9 +725,10 @@ def test_a_face_blur_follows_the_face_not_the_whole_box():
     # The corners of the box are outside the face ellipse: untouched.
     for row, column in ((32, 42), (32, 158), (168, 42), (168, 158)):
         assert np.array_equal(frame[row, column], original[row, column])
-    # And nothing outside the box (plus the small margin) changes.
-    assert np.array_equal(frame[:20], original[:20])
-    assert np.array_equal(frame[:, :25], original[:, :25])
+    # And nothing far outside the box changes (the ellipse is a little larger
+    # than the box, and its soft edge reaches a few pixels more).
+    assert np.array_equal(frame[:8], original[:8])
+    assert np.array_equal(frame[:, :18], original[:, :18])
 
 
 def test_a_face_blur_removes_the_fine_detail():
@@ -890,6 +891,120 @@ def test_media_review_api_is_fail_closed_and_exports(tmp_path):
         approved = wait_ready(api)
         assert approved["approved"] is True
         assert api.get("/api/media/output").content == b"redacted"
+
+
+def test_the_preview_route_returns_the_redacted_picture_of_the_draft():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    import user_validation
+
+    class Previewing(FakeMediaProcessor):
+        def __init__(self):
+            self.calls = []
+
+        def preview(self, source, content_type, regions, time_ms):
+            self.calls.append((content_type, len(regions), time_ms))
+            return b"JPEG-preview"
+
+    processor = Previewing()
+    with TestClient(user_validation.create_app(
+            media_processor=processor)) as api:
+        api.post("/api/document", content=b"fake-image",
+                 headers={"Content-Type": "image/jpeg"})
+        data = wait_ready(api)
+        draft = data["regions"] + data["regions"]  # an unsaved edit
+        reply = api.post("/api/media/preview", json={
+            "attempt": 1, "time_ms": 0, "regions": draft})
+        assert reply.status_code == 200
+        assert reply.headers["content-type"] == "image/jpeg"
+        assert reply.headers["cache-control"] == "no-store"
+        assert reply.content == b"JPEG-preview"
+        assert processor.calls == [("image/jpeg", 2, 0)]
+        stale = api.post("/api/media/preview", json={
+            "attempt": 7, "time_ms": 0, "regions": []})
+        assert stale.status_code == 409
+        broken = api.post("/api/media/preview", json={
+            "attempt": 1, "time_ms": 0,
+            "regions": [{"id": "x", "category": "nope"}]})
+        assert broken.status_code == 422
+
+
+def test_the_preview_route_needs_a_finished_media_review():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    import user_validation
+
+    with TestClient(user_validation.create_app(
+            media_processor=FakeMediaProcessor())) as api:
+        reply = api.post("/api/media/preview", json={
+            "attempt": 1, "time_ms": 0, "regions": []})
+        assert reply.status_code == 409
+
+
+def test_a_failing_preview_is_a_fixed_message_not_the_detail():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    import user_validation
+    from media import MediaError
+
+    class Failing(FakeMediaProcessor):
+        def preview(self, *args):
+            raise MediaError("detalhe interno do OpenCV")
+
+    with TestClient(user_validation.create_app(
+            media_processor=Failing())) as api:
+        api.post("/api/document", content=b"fake-image",
+                 headers={"Content-Type": "image/jpeg"})
+        wait_ready(api)
+        reply = api.post("/api/media/preview", json={
+            "attempt": 1, "time_ms": 0, "regions": []})
+        assert reply.status_code == 502
+        assert reply.json()["detail"] == user_validation.PREVIEW_FAILED
+        assert "OpenCV" not in reply.text
+
+
+def test_the_real_preview_shows_the_blur_of_a_photo(tmp_path):
+    Image = pytest.importorskip("PIL.Image")
+    np = pytest.importorskip("numpy")
+    import io
+    source = tmp_path / "photo.png"
+    Image.fromarray(_textured_frame(np)).save(source)
+    processor = MediaProcessor(analyzer=None)
+
+    def decode(data):
+        with Image.open(io.BytesIO(data)) as picture:
+            return np.asarray(picture.convert("RGB")).astype(int)
+
+    plain = decode(processor.preview(source, "image/png", [], 0))
+    blurred = decode(processor.preview(source, "image/png", [_face_item()], 0))
+    # Smooth in the middle of the face, and the same as the plain preview at
+    # the corners of the box (outside the ellipse).
+    assert np.max(np.abs(np.diff(blurred[70:130, 70:130], axis=1))) < 14
+    # (JPEG works in blocks, so "identical" means within its rounding.)
+    assert np.abs(blurred[32, 42] - plain[32, 42]).max() <= 8
+    assert np.abs(blurred[100, 100] - plain[100, 100]).max() > 20
+
+
+@pytest.mark.skipif(
+    shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
+    reason="ffmpeg is required",
+)
+def test_the_real_preview_shows_the_blur_of_a_video_frame(tmp_path):
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    source = tmp_path / "clip.mp4"
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc2=s=200x200:d=1:r=10",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)],
+        check=True, capture_output=True)
+    item = _face_item()
+    item.end_ms = 1000
+    processor = MediaProcessor(analyzer=None)
+    data = processor.preview(source, "video/mp4", [item], 500)
+    frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    assert frame.shape[:2] == (200, 200)
+    assert np.max(np.abs(np.diff(
+        frame[70:130, 70:130].astype(int), axis=1))) < 30
 
 
 def test_media_initial_instructions_reach_the_analysis_and_the_reanalysis():

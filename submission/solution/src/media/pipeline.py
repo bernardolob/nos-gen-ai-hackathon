@@ -226,6 +226,17 @@ class MediaProcessor:
             raise MediaError(
                 "Não foi possível rastrear esta região.") from None
 
+    def preview(self, source, content_type, regions, time_ms=0):
+        """One redacted picture (JPEG bytes) with the same blur and mosaic as
+        the export: the photo, or the video frame at ``time_ms``. Used to show
+        the reviewer what the result will look like, before approving."""
+        kind = supported_media_kind(content_type)
+        if kind == "image":
+            return _preview_image(source, regions)
+        if kind == "video":
+            return _preview_video_frame(source, regions, time_ms)
+        raise MediaValidationError("Unsupported media type.")
+
     def render(self, source, content_type, regions, output, progress=None):
         report = progress or (lambda *_args: None)
         kind = supported_media_kind(content_type)
@@ -239,6 +250,55 @@ class MediaProcessor:
             report("exportação concluída", 1, 1)
         else:
             raise MediaValidationError("Unsupported media type.")
+
+
+PREVIEW_MAX_SIDE = 1280
+
+
+def _preview_image(source, regions):
+    """The photo with the same redaction as the export, as JPEG bytes."""
+    import io
+    from PIL import Image, ImageOps
+    try:
+        with Image.open(source) as original:
+            image = ImageOps.exif_transpose(original).convert("RGB")
+    except Exception:
+        raise MediaError("Não foi possível abrir a imagem.") from None
+    _pixelate_image_regions(image, regions, 0)
+    image.thumbnail((PREVIEW_MAX_SIDE, PREVIEW_MAX_SIDE))
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=85)
+    return buffer.getvalue()
+
+
+def _preview_video_frame(source, regions, time_ms):
+    """One video frame, redacted like the export, as JPEG bytes."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        raise MediaError("O OpenCV não está instalado.") from None
+    capture = cv2.VideoCapture(str(source))
+    try:
+        if not capture.isOpened():
+            raise MediaError("Não foi possível abrir o vídeo.")
+        capture.set(cv2.CAP_PROP_POS_MSEC, max(0, int(time_ms)))
+        ok, frame = capture.read()
+        if not ok:
+            raise MediaError("Não foi possível ler esse instante do vídeo.")
+    finally:
+        capture.release()
+    _pixelate_video_regions(frame, regions, time_ms, cv2, np)
+    height, width = frame.shape[:2]
+    scale = PREVIEW_MAX_SIDE / max(width, height)
+    if scale < 1:
+        frame = cv2.resize(
+            frame, (round(width * scale), round(height * scale)),
+            interpolation=cv2.INTER_AREA)
+    done, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not done:
+        raise MediaError("Não foi possível gerar a pré-visualização.")
+    return encoded.tobytes()
 
 
 def _read_image(path):
@@ -1525,14 +1585,16 @@ def _blur_face(image, box, cv2, np):
     box_w, box_h = right - left, bottom - top
     if min(box_w, box_h) < FACE_MIN_SIDE:
         return False
-    # Work on a crop a bit larger than the box: the ellipse is larger too.
-    pad_x = int(round(box_w * (FACE_ELLIPSE_MARGIN - 1) / 2)) + 2
-    pad_y = int(round(box_h * (FACE_ELLIPSE_MARGIN - 1) / 2)) + 2
+    short = min(box_w, box_h)
+    sigma = max(1.5, short * FACE_EDGE_SOFTNESS)
+    # Work on a crop larger than the box: the ellipse is larger too, plus its
+    # soft edge, and a crop that cut it would leave a flat edge to the blur.
+    pad_x = int(round(box_w * (FACE_ELLIPSE_MARGIN - 1) / 2 + 3 * sigma)) + 2
+    pad_y = int(round(box_h * (FACE_ELLIPSE_MARGIN - 1) / 2 + 3 * sigma)) + 2
     x0, y0 = max(0, left - pad_x), max(0, top - pad_y)
     x1, y1 = min(width, right + pad_x), min(height, bottom + pad_y)
     area = image[y0:y1, x0:x1]
     area_h, area_w = area.shape[:2]
-    short = min(box_w, box_h)
     cell = max(4.0, short / FACE_BLUR_CELLS)
     columns = max(1, int(math.ceil(area_w / cell)))
     rows = max(1, int(math.ceil(area_h / cell)))
@@ -1540,7 +1602,6 @@ def _blur_face(image, box, cv2, np):
     blurred = cv2.resize(
         coarse, (area_w, area_h), interpolation=cv2.INTER_CUBIC)
     blurred = cv2.GaussianBlur(blurred, (0, 0), cell * 0.5)
-    sigma = max(1.5, short * FACE_EDGE_SOFTNESS)
     mask = np.zeros((area_h, area_w), dtype=np.float32)
     center = (int(round((left + right) / 2 - x0)),
               int(round((top + bottom) / 2 - y0)))
