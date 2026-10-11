@@ -23,6 +23,10 @@ O Gemini só **deteta**: devolve a lista dos valores sensíveis. Quem escreve os
 `*` é o código, por isso a formatação do documento nunca depende do modelo.
 Pormenores em [ARCHITECTURE.md](ARCHITECTURE.md).
 
+Além do texto, o sistema trata **áudio**, **fotografias** e **vídeos**, e
+devolve também o **PDF anonimizado**; tudo se revê numa UI (ver "Extras"
+abaixo). O texto do desafio, o `submission.txt`, é a saída principal.
+
 ## Estado
 
 Pontos do pipeline, pela ordem do fluxo:
@@ -40,6 +44,11 @@ Pontos do pipeline, pela ordem do fluxo:
 | | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), ligado ao Gemini pelo gateway (`src/gateway.py`), testado com o Gemini real |
 | | `submission/submission.txt` | refeito com o prompt atual e as instruções iniciais (`user_instructions.txt`), ver "A submissão" abaixo |
 | | `submission/prompt.txt` | preenchido: o pedido exato (prompt interno, documento e instruções iniciais); falta confirmar com a NOS que é isto que lá vai |
+| | Resposta do modelo em JSON obrigada | feito: um só esquema (`detection_schema.json`) para o Worker e para o SDK, ver [DETECTION.md](DETECTION.md) |
+| Extra | Saída em PDF | feito e testado com o Gemini real, ver [PDF.md](PDF.md) |
+| Extra | Imagem e vídeo | feito e testado com o Gemini real e um vídeo real, ver [MEDIA.md](MEDIA.md) |
+| Extra | Censura de áudio | feita; a rota pelo Worker espera o deploy, ver [AUDIO.md](AUDIO.md) |
+| Extra | UI da revisão | feita (texto, PDF, áudio, imagem e vídeo, instruções, temas), ver [REVIEW.md](REVIEW.md) |
 
 Sem a deteção, o pipeline já corre no documento do desafio e mascara o que as
 regras de segurança apanham (data de nascimento, números de identificação,
@@ -53,14 +62,17 @@ Gemini.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, contrato de dados e estrutura de pastas |
 | [DECISIONS.md](DECISIONS.md) | Decisões de desenho, com as razões, e decisões em aberto |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Como instalar, testar e contribuir |
-| [REVIEW.md](REVIEW.md) | Revisão manual (texto e áudio): UI, backend, rotas e rejeição com observações |
+| [REVIEW.md](REVIEW.md) | Revisão manual (texto, PDF, áudio, imagem e vídeo): UI, backend, rotas e rejeição com observações |
 | [AUDIO.md](AUDIO.md) | Extra: censura de áudio (linha de comandos e rota do backend) |
+| [MEDIA.md](MEDIA.md) | Extra: anonimização de imagens e vídeos (deteção, rastreio, desfoque) |
 | [PDF.md](PDF.md) | Saída em PDF: o PDF original com as palavras sensíveis apagadas |
 | [GATEWAY.md](GATEWAY.md) | Como o pipeline chama o Gemini pelo Worker Cloudflare |
+| [CLOUDFLARE.md](CLOUDFLARE.md) | O Worker: configurar, publicar e as rotas (texto, media, áudio) |
+| [GEMINI.md](GEMINI.md) | O cliente direto do Gemini (SDK), com cache do prompt |
 | [DETECTION.md](DETECTION.md) | Como a deteção pede e valida a lista de itens |
 | [MASKING.md](MASKING.md) | Como o mascaramento trata cada caso |
 | [taxonomy.md](taxonomy.md) | Categorias de dados sensíveis |
-| [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (versão 4, genérica) |
+| [internal_prompt.txt](internal_prompt.txt) | A prompt enviada ao Gemini (genérica, pelo critério de reidentificação) |
 
 ## Experimentar
 
@@ -194,6 +206,28 @@ privacidade: o áudio original, ainda com os dados sensíveis, vai para o
 ElevenLabs.
 Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
 
+## Extras
+
+Fora da numeração do pipeline. Reaproveitam-no sem lhe tocar.
+
+- **Saída em PDF** ([PDF.md](PDF.md)). Quando o documento é um PDF, devolve o
+  PDF original com cada palavra sensível **apagada do ficheiro** e um `*` no
+  lugar, mantendo o layout. Falha fechada: se uma linha não bate certo cobre-se
+  inteira, e um PDF que a verificação não confirme não é devolvido. Na linha de
+  comandos, `--pdf`; no backend, `GET /api/pdf/current`.
+- **Imagem e vídeo** ([MEDIA.md](MEDIA.md)). O Gemini (pelo Worker) indica o
+  que é sensível; o OpenCV afina os rostos e **rastreia** cada região no vídeo
+  (até 10 posições por segundo). Os rostos ficam com um **desfoque suave numa
+  elipse colada à cara**; o texto, os documentos, os cartões e as matrículas
+  ficam pixelizados. O revisor pode desenhar, mover, redimensionar, limitar no
+  tempo e rastrear regiões antes de aprovar. Verificado com uma fotografia e
+  com um vídeo reais (uma cara a mexer e um cartão).
+- **A UI** ([REVIEW.md](REVIEW.md)): enviar PDF, texto, áudio, imagem ou
+  vídeo, escrever instruções logo no envio, rejeitar com observações,
+  descarregar o resultado (texto, PDF, áudio, imagem ou vídeo), ver a palavra
+  escondida por um `*` ao passar o rato, e escolher o tema (seis temas,
+  claro, escuro ou o do sistema).
+
 ## Como a solução responde aos critérios
 
 | Critério (peso) | Onde está | Estado |
@@ -202,10 +236,10 @@ Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
 | Prompt (10%) | [internal_prompt.txt](internal_prompt.txt), [taxonomy.md](taxonomy.md) | testada com o Gemini |
 | Qualidade da anonimização (5%) | [MASKING.md](MASKING.md) | formatação preservada; contexto por medir |
 | Explicabilidade (5%) | Relatório, campo `reason` de cada item | feito |
-| Eficiência (5%) | Uma chamada ao modelo; o resto é código | por medir |
+| Eficiência (5%) | Uma chamada ao modelo; o resto é código. A resposta vem em JSON pelo esquema, sem a secção de formato no prompt (-850 caracteres por pedido), e o SDK pode guardar o prompt em cache ([GEMINI.md](GEMINI.md)) | medido: ~6 a 8 s por execução, ver [GATEWAY.md](GATEWAY.md) |
 | GitHub (5%) e Colaboração (30%) | Um branch por componente, pull requests com merge commit, testes | ver [DEVELOPMENT.md](DEVELOPMENT.md) |
 | Documentação (10%) | Esta pasta | em curso |
-| Pitch (20%) | Extra: censura de áudio ([AUDIO.md](AUDIO.md)) | por preparar |
+| Pitch (20%) | Extras: áudio ([AUDIO.md](AUDIO.md)), imagem e vídeo ([MEDIA.md](MEDIA.md)), PDF ([PDF.md](PDF.md)) e a UI | por preparar |
 
 ## Problemas conhecidos
 
@@ -213,6 +247,16 @@ Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
   com os dados sensíveis (o Worker não o guarda). Sem o gateway nem uma chave
   o áudio fica desligado e o resto funciona. A transcrição local (Whisper) é
   a evolução que resolveria o problema (ver [DECISIONS.md](DECISIONS.md), 16).
+- **Imagem e vídeo vão para o Gemini.** Os fotogramas (e as fotografias) são
+  enviados, através do Worker, ao Gemini para ele indicar o que é sensível;
+  a UI avisa antes de enviar e pede "I understand". O mesmo vale para o
+  texto (vai para o Gemini) e para o áudio (vai para o ElevenLabs).
+- **O vídeo tem um limite do rastreio:** quando um objeto **entra** em cena,
+  desfocado pelo movimento, pode ficar uns fotogramas sem máscara até o modelo
+  o ver (cerca de 3 amostras por segundo). Num teste com um cartão a entrar
+  foram uns 0,2 s, e nada se lia.
+- **O PDF anonimizado** não trata texto dentro de imagens, PDFs digitalizados,
+  PDFs protegidos nem páginas rodadas (ver [PDF.md](PDF.md)).
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.
 

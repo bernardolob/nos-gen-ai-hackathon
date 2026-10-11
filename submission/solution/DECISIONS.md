@@ -237,6 +237,59 @@ afetados. O Worker passa a ser mais um ponto de custo e de abuso: limita o
 áudio a 25 MB e a 5 pedidos por minuto e por IP, só aceita as origens da UI e
 cada transcrição gasta créditos do ElevenLabs.
 
+### 17. A resposta do modelo é imposta por um esquema, não pedida no prompt
+
+**O problema.** O prompt descrevia o formato JSON (campos e um exemplo), mas o
+modelo podia sempre responder com texto à volta, campos a `null` ou uma
+categoria inventada.
+
+**A decisão.** Um só ficheiro, `detection_schema.json`, com os campos e os
+valores permitidos de `category` e `confidence`. O Worker impõe-no ao Gemini
+quando o pedido traz `"format": "detection"` (o esquema vive no Worker, nunca
+no pedido, e qualquer outro formato é 422) e o SDK passa o mesmo esquema. O
+prompt ficou com um lembrete de duas linhas (-850 caracteres por pedido).
+Foram medidas execuções reais com e sem a secção de formato: a qualidade
+ficou igual dentro da variação do modelo. Os testes ligam o esquema às
+categorias e aos campos do projeto, por isso não pode divergir. O `reason`
+passou a opcional (só com `incerto`), o que deixa vazia a coluna "Razão" do
+relatório nos outros itens.
+
+### 18. O PDF anonimizado apaga o texto, cobre a linha inteira se duvida e verifica
+
+**O problema.** Devolver um PDF com `*` sem deixar os dados no ficheiro (uma
+tarja por cima deixa o texto copiável).
+
+**A decisão.** `pdf_output.py` aplica *redactions* às palavras mascaradas (o
+texto debaixo é removido) e escreve o `*` no lugar, mantendo o layout. Se uma
+linha não bate certo com o PDF cobre-se a linha inteira (falha fechada) e, no
+fim, lê-se o PDF gerado e confirma-se que as suas palavras são exatamente as
+do texto mascarado; senão, não se devolve. **O que se perde:** PDFs só de
+imagem, protegidos ou com texto dentro de imagens não são tratados, e a caixa
+apagada é branca (ver [PDF.md](PDF.md)).
+
+### 19. Rostos desfocados numa elipse; texto e documentos pixelizados
+
+**O problema.** A grelha de píxeis sobre uma caixa retangular ficava feia e
+cobria mais do que a cara.
+
+**A decisão.** Nos rostos, o recorte é reduzido a cerca de 6 células de cor,
+ampliado com interpolação, desfocado e mostrado através de uma elipse
+ligeiramente maior do que a caixa, com a borda esbatida. Continua
+irreversível (o detalhe fino perde-se) e um teste mostra-o. O contorno vem da
+caixa e não do polígono da segmentação, que pode ser mais pequeno do que a
+cara. O texto, os documentos, os cartões e as matrículas mantêm a grelha,
+porque aí o que importa é que nada se leia (ver [MEDIA.md](MEDIA.md)).
+
+### 20. A UI mostra o original ao passar o rato e aceita instruções no envio
+
+**A decisão da equipa.** O estado traz `original_text` e a UI mostra a palavra
+escondida por um `*` ao passar o rato, para o revisor validar sem abrir o
+original. É o texto com os dados sensíveis, mas só circula entre o backend
+local e o navegador de quem enviou o ficheiro (CORS limitado às origens da
+UI). O envio tem também um campo de instruções iniciais, que valem desde a
+primeira versão. **O que se perde:** quem abrir o ecrã de revisão pode ler o
+original; para um uso fora de uma máquina local isto teria de ser opcional.
+
 ## Decisões em aberto
 
 1. **Normalização Unicode.** Se o Gemini devolver `ç` decomposto (NFD), o

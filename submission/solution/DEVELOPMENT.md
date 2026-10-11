@@ -8,11 +8,15 @@ Como instalar, testar e contribuir. O resumo do projeto está no
 Python 3.10 ou superior (é a versão do lint no GitHub).
 
 ```bash
-pip install PyMuPDF flake8
+pip install -r submission/solution/requirements-dev.txt
 ```
 
-O PyMuPDF só é preciso para a extração do PDF. O resto do núcleo (regras de
-segurança, mascaramento, relatório) usa apenas a biblioteca padrão.
+Para só o núcleo (regras de segurança, mascaramento, relatório) basta o
+PyMuPDF (extração do PDF) e o `flake8`: o resto usa a biblioteca padrão. O
+backend da revisão precisa do `fastapi`, do `uvicorn` e do `httpx`; a saída em
+PDF, de imagem e de vídeo precisam do PyMuPDF, do Pillow e do OpenCV (tudo em
+`requirements.txt`), e o vídeo e o áudio do `ffmpeg` (ver abaixo). A UI precisa
+do Node.js (`npm install` na pasta da UI).
 
 ### Chave do Gemini
 
@@ -81,12 +85,39 @@ biblioteca padrão. O `pytest` também os corre
 (`python -m pytest submission/solution/tests`) e passa a ser preciso quando
 entrarem os testes do cliente do Gemini.
 
+Os testes da UI correm na pasta `Lovable_UI_JunctionX` com `npx vitest run`
+(e `npx tsc --noEmit`). Os de imagem e vídeo (`tests/test_media.py`) usam o
+OpenCV e o Pillow; o que grava um vídeo precisa do `ffmpeg`.
+
 Os testes de `audio/redactor.py`, de `audio_pipeline.py` e da rota de áudio
 (`tests/test_audio_route.py`) que escrevem áudio a sério precisam do `ffmpeg`
 instalado; sem ele, saltam-se sozinhos, não falham. Os restantes testes da
 rota de áudio usam a transcrição, o modelo e o `ffmpeg` falsos, por isso
 correm em qualquer máquina (precisam do `pytest`, do `fastapi` e do
 `httpx`).
+
+### Publicar o Worker da Cloudflare
+
+O Worker (`cloudflare/worker.ts`) tem de ser publicado de cada vez que muda: o
+esquema da resposta, a rota do áudio e as de imagem e vídeo só existem depois
+disso. A partir da raiz do repositório, com `npm install` feito:
+
+```bash
+npx wrangler login            # uma vez; no PowerShell use npx.cmd
+npx wrangler deploy
+```
+
+Quem publica tem de ter permissão de **escrita** na conta da Cloudflare onde
+está o Worker (não chega ser membro com leitura: o `wrangler` falha com 403).
+Com várias contas, indique-a em `CLOUDFLARE_ACCOUNT_ID`. Para confirmar:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "Origin: http://localhost:5173" \
+  -H "Content-Type: application/octet-stream" --data-binary "" \
+  https://nos-gemini-gateway.jnhorta05.workers.dev/api/v1/audio/transcribe
+```
+
+Dá 413 (corpo vazio) se a rota do áudio existe, e 404 se o Worker é antigo.
 
 ## Correr o código à mão
 

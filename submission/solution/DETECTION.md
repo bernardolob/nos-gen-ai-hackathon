@@ -46,6 +46,30 @@ Mascara também as datas.
 </user_instructions>
 ```
 
+## A resposta vem em JSON obrigada
+
+O formato da resposta não está descrito no prompt: é **imposto** ao modelo por
+um esquema, `detection_schema.json` (uma lista de itens com `line`, `text`,
+`category`, `confidence` e, opcionais, `reason`, `occurrence` e `visible`; os
+valores de `category` e `confidence` são os do projeto). Os dois caminhos usam
+o mesmo ficheiro:
+
+- **Gateway:** `gateway.make_generate` envia `{"prompt": ..., "format":
+  "detection"}` e o Worker pede ao Gemini `responseMimeType` e
+  `responseSchema` (ver [GATEWAY.md](GATEWAY.md)). O esquema vive no Worker,
+  nunca no pedido.
+- **SDK direto:** `gemini_adapter` passa o mesmo esquema (ver
+  [GEMINI.md](GEMINI.md)).
+
+O prompt só leva um lembrete de duas linhas ("devolve uma lista JSON; nunca
+uma chave com `null`"), o que poupa cerca de 850 caracteres por pedido. O
+`reason` é opcional e só se pede quando a confiança é `incerto`; por isso, na
+tabela do relatório, a coluna "Razão" fica vazia nos restantes itens (a
+categoria continua lá). Medido com o Gemini real: a qualidade ficou igual
+dentro da variação normal do modelo. Os testes
+(`tests/test_detection_schema.py`) ligam o esquema às categorias, aos níveis
+de confiança, aos campos dos itens e ao `import` do Worker.
+
 ## Prompt do utilizador
 
 É o texto livre em que o utilizador diz **diretamente o que quer mascarar**,

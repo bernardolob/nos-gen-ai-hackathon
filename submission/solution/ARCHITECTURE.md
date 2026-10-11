@@ -128,6 +128,9 @@ tocar.
 | Extra | Ficheiros | Estado |
 |---|---|---|
 | Saída em PDF | `src/pdf_output.py` | feito e testado, ver [PDF.md](PDF.md) |
+| Imagem e vídeo | `src/media/` (análise, regiões, rastreio, exportação) | feito e testado com o Gemini e um vídeo reais, ver [MEDIA.md](MEDIA.md) |
+| Resposta em JSON obrigada | `detection_schema.json`, `cloudflare/worker.ts` (`format: "detection"`), `src/gemini_adapter.py` | feito, ver [DETECTION.md](DETECTION.md) |
+| Cache do prompt | `src/gemini_adapter.py`, `src/gemini/caching.py` | feito; só com `GEMINI_API_KEY` local, ver [GEMINI.md](GEMINI.md) |
 | Censura de áudio | `src/audio/`, `src/audio_pipeline.py` | feito e testado com a API real do ElevenLabs, ver [AUDIO.md](AUDIO.md) |
 | Rota de áudio da revisão | `src/user_validation.py` (`/api/audio`) | feita e testada com a transcrição falsa e o `ffmpeg` real; a UI de áudio existe (visto em modo demonstração), ver [REVIEW.md](REVIEW.md) |
 
@@ -135,8 +138,8 @@ tocar.
 
 ```
 submission/
-  prompt.txt                  (a preencher: a prompt usada)
-  submission.txt              (a preencher: a saída do sistema)
+  prompt.txt                  o pedido exato (prompt interno, documento, instruções)
+  submission.txt              a saída do sistema para o documento do desafio
   solution/
     SOLUTION.md               ponto de entrada da documentação
     ARCHITECTURE.md           este documento
@@ -145,7 +148,12 @@ submission/
     DETECTION.md              deteção e validação da resposta
     MASKING.md                regras do mascaramento
     AUDIO.md                  extra: censura de áudio
+    MEDIA.md                  extra: imagem e vídeo
+    PDF.md                    extra: saída em PDF
+    GATEWAY.md, CLOUDFLARE.md, GEMINI.md   o Worker e os clientes do Gemini
     REVIEW.md                 revisão manual: UI, backend e rotas
+    user_instructions.txt     as instruções iniciais da submissão
+    detection_schema.json     o esquema da resposta do modelo (Worker e SDK)
     taxonomy.md               categorias de dados sensíveis
     internal_prompt.txt       2 Prompt interna
     src/
@@ -161,8 +169,11 @@ submission/
       gateway.py              liga o pipeline ao Gemini pelo Worker
       labels.py               deixa as etiquetas visíveis (itens do modelo)
       visibility.py           valores que o utilizador pediu para ficarem visíveis
-      user_validation.py      backend da revisão manual, texto e áudio (FastAPI)
+      user_validation.py      backend da revisão manual: texto, PDF, áudio, imagem e vídeo (FastAPI)
+      pdf_output.py           extra: o PDF anonimizado
+      media/                  extra: imagem e vídeo (Gemini, OpenCV, ffmpeg)
       gemini/                 cliente direto do Gemini (alternativa)
+      gemini_adapter.py       esse cliente como `generate`, com cache do prompt
       audio/                  extra: transcrição, alinhamento e redação
       audio_pipeline.py       extra: ponto de entrada da censura de áudio
     assets/

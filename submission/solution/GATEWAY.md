@@ -52,6 +52,14 @@ Fora de `localhost`, o endereço tem de ser `https`.
 - **Origem e ritmo.** Sem `Origin` autorizado o Worker responde 403; passam
   até 60 pedidos por minuto por IP para acomodar os lotes de vídeo.
 
+## Medido
+
+Com o `gemini-3.5-flash-lite` e o PDF do desafio (cerca de 10 mil caracteres
+por pedido, com o esquema JSON): **5 a 8 segundos por execução** em mais
+de 20 execuções reais, sem problemas de verificação em nenhuma e quase sempre
+sem avisos (uma deu 3).
+O número de itens varia entre execuções (83 a 101).
+
 ## Erros
 
 | Erro | Quando | Repete? |

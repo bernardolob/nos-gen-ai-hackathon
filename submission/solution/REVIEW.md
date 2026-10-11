@@ -14,8 +14,11 @@ logo na primeira versão. As versões rejeitadas ficam no histórico da sessão.
 
 ```
 texto:  UI <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)
+PDF:    o mesmo, e GET /api/pdf/current -> pdf_output (apaga as palavras)
 áudio:  UI <-> src/user_validation.py -> ElevenLabs (1 vez) -> pipeline.run
                                       -> alinhamento -> ffmpeg (sons de censura)
+imagem, vídeo: UI <-> src/user_validation.py -> src/media (Gemini pelo Worker,
+               OpenCV, ffmpeg); a análise e a exportação correm em segundo plano
 ```
 
 ## Backend (`src/user_validation.py`)
@@ -33,16 +36,23 @@ de um: enviar um novo ficheiro substitui o anterior.
 | `GET /api/current` | o estado (ver abaixo) |
 | `POST /api/reject` | `{attempt, text, reason}`: guarda a versão, junta `reason` às instruções e gera a seguinte |
 | `POST /api/approve` | aprova a versão atual |
+| `GET /api/ready` | diz se a análise de imagem e vídeo está disponível (o modelo do Worker verificado) |
 | `PUT /api/media/regions` | guarda as regiões multimédia editadas |
+| `POST /api/media/track` | segue uma caixa desenhada à mão pelo vídeo, para a frente e para trás |
 | `GET /api/media/source` | serve o original temporário para revisão |
 | `GET /api/media/output` | serve a versão multimédia aprovada |
 
 O **estado** (o mesmo em todas as rotas, e o que a UI mostra) tem os campos
-`has_document`, `attempt`, `text`, `approved`, `history`, `mode` (`model` ou
-`rules`), `warnings`, `issues` e, desde o áudio, `kind` (`text` ou `audio`),
-`audio_url` (o caminho do áudio censurado, ou `null`), `audio_ranges`
-(quantos troços foram trocados por um som) e `audio_enabled` (a censura de
-áudio está disponível). No áudio, `text` é a **transcrição mascarada**.
+`has_document`, `attempt`, `text`, `original_text`, `approved`, `history`,
+`mode` (`model`, `rules` ou `multimodal`), `warnings`, `issues`, `kind`
+(`text`, `audio`, `image` ou `video`), `pdf_url` (o PDF anonimizado, ou
+`null`), `audio_url` (o áudio censurado, ou `null`), `audio_ranges` (quantos
+troços foram trocados por um som) e `audio_enabled`. Para imagem e vídeo, que
+correm em segundo plano, traz também `status` (`processing`, `exporting`,
+`ready`, `failed`...), `progress` (etapa, feitos, total), `media` (o ficheiro:
+endereços, tamanho, duração), `regions` (o que ocultar: categoria, tipo, razão,
+confiança, origem, tempo e coordenadas, **nunca o texto reconhecido**), `model`
+e `error`. No áudio, `text` é a **transcrição mascarada**.
 
 Comportamento:
 
@@ -145,12 +155,25 @@ interface está **em inglês** (decisão da equipa).
   `src/lib/review/` (`uploadAudio`, `uploadFile`, `censoredAudioUrl`, os 4
   campos novos do estado e os dados de demonstração); a UI de áudio tem
   testes próprios (`src/test/audio-ui.test.tsx`).
-- **O contrato de imagem e vídeo** (já feito, sem parte visual): `uploadMedia`,
-  `waitUntilSettled` (a análise e a exportação correm em segundo plano; o
-  estado traz `status` e `progress`), `updateRegions`, `trackRegion`,
-  `mediaSourceUrl`, `mediaOutputUrl`, os tipos das regiões e um modo de
-  demonstração com uma fotografia e um vídeo falsos. Os testes de contrato
-  verificam os campos, os limites e o vocabulário das regiões contra o backend.
+- **A UI de imagem e vídeo.** O envio mostra o aviso de privacidade (os
+  fotogramas vão para o Gemini) e uma barra de progresso real, com o nome
+  da etapa em inglês (`stageLabel`). Na revisão, as regiões desenham-se por
+  cima do ficheiro (caixas, ou o contorno de 32 pontos nos rostos), com a cor
+  da categoria, e no vídeo seguem o tempo, com interpolação entre
+  quadros-chave e uma linha temporal. Edita-se à mão: desenhar, mover,
+  redimensionar, setas, apagar com "Undo", mudar o tipo e a categoria, limitar
+  no tempo, **rastrear** uma caixa pelo vídeo, "Save changes" e "Discard"
+  (aprovar e rejeitar ficam bloqueados com alterações por guardar). Aprovar
+  exporta em segundo plano e depois aparece "Download image" ou "Download
+  video" (o vídeo é sempre MP4). O contrato está em `src/lib/review/`
+  (`uploadMedia`, `waitUntilSettled`, `updateRegions`, `trackRegion`,
+  `mediaSourceUrl`, `mediaOutputUrl`, `stageLabel`), com um modo de
+  demonstração com uma fotografia e um vídeo falsos; os testes de contrato
+  verificam os campos, os limites, o vocabulário das regiões e as etapas
+  contra o backend.
+- **Descarregar o PDF.** Num documento que veio de um PDF, "Download PDF" ao
+  lado de "Download .txt" gera o PDF anonimizado da versão em revisão (ver
+  [PDF.md](PDF.md)).
 - **Passar o rato por um `*`** mostra a palavra que ele esconde. Para isso o
   estado traz `original_text` (o texto do documento, ou a transcrição do
   áudio): é o texto original, com os dados sensíveis, e só sai do servidor
@@ -253,8 +276,11 @@ nem em browsers que não sejam o do painel da app.
 - Rota de áudio: `tests/test_audio_route.py`, com a transcrição, o modelo e o
   `ffmpeg` falsos (29 testes). Um teste usa o `ffmpeg` a sério e só corre se
   ele estiver instalado.
-- UI: `npx tsc --noEmit`, `npx vitest run` (76 testes em 9 ficheiros) e
-  `npm run build`, na pasta da UI.
+- UI: `npx tsc --noEmit`, `npx vitest run` (208 testes) e `npm run build`,
+  na pasta da UI.
+- PDF: `tests/test_pdf_output.py` e `tests/test_pdf_route.py` (18 testes);
+  imagem e vídeo: `tests/test_media.py` (35 testes, incluindo o desfoque dos
+  rostos), mais os testes de UI de edição de regiões e de descarregar o PDF.
 - **Instruções iniciais:** `tests/test_initial_instructions.py` (30 testes:
   fronteiras do tamanho, codificação, falhas, segurança e CORS), mais os
   casos de texto em `test_user_validation.py`, de áudio em
@@ -316,6 +342,16 @@ modo escuro.
 ## Verificado e não verificado
 
 Verificado:
+- **Imagem, de ponta a ponta,** com o Gemini real pelo Worker: um cartão de
+  cidadão fictício com uma cara e uma matrícula; as regiões ficam alinhadas na
+  UI, e a exportação deixa o cartão, a cara e a matrícula ilegíveis.
+- **Vídeo, de ponta a ponta,** com o Gemini real, o `ffmpeg` e um vídeo real
+  (uma cara que se mexe e um cartão): a cara é desfocada em todos os
+  fotogramas vistos e o cartão é pixelado a partir de quando o modelo o vê; o
+  áudio mantém-se. Fica uma falha pequena na entrada do cartão (ver
+  [MEDIA.md](MEDIA.md)).
+- **PDF anonimizado,** com o PDF do desafio e o Gemini real: as palavras
+  sensíveis não estão no texto do PDF e o layout mantém-se.
 - O fluxo de texto de ponta a ponta, no browser, contra o backend real e o
   Gemini: enviar, rejeitar com um pedido (a tentativa 2 respeita-o), aprovar.
 - As instruções iniciais de ponta a ponta, no browser: o cabeçalho sai
