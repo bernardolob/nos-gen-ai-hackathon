@@ -82,6 +82,33 @@ def test_the_ui_reason_limit_is_the_backends():
     assert ui == pipeline.MAX_INSTRUCTIONS
 
 
+def test_the_ui_instructions_limit_is_the_backends():
+    types = TYPES.read_text(encoding="utf-8")
+    ui = int(re.search(r"MAX_INSTRUCTIONS = (\d+)", types).group(1))
+    assert ui == user_validation.MAX_INITIAL_INSTRUCTIONS
+
+
+def test_the_ui_instructions_header_is_the_one_the_backend_reads():
+    """O nome do cabeçalho tem de ser o mesmo, e o CORS tem de o aceitar."""
+    sent = set(re.findall(r'"(X-User-Instructions)"', API.read_text("utf-8")))
+    assert sent == {"X-User-Instructions"}
+    from fastapi.testclient import TestClient
+
+    api = TestClient(user_validation.create_app())
+    response = api.options("/api/document", headers={
+        "Origin": "http://localhost:5173",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "x-user-instructions",
+    })
+    assert response.status_code == 200
+    model = []
+    api = TestClient(user_validation.create_app(
+        lambda system, content: model.append(content) or "[]"))
+    api.post("/api/document", content=b"Nome: Ana", headers={
+        "Content-Type": "text/plain", "X-User-Instructions": "Ola"})
+    assert "Ola" in model[0]
+
+
 def test_the_content_types_the_ui_sends_are_accepted():
     api = API.read_text(encoding="utf-8")
     sent = set(re.findall(r'"(audio/[a-z0-9-]+)"', api))
