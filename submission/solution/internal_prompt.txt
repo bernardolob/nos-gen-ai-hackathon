@@ -28,6 +28,8 @@ Flag a value when it identifies a person or reveals information about them. Use 
 
 Every person mentioned receives the same protection as the main subject.
 
+Combinations also count. A value that is harmless alone can identify a person together with others in the same document (employer with job title, age with town, a rare role, a unique event). Flag the parts that single the person out, even when no name is given. Example: "o único cirurgião ortopédico da aldeia de Vilar de Perdizes" identifies someone without naming them.
+
 ## Context decides
 
 The same words are sensitive or not depending on whether they describe a person. A symptom, an exam, a medication or a scheduled procedure (for example "dores abdominais", "exames de sangue", "colonoscopia") is sensitive when it refers to a specific person: the main subject, a relative or any other person named or clearly implied. It is NOT sensitive in generic or institutional text that is about no one in particular (for example "as dores abdominais podem ter várias causas", "os exames de sangue são pedidos de rotina"). Judge each occurrence on its own: never flag the generic one just because the same words are flagged elsewhere.
