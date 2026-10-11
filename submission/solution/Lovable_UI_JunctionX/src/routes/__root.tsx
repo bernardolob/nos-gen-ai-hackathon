@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "../components/ui/alert";
+﻿import { Alert, AlertDescription } from "../components/ui/alert";
 import { isMockMode } from "../lib/review/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -14,6 +14,10 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+
+/** Sets the theme before the first paint (saved choice, else the system one) so it never flashes. */
+const THEME_SCRIPT =
+  "try{var t=localStorage.getItem('theme');if(t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches)document.documentElement.classList.add('dark')}catch(e){}";
 
 function NotFoundComponent() {
   return (
@@ -93,8 +97,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
+    scripts: [{ children: THEME_SCRIPT }],
     links: [
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -110,7 +115,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -141,3 +146,4 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+

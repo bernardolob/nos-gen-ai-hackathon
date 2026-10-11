@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Loader2, LockKeyhole, Moon, ShieldCheck, Sun } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -39,9 +39,20 @@ function Index() {
   const [retry, setRetry] = useState<(() => void) | null>(null);
   const [dark, setDark] = useState(false);
 
+  // The theme script in <head> already set the class; read it back, then keep both in step.
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
+    setDark(document.documentElement.classList.contains("dark"));
+  }, []);
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    try {
+      localStorage.setItem("theme", next ? "dark" : "light");
+    } catch {
+      /* private mode: the choice just is not remembered */
+    }
+  };
 
   const load = async () => {
     setInitialising(true);
@@ -115,92 +126,108 @@ function Index() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-5 sm:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <ShieldCheck className="h-5 w-5" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm font-extrabold text-foreground sm:text-base">Document Anonymizer</h1>
-              <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">Protect personal and sensitive data (GDPR)</p>
-            </div>
+      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-14 w-full max-w-[1180px] items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 text-lg font-bold text-foreground">
+            <span className="brand-gradient h-[22px] w-[22px] shrink-0 rounded-md" aria-hidden />
+            MiniNovers
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setDark((d) => !d)}
-            aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-          >
-            {dark ? <Sun aria-hidden /> : <Moon aria-hidden />}
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <span className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground sm:text-[13px]">
+              <ShieldCheck className="h-4 w-4 text-ok" aria-hidden />
+              <span className="max-[420px]:sr-only">Data protection · GDPR</span>
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full bg-card"
+              onClick={toggleTheme}
+              aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+            >
+              {dark ? <Sun aria-hidden /> : <Moon aria-hidden />}
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-5 py-8 sm:px-8 sm:py-10">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="mb-3 text-xs font-bold uppercase text-primary">Document anonymization</p>
-            <h2 className="text-2xl font-extrabold text-foreground sm:text-3xl">
-              {showUpload ? "New document" : "Review anonymized version"}
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {showUpload
-                ? "Upload a PDF, a text file or an audio file (mp3, m4a, wav)."
-                : "Approve the version or reject it with feedback to generate another."}
+      <main className="mx-auto flex w-full max-w-[1180px] flex-1 flex-col px-4 sm:px-6">
+        {showUpload ? (
+          <section className="hero-glow pb-12 pt-12 text-center sm:pb-16 sm:pt-20">
+            <span className="reveal mb-6 inline-block rounded-full border border-border bg-card px-3.5 py-1.5 text-xs text-muted-foreground sm:text-[13px]">
+              ✨ Privacy by design · {isMockMode ? "Demo mode" : snapshot?.mode === "rules" ? "Connected · rules only" : "Connected to server"}
+            </span>
+            <h1 className="gradient-text reveal mx-auto mb-5 max-w-[780px] text-[clamp(2.3rem,6vw,4rem)] font-bold leading-[1.06] tracking-[-0.035em]" style={{ "--d": "0.1s" } as CSSProperties}>
+              Share the document, not the data.
+            </h1>
+            <p className="reveal mx-auto max-w-[520px] text-[1.05rem] text-muted-foreground" style={{ "--d": "0.2s" } as CSSProperties}>
+              Documents and audio, anonymized in seconds. Every redaction is yours to review before it is final.
             </p>
-          </div>
-          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            {isMockMode ? "Demo mode" : snapshot?.mode === "rules" ? "Connected · rules only" : "Connected to server"}
-          </span>
-        </div>
 
-        {initialising ? (
-          <div className="flex items-center justify-center gap-3 p-16 text-sm text-muted-foreground" role="status">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden /> Loading the current review...
-          </div>
-        ) : showUpload ? (
-          <div className="flex flex-col gap-4">
-            {wantsNew && (
-              <Button variant="ghost" className="self-start" onClick={() => { setWantsNew(false); setError(null); }} disabled={uploading}>
-                ← Back to current review
-              </Button>
-            )}
-            <UploadStep
-              file={file}
-              onFile={(f) => { setFile(f); setError(null); }}
-              onAnalyze={upload}
-              loading={uploading}
-              status={
-                file && isAudioFile(file)
-                  ? "Transcribing and censoring the audio... this can take several seconds."
-                  : "Analyzing the document... (about 8 s)"
-              }
-              error={error}
-              errorTitle={file ? "The document could not be analyzed" : "Could not load the current review"}
-              onRetry={() => (file ? void upload() : void load())}
-              audioEnabled={snapshot?.audio_enabled ?? false}
-            />
-          </div>
+            <div className="reveal mx-auto mt-10 max-w-[640px] text-left" style={{ "--d": "0.3s" } as CSSProperties}>
+              {initialising ? (
+                <div className="flex items-center justify-center gap-3 p-16 text-sm text-muted-foreground" role="status">
+                  <Loader2 className="h-5 w-5 animate-spin text-brand" aria-hidden /> Loading the current review...
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {wantsNew && (
+                    <Button variant="ghost" className="self-start" onClick={() => { setWantsNew(false); setError(null); }} disabled={uploading}>
+                      ← Back to current review
+                    </Button>
+                  )}
+                  <UploadStep
+                    file={file}
+                    onFile={(f) => { setFile(f); setError(null); }}
+                    onAnalyze={upload}
+                    loading={uploading}
+                    status={
+                      file && isAudioFile(file)
+                        ? "Transcribing and censoring the audio... this can take several seconds."
+                        : "Analyzing the document... (about 8 s)"
+                    }
+                    error={error}
+                    errorTitle={file ? "The document could not be analyzed" : "Could not load the current review"}
+                    onRetry={() => (file ? void upload() : void load())}
+                    audioEnabled={snapshot?.audio_enabled ?? false}
+                  />
+                </div>
+              )}
+            </div>
+          </section>
         ) : (
           snapshot && (
-            <ReviewWorkspace
-              snapshot={snapshot}
-              busy={busy}
-              busyMessage={busyMessage}
-              error={error}
-              onRetry={retry}
-              onReject={reject}
-              onApprove={approve}
-              onNewDocument={() => { setWantsNew(true); setError(null); setRetry(null); }}
-            />
+            <section className="pb-16 pt-8 sm:pt-11">
+              <div className="reveal mb-8 flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-[clamp(1.6rem,4vw,2.7rem)] font-bold leading-[1.1] tracking-[-0.03em] text-foreground">
+                    Anonymization review
+                  </h2>
+                  <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
+                    Approve the version or reject it with feedback to generate another.
+                  </p>
+                </div>
+                <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+                  {isMockMode ? "Demo mode" : snapshot.mode === "rules" ? "Connected · rules only" : "Connected to server"}
+                </span>
+              </div>
+              <ReviewWorkspace
+                snapshot={snapshot}
+                busy={busy}
+                busyMessage={busyMessage}
+                error={error}
+                onRetry={retry}
+                onReject={reject}
+                onApprove={approve}
+                onNewDocument={() => { setWantsNew(true); setError(null); setRetry(null); }}
+              />
+            </section>
           )
         )}
       </main>
 
-      <footer className="border-t border-border px-5 py-5 text-xs text-muted-foreground">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 sm:px-8">
+      <footer className="border-t border-border px-4 py-5 text-xs text-muted-foreground sm:px-6">
+        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-3">
           <span className="flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5" aria-hidden /> Data protection · GDPR</span>
           <span className="flex items-center gap-2">{isMockMode ? "Demo document with dummy data" : "Review connected to the server"}</span>
         </div>

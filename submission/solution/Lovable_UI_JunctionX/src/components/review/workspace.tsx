@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Copy, Download, History, Loader2, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Copy, Download, History, Loader2, RotateCcw, ShieldCheck, ThumbsDown, ThumbsUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -106,8 +106,52 @@ export function ReviewWorkspace({
     }
   };
 
+  const steps: { title: string; note: string; state: "done" | "now" | "todo" }[] = [
+    { title: isAudio ? "Audio received" : "Document received", note: isAudio ? "Transcribed" : "Analyzed", state: "done" },
+    {
+      title: "Manual review",
+      note: `Attempt ${snapshot.attempt}`,
+      state: snapshot.approved ? "done" : "now",
+    },
+    {
+      title: "Final approval",
+      note: snapshot.approved ? `Version ${snapshot.attempt}` : "Waiting for your review",
+      state: snapshot.approved ? "done" : "todo",
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="grid items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)_260px]">
+      <aside aria-label="Progress" className="lg:sticky lg:top-24">
+        <ol className="steps-list rounded-2xl border border-border bg-card p-5 lg:border-0 lg:bg-transparent lg:p-0">
+          {steps.map((s) => (
+            <li
+              key={s.title}
+              className={`grid grid-cols-[32px_1fr] gap-3.5 pb-6 last:pb-0 step-${s.state} ${s.state === "todo" ? "text-muted-foreground" : ""}`}
+            >
+              <span
+                className={`step-dot grid h-8 w-8 place-items-center rounded-full border text-[13px] font-semibold ${
+                  s.state === "done"
+                    ? "border-ok text-ok"
+                    : s.state === "now"
+                      ? "brand-gradient glow-ring border-transparent text-white"
+                      : "border-border bg-card"
+                }`}
+              >
+                {s.state === "done" && <Check className="h-4 w-4" aria-hidden />}
+              </span>
+              <span>
+                <b className={`block text-[15px] ${s.state === "todo" ? "text-muted-foreground" : "text-foreground"}`}>
+                  {s.title}
+                </b>
+                <small className="text-[13px] text-muted-foreground">{s.note}</small>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </aside>
+
+      <div className="flex min-w-0 flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Attempt" value={snapshot.attempt} />
         {isAudio ? (
@@ -197,8 +241,8 @@ export function ReviewWorkspace({
             )}
           </div>
         </div>
-        <div className="document-paper max-h-[34rem] overflow-auto rounded-lg border border-border bg-card p-6" aria-busy={busy}>
-          <MaskedText text={snapshot.text} className={busy ? "opacity-40" : ""} />
+        <div key={snapshot.attempt} className="document-paper stage-frame stage-scan max-h-[34rem] overflow-auto rounded-2xl border border-border bg-card p-6" aria-busy={busy}>
+          <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
         </div>
         {busy && (
           <div className="absolute inset-0 top-10 grid place-items-center rounded-lg bg-background/60" role="status">
@@ -220,6 +264,43 @@ export function ReviewWorkspace({
           </Button>
         </div>
       </div>
+      </div>
+
+      <aside aria-label="Review details" className="rounded-2xl border border-border bg-card p-5">
+        <div className="mb-4 flex items-center justify-between border-b border-border pb-3.5 font-semibold">
+          <span className="flex items-center gap-2.5">
+            <History className="h-[18px] w-[18px]" aria-hidden /> Review
+          </span>
+          <span
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+              snapshot.approved ? "border-ok/40 bg-ok/10 text-ok" : "border-warn/40 bg-warn/10 text-warn"
+            }`}
+          >
+            {snapshot.approved ? "Approved" : "In review"}
+          </span>
+        </div>
+        <div className="relative overflow-hidden rounded-xl border border-border bg-background py-3.5 pl-5 pr-4 text-sm">
+          <span className="brand-gradient absolute inset-y-0 left-0 w-1" aria-hidden />
+          <b>Current version</b>
+          <small className="mt-1 block text-[13px] text-muted-foreground">
+            {isAudio ? "Audio censored" : "Text anonymized"} · {snapshot.history.length} rejected
+          </small>
+        </div>
+        <div className="mt-3.5 divide-y divide-border text-sm text-muted-foreground">
+          <div className="flex justify-between py-3">
+            Type <b className="font-semibold text-foreground">{isAudio ? "Audio" : "Document"}</b>
+          </div>
+          <div className="flex justify-between py-3">
+            Mode <b className="font-semibold text-foreground">{snapshot.mode === "rules" ? "Rules only" : "AI + rules"}</b>
+          </div>
+        </div>
+        <div className="mt-1.5 border-t border-border pt-4 text-[13px] text-muted-foreground">
+          <b className="mb-1.5 flex items-center gap-2 text-sm text-foreground">
+            <ShieldCheck className="h-4 w-4 text-ok" aria-hidden /> Temporary session
+          </b>
+          Nothing is stored after you close the review. The original is never shown here.
+        </div>
+      </aside>
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>
