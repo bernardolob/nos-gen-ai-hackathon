@@ -208,10 +208,10 @@ Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
 
 ## Problemas conhecidos
 
-- **O áudio precisa de uma chave do ElevenLabs no servidor** e envia o áudio
-  original, ainda com os dados sensíveis, para esse serviço. Sem a chave o
-  áudio fica desligado e o resto funciona. A transcrição local (Whisper) é a
-  evolução que resolveria as duas coisas (ver [DECISIONS.md](DECISIONS.md), 16).
+- **O áudio passa pelo Worker da Cloudflare e vai para o ElevenLabs**, ainda
+  com os dados sensíveis (o Worker não o guarda). Sem o gateway nem uma chave
+  o áudio fica desligado e o resto funciona. A transcrição local (Whisper) é
+  a evolução que resolveria o problema (ver [DECISIONS.md](DECISIONS.md), 16).
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.
 

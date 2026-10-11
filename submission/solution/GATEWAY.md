@@ -1,11 +1,12 @@
 # Gateway: como o pipeline chama o Gemini
 
-A chave do Gemini é um segredo do Worker Cloudflare
+As chaves do Gemini e do ElevenLabs são segredos do Worker Cloudflare
 (`cloudflare/worker.ts`, ver [CLOUDFLARE.md](CLOUDFLARE.md)). O pipeline não a
 vê: `src/gateway.py` envia o pedido ao Worker, que chama o Gemini.
 
 ```
-pipeline.py -> gateway.make_generate -> Worker (POST /api/v1/generate) -> Gemini
+texto:  pipeline.py -> gateway.make_generate -> Worker (POST /api/v1/generate) -> Gemini
+áudio:  audio.elevenlabs_client -> Worker (POST /api/v1/audio/transcribe) -> ElevenLabs
 ```
 
 ## Configuração

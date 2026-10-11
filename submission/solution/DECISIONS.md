@@ -205,7 +205,7 @@ substituir o documento, ao fechar a sessão e ao sair do servidor.
 o seu áudio. E se a transcrição estiver errada, rejeitar não a corrige: é
 preciso enviar o áudio outra vez.
 
-### 16. A chave do ElevenLabs é do servidor, não do utilizador
+### 16. A chave do ElevenLabs está no Worker, não no utilizador
 
 **O problema.** A censura de áudio precisa de transcrever o áudio, e o
 ElevenLabs Scribe exige uma chave de API. Quem usa a UI não deve ter de a
@@ -215,21 +215,27 @@ ter, nem de a ver.
 
 | Caminho | Prós | Contras |
 |---|---|---|
-| **1. A chave no servidor** (`ELEVENLABS_API_KEY`) | o mais simples; o utilizador não vê nem precisa de nada | quem corre o backend precisa de uma chave |
-| 2. Um Worker da Cloudflare para o ElevenLabs, como o do Gemini | a chave fica na Cloudflare; o backend só conhece um endereço | o áudio passa também pela Cloudflare; limites de tamanho; mais uma peça |
+| 1. A chave no ambiente de quem corre o backend (`ELEVENLABS_API_KEY`) | o mais simples | cada pessoa que corra o backend precisa de uma chave |
+| **2. Um Worker da Cloudflare para o ElevenLabs, como o do Gemini** | a chave fica na Cloudflare; o backend só conhece o endereço do gateway, que já usa para o Gemini | o áudio passa também pela Cloudflare; limite de tamanho; mais uma rota a manter |
 | 3. Transcrição local (Whisper) | sem chave; o **áudio nunca sai da máquina** | descarregar um modelo (centenas de MB); mais lento sem placa gráfica |
 | 4. O utilizador cola a sua chave na UI | nenhuma infraestrutura | a chave fica no navegador: mais um dado sensível a proteger |
 
-**A decisão.** O caminho 1. Serve a demonstração e o pitch: nós ligamos o
-backend com a nossa chave e quem experimenta a UI não precisa de nada. O
-caminho 4 rejeita-se. Os caminhos 2 e 3 ficam como evolução; o 3 é o que
-resolve também o problema de privacidade, porque hoje o áudio original,
-ainda com os dados sensíveis, vai para o ElevenLabs (ver [AUDIO.md](AUDIO.md)).
+**A decisão.** Primeiro ficou o caminho 1; foi **substituído pelo 2**, que é
+o normal: a chave é um segredo do Worker (`POST /api/v1/audio/transcribe`) e
+quem corre o backend só precisa de `GEMINI_GATEWAY_URL` e
+`GEMINI_GATEWAY_ORIGIN`. O caminho 1 mantém-se para desenvolvimento local e
+tem prioridade se `ELEVENLABS_API_KEY` estiver definida. O caminho 4
+rejeita-se. O 3 fica como evolução e é o que resolveria o problema de
+privacidade, porque o áudio original, ainda com os dados sensíveis, vai para
+o ElevenLabs, agora pelo Worker, onde não fica guardado (ver
+[AUDIO.md](AUDIO.md)).
 
-**O que se perde.** Sem a chave, o backend arranca na mesma mas o áudio fica
-desligado (`audio_enabled` falso) e a UI bloqueia o envio com "Audio censoring
-is not available on this server."; o texto e o PDF não são afetados. E cada
-pessoa que corra o backend por conta própria precisa da sua chave.
+**O que se perde.** Sem o gateway nem a chave, o backend arranca na mesma mas
+o áudio fica desligado (`audio_enabled` falso) e a UI bloqueia o envio com
+"Audio censoring is not available on this server."; o texto e o PDF não são
+afetados. O Worker passa a ser mais um ponto de custo e de abuso: limita o
+áudio a 25 MB e a 5 pedidos por minuto e por IP, só aceita as origens da UI e
+cada transcrição gasta créditos do ElevenLabs.
 
 ## Decisões em aberto
 

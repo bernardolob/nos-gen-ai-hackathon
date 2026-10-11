@@ -37,20 +37,22 @@ chat tem de ser revogada. O ficheiro `.env` está no `.gitignore`.
 
 Só é preciso para `audio_pipeline.py` e para a rota de áudio do backend de
 revisão (`/api/audio`, ver [AUDIO.md](AUDIO.md) e [REVIEW.md](REVIEW.md)); o
-resto do projeto não depende disto. Sem a chave ou sem o `ffmpeg`, o backend
-arranca na mesma, com a rota de áudio desligada (`audio_enabled` falso no
-estado).
+resto do projeto não depende disto. Sem o gateway (nem uma chave) ou sem o
+`ffmpeg`, o backend arranca na mesma, com a rota de áudio desligada
+(`audio_enabled` falso no estado).
 
 - **`ffmpeg`** (e o `ffprobe`) instalado no sistema (binário, não um pacote
   Python) — o `audio/redactor.py` chama-o diretamente por `subprocess`. No
   Windows: `winget install Gyan.FFmpeg`; o PATH só se atualiza num terminal
   novo. Sem ele, os testes de áudio que o usam saltam-se.
-- **`ELEVENLABS_API_KEY`**, da mesma forma que a chave do Gemini acima. É a
-  chave do **servidor**: quem usa a UI não precisa de nenhuma (ver
-  [DECISIONS.md](DECISIONS.md), 16). Nunca a ponha no repositório.
+- **A transcrição.** O normal é o **gateway da Cloudflare**: com
+  `GEMINI_GATEWAY_URL` e `GEMINI_GATEWAY_ORIGIN` (os mesmos do Gemini, acima)
+  não precisa de mais nada, porque a chave do ElevenLabs é um segredo do
+  Worker (ver [DECISIONS.md](DECISIONS.md), 16). Só para desenvolvimento
+  local pode usar a sua, que tem prioridade, e nunca a ponha no repositório:
 
 ```bash
-export ELEVENLABS_API_KEY="a-tua-chave"
+export ELEVENLABS_API_KEY="a-tua-chave"   # opcional
 ```
 
 ## Lint
