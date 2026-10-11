@@ -168,24 +168,29 @@ export function ReviewWorkspace({
       if (!res.ok) throw new Error(`Download failed: ${res.status}`);
       const blob = await res.blob();
 
-      const defaultExt = isVideo ? "mp4" : "png";
-      let ext: string = defaultExt;
-      if (snapshot.media.filename && snapshot.media.filename.includes(".")) {
-        ext = snapshot.media.filename.split(".").pop()?.toLowerCase() || defaultExt;
-      } else if (snapshot.media.output_url) {
-        const dataMatch = snapshot.media.output_url.match(/^data:(?:image|video)\/([a-zA-Z0-9+]+)/);
-        if (dataMatch?.[1]) {
-          ext = dataMatch[1] === "jpeg" ? "jpg" : dataMatch[1];
-        } else {
-          const urlMatch = snapshot.media.output_url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/);
-          if (urlMatch?.[1]) ext = urlMatch[1].toLowerCase();
+      let filename: string;
+      if (isVideo) {
+        filename = "anonymized-video.mp4";
+      } else {
+        let ext = "png";
+        if (snapshot.media.filename && snapshot.media.filename.includes(".")) {
+          ext = snapshot.media.filename.split(".").pop()?.toLowerCase() || "png";
+        } else if (snapshot.media.output_url) {
+          const dataMatch = snapshot.media.output_url.match(/^data:image\/([a-zA-Z0-9+]+)/);
+          if (dataMatch?.[1]) {
+            ext = dataMatch[1] === "jpeg" ? "jpg" : dataMatch[1];
+          } else {
+            const urlMatch = snapshot.media.output_url.match(/\.([a-zA-Z0-9]+)(?:[?#]|$)/);
+            if (urlMatch?.[1]) ext = urlMatch[1].toLowerCase();
+          }
         }
+        filename = `anonymized-image.${ext}`;
       }
 
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = `${isVideo ? "anonymized-video" : "anonymized-image"}.${ext}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -479,7 +484,7 @@ export function ReviewWorkspace({
             <Button
               variant="outline"
               onClick={() => setRejectOpen(true)}
-              disabled={busy || isWorkingState}
+              disabled={busy || isWorkingState || (!isMedia && snapshot.approved)}
             >
               <ThumbsDown aria-hidden /> Reject
             </Button>

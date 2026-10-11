@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ReviewWorkspace } from "@/components/review/workspace";
@@ -378,5 +378,172 @@ describe("Media review loop (Request 2b)", () => {
     // Must NOT contain copy or download .txt buttons
     expect(screen.queryByRole("button", { name: /Download \.txt/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Copy/i })).not.toBeInTheDocument();
+  });
+  it('a video snapshot whose media.filename is "clip.mov" downloads as anonymized-video.mp4', async () => {
+    const videoSnapshot = createMediaSnapshot({
+      kind: "video",
+      attempt: 1,
+      approved: true,
+      status: "ready",
+      media: {
+        source_url: "data:video/mp4;base64,AAAA",
+        output_url: "https://example.com/api/media/output.mp4",
+        filename: "clip.mov",
+      },
+    });
+
+    const fakeBlob = new Blob(["fake video content"], { type: "video/mp4" });
+    const originalFetch = globalThis.fetch;
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: async () => fakeBlob,
+    } as Response);
+
+    URL.createObjectURL = vi.fn().mockReturnValue("blob:fake-url");
+    URL.revokeObjectURL = vi.fn();
+
+    let downloadedFilename = "";
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+      downloadedFilename = this.download;
+    };
+
+    try {
+      render(
+        <ReviewWorkspace
+          snapshot={videoSnapshot}
+          busy={false}
+          busyMessage=""
+          error={null}
+          onRetry={null}
+          onReject={async () => true}
+          onApprove={() => {}}
+          onNewDocument={() => {}}
+        />,
+      );
+
+      const downloadBtn = screen.getByRole("button", { name: /Download video/i });
+      await act(async () => {
+        fireEvent.click(downloadBtn);
+      });
+
+      await vi.waitFor(() => {
+        expect(downloadedFilename).toBe("anonymized-video.mp4");
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      HTMLAnchorElement.prototype.click = originalClick;
+    }
+  });
+
+  it("reject button is disabled when approved for text and audio, but stays enabled for image and video", () => {
+    // 1. Text snapshot when approved -> Reject is disabled
+    const approvedTextSnapshot = {
+      ...EMPTY_SNAPSHOT,
+      has_document: true,
+      kind: "text" as const,
+      status: "ready" as const,
+      attempt: 1,
+      approved: true,
+      text: "Masked text content",
+    };
+
+    const { rerender } = render(
+      <ReviewWorkspace
+        snapshot={approvedTextSnapshot}
+        busy={false}
+        busyMessage=""
+        error={null}
+        onRetry={null}
+        onReject={async () => true}
+        onApprove={() => {}}
+        onNewDocument={() => {}}
+      />,
+    );
+
+    const textRejectBtn = screen.getByRole("button", { name: /Reject/i });
+    expect(textRejectBtn).toBeDisabled();
+
+    // 2. Audio snapshot when approved -> Reject is disabled
+    const approvedAudioSnapshot = {
+      ...EMPTY_SNAPSHOT,
+      has_document: true,
+      kind: "audio" as const,
+      status: "ready" as const,
+      attempt: 1,
+      approved: true,
+      text: "Masked audio transcript",
+      audio_url: "data:audio/wav;base64,AAAA",
+    };
+
+    rerender(
+      <ReviewWorkspace
+        snapshot={approvedAudioSnapshot}
+        busy={false}
+        busyMessage=""
+        error={null}
+        onRetry={null}
+        onReject={async () => true}
+        onApprove={() => {}}
+        onNewDocument={() => {}}
+      />,
+    );
+
+    const audioRejectBtn = screen.getByRole("button", { name: /Reject/i });
+    expect(audioRejectBtn).toBeDisabled();
+
+    // 3. Image snapshot when approved -> Reject is enabled
+    const approvedImageSnapshot = createMediaSnapshot({
+      kind: "image",
+      attempt: 1,
+      approved: true,
+      status: "ready",
+    });
+
+    rerender(
+      <ReviewWorkspace
+        snapshot={approvedImageSnapshot}
+        busy={false}
+        busyMessage=""
+        error={null}
+        onRetry={null}
+        onReject={async () => true}
+        onApprove={() => {}}
+        onNewDocument={() => {}}
+      />,
+    );
+
+    const imageRejectBtn = screen.getByRole("button", { name: /Reject/i });
+    expect(imageRejectBtn).toBeEnabled();
+
+    // 4. Video snapshot when approved -> Reject is enabled
+    const approvedVideoSnapshot = createMediaSnapshot({
+      kind: "video",
+      attempt: 1,
+      approved: true,
+      status: "ready",
+    });
+
+    rerender(
+      <ReviewWorkspace
+        snapshot={approvedVideoSnapshot}
+        busy={false}
+        busyMessage=""
+        error={null}
+        onRetry={null}
+        onReject={async () => true}
+        onApprove={() => {}}
+        onNewDocument={() => {}}
+      />,
+    );
+
+    const videoRejectBtn = screen.getByRole("button", { name: /Reject/i });
+    expect(videoRejectBtn).toBeEnabled();
   });
 });
