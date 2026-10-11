@@ -57,6 +57,10 @@ as duas. Exemplos:
 - `Neste documento, "Orion" é o nome de um doente.`
 - `Trata as referências internas (ADM-...) como identificadores.`
 
+Para o documento do desafio há instruções iniciais prontas em
+[user_instructions.txt](user_instructions.txt), usadas na submissão (ver
+[SOLUTION.md](SOLUTION.md), "A submissão").
+
 Regras:
 
 - **O utilizador tem a palavra final sobre o que se mascara.** Pode pedir
