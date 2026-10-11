@@ -164,6 +164,73 @@ npm run dev                          # http://localhost:8080
 
 O arranque diz se o Gemini e o áudio estão ligados.
 
+## Temas (UI)
+
+O utilizador escolhe o aspeto da UI num painel pequeno, o botão de paleta no
+cabeçalho (ao lado do sol/lua). O painel tem o **modo** (claro, escuro ou o do
+sistema) e uma lista de **seis temas**: Indigo & Pink (o original, por
+defeito), Ocean, Forest, Sunset, Grape e Graphite. Escolher aplica logo, fica
+guardado no browser e vale também ao recarregar, sem piscar.
+
+| Ficheiro | O que tem |
+|---|---|
+| `src/themes.css` | as paletas: só trocam os tokens da marca (`--brand`, `--brand-2`, `--glow`, `--ring`, `--sidebar-ring`, `--accent`) |
+| `src/lib/theme.ts` | a lista de temas, a validação, o armazenamento e o `useTheme()`; também o script do `<head>` |
+| `src/components/theme-picker.tsx` | o painel (Popover): modo, lista de temas e pré-visualização |
+| `src/routes/__root.tsx`, `src/routes/index.tsx` | o script de arranque e o botão no cabeçalho |
+
+Como funciona:
+
+- Um tema é o atributo `data-theme` no `<html>`; o modo é a classe `dark`. O
+  tema original não tem atributo. As cores vêm só de variáveis CSS, como pede o
+  `AGENTS.md` da UI. As cores das **categorias** de dados sensíveis (`--cat-*`)
+  não mudam com o tema (foram escolhidas por acessibilidade), nem os
+  neutros e as cores de estado.
+- Duas chaves em `localStorage`: `theme` (modo: `light` ou `dark`; sem chave é o
+  do sistema, como antes de haver temas) e `palette` (o tema; sem chave é o
+  original). Se o armazenamento estiver bloqueado (modo privado), a escolha
+  vale só até recarregar e a UI funciona na mesma.
+- O script do `<head>` aplica o tema e o modo antes do primeiro desenho e
+  **valida o tema guardado contra a lista**: um valor errado ou alterado nunca
+  chega ao `<html>`. O botão sol/lua e o painel usam o mesmo estado
+  (`useTheme`), por isso ficam sempre em sintonia, também entre separadores.
+- Cada cartão do painel usa `data-swatch="<id>"`, para mostrar a paleta do
+  seu tema mesmo quando a página usa outro.
+
+**Acrescentar um tema:**
+
+1. Em `src/themes.css`, copiar um bloco (claro e escuro) e mudar o id e as
+   cores. Manter as cores da marca com lightness entre cerca de 0,50 e 0,58,
+   que é onde o texto branco e o fundo escuro ainda têm contraste.
+2. Acrescentar `{ id, label }` a `THEMES`, em `src/lib/theme.ts`.
+3. Correr `npx vitest run`: o teste de contraste falha se uma cor não chegar.
+
+**Contraste (medido, não estimado).** O teste lê o `themes.css` e exige, para
+cada tema e modo: texto branco sobre `--brand` a 4,5:1 e sobre `--brand-2` a
+3:1, as duas cores da marca a 3:1 contra o fundo claro e o escuro, e o texto
+a 7:1 sobre o fundo `--accent`. Também exige que as cores novas estejam dentro
+do sRGB e que o `themes.css` e a lista de temas coincidam. O tema original
+passa com 4,58:1 e 3,58:1, e é o piso. Medido, os outros ficam entre 4,78 e
+6,11 (texto branco sobre a cor da marca).
+
+**Testes:** `src/test/theme-contrast.test.ts` (53), `src/test/theme.test.tsx`
+(56: valores inválidos, armazenamento bloqueado, sincronização, e o script do
+`<head>` corrido contra uma página falsa, incluindo valores maliciosos) e
+`src/test/theme-picker.test.tsx` (19: abrir, escolher, modo, Escape, e a
+sintonia com o botão sol/lua). Foram verificados por mutação: com erros
+plantados (cor demasiado clara, bloco escuro em falta, tema fora da lista,
+token neutro alterado, script que confia no valor guardado, tema não validado,
+listener que não se remove, painel que ignora o modo) falham sempre.
+
+**Verificado no browser:** os 12 casos (6 temas, claro e escuro) têm os valores
+esperados, as cores das categorias não mudam, o painel cabe num ecrã de 375 px
+sem rolar para o lado, a escolha sobrevive ao recarregar, e as setas do teclado
+selecionam e aplicam o tema.
+
+**Limites:** os temas só mexem na marca, por isso o resto da UI (neutros e
+cores de estado) é igual em todos. Não se verificou com um leitor de ecrã.
+O Safari antigo, sem `oklch()`, mostra as cores do navegador por defeito.
+
 ## Testes
 
 - Backend de texto: `tests/test_user_validation.py` (21 testes).
