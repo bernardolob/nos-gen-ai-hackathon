@@ -75,6 +75,10 @@ problemas que tivemos e as features futuras.*
 
 *As tarefas por fazer e as features futuras.*
 
+![Um elemento da equipa ao quadro](docs/whiteboard/equipa-ao-quadro.jpg)
+
+*Um dos elementos da equipa a mostrar o quadro.*
+
 ### O que correu menos bem
 
 - **Alguns merges:** a falta de atenção deu problemas que só apareceram mais
