@@ -1,0 +1,84 @@
+/*
+ * Color themes.
+ *
+ * The default theme (indigo to pink) is the one in styles.css and needs no
+ * block here. Each other theme only replaces the brand tokens, so the rest of
+ * the interface (neutrals, status and category colors) is the same in all of
+ * them. A theme is the `data-theme` attribute on <html>; light and dark are
+ * the `.dark` class, and every theme has both. The contrast of these colors
+ * is checked by src/test/theme-contrast.test.ts, which reads this file: keep
+ * the `--brand`, `--brand-2` and `--accent` lines in the format below.
+ *
+ * Add a theme: copy a block, change the id and the colors, add the id to
+ * src/lib/theme.ts and run the tests.
+ */
+
+/* Ocean */
+:root[data-theme="ocean"] {
+  --brand: oklch(0.55 0.125 240);
+  --brand-2: oklch(0.6 0.095 200);
+  --glow: oklch(0.55 0.125 240 / 16%);
+  --ring: oklch(0.55 0.125 240);
+  --sidebar-ring: oklch(0.55 0.125 240);
+  --accent: oklch(0.955 0.025 240);
+}
+:root.dark[data-theme="ocean"] {
+  --glow: oklch(0.55 0.125 240 / 22%);
+  --accent: oklch(0.28 0.06 240);
+}
+
+/* Forest */
+:root[data-theme="forest"] {
+  --brand: oklch(0.52 0.13 150);
+  --brand-2: oklch(0.6 0.14 125);
+  --glow: oklch(0.52 0.13 150 / 16%);
+  --ring: oklch(0.52 0.13 150);
+  --sidebar-ring: oklch(0.52 0.13 150);
+  --accent: oklch(0.955 0.025 150);
+}
+:root.dark[data-theme="forest"] {
+  --glow: oklch(0.52 0.13 150 / 22%);
+  --accent: oklch(0.28 0.06 150);
+}
+
+/* Sunset */
+:root[data-theme="sunset"] {
+  --brand: oklch(0.56 0.16 45);
+  --brand-2: oklch(0.6 0.18 10);
+  --glow: oklch(0.56 0.16 45 / 16%);
+  --ring: oklch(0.56 0.16 45);
+  --sidebar-ring: oklch(0.56 0.16 45);
+  --accent: oklch(0.955 0.025 45);
+}
+:root.dark[data-theme="sunset"] {
+  --glow: oklch(0.56 0.16 45 / 22%);
+  --accent: oklch(0.28 0.06 45);
+}
+
+/* Grape */
+:root[data-theme="grape"] {
+  --brand: oklch(0.52 0.2 305);
+  --brand-2: oklch(0.58 0.24 335);
+  --glow: oklch(0.52 0.2 305 / 16%);
+  --ring: oklch(0.52 0.2 305);
+  --sidebar-ring: oklch(0.52 0.2 305);
+  --accent: oklch(0.955 0.025 305);
+}
+:root.dark[data-theme="grape"] {
+  --glow: oklch(0.52 0.2 305 / 22%);
+  --accent: oklch(0.28 0.06 305);
+}
+
+/* Graphite */
+:root[data-theme="graphite"] {
+  --brand: oklch(0.5 0.02 260);
+  --brand-2: oklch(0.6 0.03 260);
+  --glow: oklch(0.5 0.02 260 / 16%);
+  --ring: oklch(0.5 0.02 260);
+  --sidebar-ring: oklch(0.5 0.02 260);
+  --accent: oklch(0.955 0.008 260);
+}
+:root.dark[data-theme="graphite"] {
+  --glow: oklch(0.5 0.02 260 / 22%);
+  --accent: oklch(0.28 0.019 260);
+}
