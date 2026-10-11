@@ -157,6 +157,7 @@ testados.
 | `GET` | `/api/current` | estado, progresso, modelo e regiões |
 | `GET` | `/api/media/source` | pré-visualização temporária |
 | `PUT` | `/api/media/regions` | substitui o manifesto editado |
+| `POST` | `/api/media/preview` | devolve uma imagem com o desfoque e a pixelização já aplicados às regiões enviadas (a fotografia, ou um fotograma do vídeo), para o revisor ver o resultado antes de aprovar |
 | `POST` | `/api/media/track` | rastreia uma caixa manual nos dois sentidos |
 | `POST` | `/api/reject` | reanalisa com observações |
 | `POST` | `/api/approve` | inicia a exportação final |

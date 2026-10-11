@@ -38,6 +38,7 @@ de um: enviar um novo ficheiro substitui o anterior.
 | `POST /api/approve` | aprova a versão atual |
 | `GET /api/ready` | diz se a análise de imagem e vídeo está disponível (o modelo do Worker verificado) |
 | `PUT /api/media/regions` | guarda as regiões multimédia editadas |
+| `POST /api/media/preview` | `{attempt, time_ms, regions}`: devolve uma imagem JPEG (sem cache) com o resultado já aplicado às regiões enviadas (as do rascunho, guardadas ou não): a fotografia, ou o fotograma do vídeo em `time_ms`. Rostos desfocados, o resto pixelado, como na exportação. 409 se a versão mudou, 502 com mensagem fixa se falhar |
 | `POST /api/media/track` | segue uma caixa desenhada à mão pelo vídeo, para a frente e para trás |
 | `GET /api/media/source` | serve o original temporário para revisão |
 | `GET /api/media/output` | serve a versão multimédia aprovada |
@@ -171,6 +172,13 @@ interface está **em inglês** (decisão da equipa).
   demonstração com uma fotografia e um vídeo falsos; os testes de contrato
   verificam os campos, os limites, o vocabulário das regiões e as etapas
   contra o backend.
+- **Pré-visualização do desfoque.** O botão "Blur preview" (ligado por
+  defeito) desenha por cima da fotografia, ou do fotograma do vídeo parado, o
+  resultado tal como a exportação o vai fazer: a UI pede-o ao backend com as
+  regiões do rascunho, por isso as edições por guardar também se veem. Com o
+  vídeo a tocar mostra só os contornos, e a tira de baixo fica para os
+  controlos do leitor. No modo de demonstração não existe (só o backend a
+  desenha). Sem ela, o desfoque só se via depois de aprovar e descarregar.
 - **Descarregar o PDF.** Num documento que veio de um PDF, "Download PDF" ao
   lado de "Download .txt" gera o PDF anonimizado da versão em revisão (ver
   [PDF.md](PDF.md)).

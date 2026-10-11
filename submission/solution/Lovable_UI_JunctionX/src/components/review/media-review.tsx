@@ -264,6 +264,8 @@ export function MediaViewer({
   onRemoveRegion,
   isDrawing = false,
   onToggleDrawMode,
+  previewUrl = null,
+  onPlayingChange,
 }: {
   snapshot: Snapshot;
   currentTimeMs: number;
@@ -277,6 +279,9 @@ export function MediaViewer({
   onRemoveRegion?: (regionId: string) => void;
   isDrawing?: boolean;
   onToggleDrawMode?: () => void;
+  /** The file with the redaction applied (see previewMedia); drawn over the original. */
+  previewUrl?: string | null;
+  onPlayingChange?: (playing: boolean) => void;
 }) {
   const isImage = snapshot.kind === "image";
   const sourceUrl = mediaSourceUrl(snapshot);
@@ -354,6 +359,24 @@ export function MediaViewer({
       stopLoop();
     };
   }, [videoRef, isImage, onTimeUpdate]);
+
+  // Tell the parent when the video plays: the blur preview is a still, so it
+  // is only shown while the video is paused.
+  useEffect(() => {
+    const vid = videoRef?.current;
+    if (!vid || isImage || !onPlayingChange) return;
+    const playing = () => onPlayingChange(true);
+    const stopped = () => onPlayingChange(false);
+    vid.addEventListener("play", playing);
+    vid.addEventListener("pause", stopped);
+    vid.addEventListener("ended", stopped);
+    onPlayingChange(!vid.paused && !vid.ended);
+    return () => {
+      vid.removeEventListener("play", playing);
+      vid.removeEventListener("pause", stopped);
+      vid.removeEventListener("ended", stopped);
+    };
+  }, [videoRef, isImage, onPlayingChange]);
 
   const renderedRegions = useMemo(() => {
     return activeRegions
@@ -634,6 +657,17 @@ export function MediaViewer({
           src={sourceUrl ?? ""}
           className="absolute inset-0 h-full w-full object-contain"
           onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
+        />
+      )}
+
+      {previewUrl && (
+        <img
+          src={previewUrl}
+          alt="Preview of the redacted result"
+          data-testid="blur-preview"
+          // For a video the bottom strip is left to the player's controls.
+          style={isImage ? undefined : { clipPath: "inset(0 0 44px 0)" }}
+          className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
         />
       )}
 

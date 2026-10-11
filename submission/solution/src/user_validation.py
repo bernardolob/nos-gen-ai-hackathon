@@ -52,7 +52,7 @@ from audio import (
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from media import (
@@ -112,6 +112,7 @@ ALIGN_FAILED = ("Não foi possível alinhar a transcrição com o áudio; nada "
                 "foi censurado. Tente outra vez.")
 REDACT_FAILED = "Não foi possível censurar o áudio. Tente outra vez."
 PDF_FAILED = "Não foi possível gerar o PDF anonimizado. Tente outra vez."
+PREVIEW_FAILED = "Não foi possível gerar a pré-visualização."
 NO_PDF = "Esta revisão não vem de um PDF."
 
 
@@ -125,6 +126,12 @@ class RejectedVersion(BaseModel):
     text: str = ""
     reason: str = ""
     regions: int | None = None
+
+
+class PreviewRequest(BaseModel):
+    attempt: int
+    time_ms: int = 0
+    regions: list[MediaRegion]
 
 
 class RegionTrackRequest(BaseModel):
@@ -407,6 +414,30 @@ class ReviewSession:
                     request.attempt != self.attempt):
                 raise ReviewError(409, "A versão em revisão já mudou.")
         return tracked
+
+    def preview_media(self, request):
+        """A redacted picture of the file under review, for the given regions
+        (the reviewer's draft, saved or not) and, for a video, the instant."""
+        with self.lock:
+            self._require_media_ready()
+            if request.attempt != self.attempt:
+                raise ReviewError(409, "A versão em revisão já mudou.")
+            duration = (self.media or {}).get("duration_ms", 0)
+            if self.kind == "video" and not 0 <= request.time_ms <= duration:
+                raise ReviewError(422, "O instante pedido é inválido.")
+            source, content_type = self.source_path, self.content_type
+            regions = [region.model_copy(deep=True)
+                       for region in request.regions]
+            job = self.job_number
+        try:
+            data = self.media_processor.preview(
+                source, content_type, regions, request.time_ms)
+        except MediaError:
+            raise ReviewError(502, PREVIEW_FAILED) from None
+        with self.lock:
+            if job != self.job_number or request.attempt != self.attempt:
+                raise ReviewError(409, "A versão em revisão já mudou.")
+        return data
 
     def source_file(self):
         with self.lock:
@@ -830,6 +861,13 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
     async def track_region(request: RegionTrackRequest):
         region = await run_in_threadpool(session.track_region, request)
         return region.model_dump()
+
+    @app.post("/api/media/preview")
+    async def media_preview(request: PreviewRequest):
+        data = await run_in_threadpool(session.preview_media, request)
+        return Response(
+            content=data, media_type="image/jpeg",
+            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/media/source")
     def media_source():

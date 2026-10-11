@@ -226,6 +226,17 @@ class MediaProcessor:
             raise MediaError(
                 "Não foi possível rastrear esta região.") from None
 
+    def preview(self, source, content_type, regions, time_ms=0):
+        """One redacted picture (JPEG bytes) with the same blur and mosaic as
+        the export: the photo, or the video frame at ``time_ms``. Used to show
+        the reviewer what the result will look like, before approving."""
+        kind = supported_media_kind(content_type)
+        if kind == "image":
+            return _preview_image(source, regions)
+        if kind == "video":
+            return _preview_video_frame(source, regions, time_ms)
+        raise MediaValidationError("Unsupported media type.")
+
     def render(self, source, content_type, regions, output, progress=None):
         report = progress or (lambda *_args: None)
         kind = supported_media_kind(content_type)
@@ -239,6 +250,55 @@ class MediaProcessor:
             report("exportação concluída", 1, 1)
         else:
             raise MediaValidationError("Unsupported media type.")
+
+
+PREVIEW_MAX_SIDE = 1280
+
+
+def _preview_image(source, regions):
+    """The photo with the same redaction as the export, as JPEG bytes."""
+    import io
+    from PIL import Image, ImageOps
+    try:
+        with Image.open(source) as original:
+            image = ImageOps.exif_transpose(original).convert("RGB")
+    except Exception:
+        raise MediaError("Não foi possível abrir a imagem.") from None
+    _pixelate_image_regions(image, regions, 0)
+    image.thumbnail((PREVIEW_MAX_SIDE, PREVIEW_MAX_SIDE))
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=85)
+    return buffer.getvalue()
+
+
+def _preview_video_frame(source, regions, time_ms):
+    """One video frame, redacted like the export, as JPEG bytes."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        raise MediaError("O OpenCV não está instalado.") from None
+    capture = cv2.VideoCapture(str(source))
+    try:
+        if not capture.isOpened():
+            raise MediaError("Não foi possível abrir o vídeo.")
+        capture.set(cv2.CAP_PROP_POS_MSEC, max(0, int(time_ms)))
+        ok, frame = capture.read()
+        if not ok:
+            raise MediaError("Não foi possível ler esse instante do vídeo.")
+    finally:
+        capture.release()
+    _pixelate_video_regions(frame, regions, time_ms, cv2, np)
+    height, width = frame.shape[:2]
+    scale = PREVIEW_MAX_SIDE / max(width, height)
+    if scale < 1:
+        frame = cv2.resize(
+            frame, (round(width * scale), round(height * scale)),
+            interpolation=cv2.INTER_AREA)
+    done, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not done:
+        raise MediaError("Não foi possível gerar a pré-visualização.")
+    return encoded.tobytes()
 
 
 def _read_image(path):
