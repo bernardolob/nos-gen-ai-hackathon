@@ -267,6 +267,7 @@ export function ReviewWorkspace({
   const [showBlur, setShowBlur] = useState(true);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const lastPreview = useRef<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -296,9 +297,11 @@ export function ReviewWorkspace({
   useEffect(() => {
     if (!canPreview) {
       setPreviewUrl(null);
+      setPreviewLoading(false);
       return;
     }
     let cancelled = false;
+    setPreviewLoading(true);
     const timer = setTimeout(async () => {
       try {
         const url = await previewMedia(activeSnapshot.attempt, previewTime, draftRegions);
@@ -315,6 +318,8 @@ export function ReviewWorkspace({
           setPreviewUrl(null);
           setPreviewError(err instanceof Error ? err.message : "Could not draw the blur preview.");
         }
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
       }
     }, 250);
     return () => {
@@ -702,13 +707,20 @@ export function ReviewWorkspace({
                 )}
                 {!isMockMode && (
                   <Button
-                    variant={showBlur ? "secondary" : "ghost"}
+                    variant={showBlur ? "secondary" : "outline"}
                     size="sm"
-                    aria-pressed={showBlur}
                     onClick={() => setShowBlur((v) => !v)}
-                    title="Show how the result will look: faces blurred, text and documents pixelated"
+                    title={
+                      showBlur
+                        ? "Hide the blur to see the original with the detected regions outlined"
+                        : "Show how the result will look: faces blurred, text and documents pixelated"
+                    }
                   >
-                    {showBlur ? <Eye aria-hidden /> : <EyeOff aria-hidden />} Blur preview
+                    {showBlur ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+                    {showBlur ? "Hide blur" : "Show blur"}
+                    {showBlur && previewLoading && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Drawing the preview" />
+                    )}
                   </Button>
                 )}
                 <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
@@ -758,6 +770,7 @@ export function ReviewWorkspace({
                 isDrawing={isDrawing}
                 onToggleDrawMode={() => setIsDrawing(!isDrawing)}
                 previewUrl={previewUrl}
+                liveBlur={isVideo && showBlur && !isMockMode && videoPlaying}
                 onPlayingChange={setVideoPlaying}
               />
               {previewError && showBlur && (

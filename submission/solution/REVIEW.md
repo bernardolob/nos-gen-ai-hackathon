@@ -176,12 +176,15 @@ interface está **em inglês** (decisão da equipa).
   demonstração com uma fotografia e um vídeo falsos; os testes de contrato
   verificam os campos, os limites, o vocabulário das regiões e as etapas
   contra o backend.
-- **Pré-visualização do desfoque.** O botão "Blur preview" (ligado por
-  defeito) desenha por cima da fotografia, ou do fotograma do vídeo parado, o
+- **Pré-visualização do desfoque.** O botão "Hide blur" / "Show blur" (o
+  desfoque vem ligado por defeito e o botão diz o que o próximo clique faz) desenha por cima da fotografia, ou do fotograma do vídeo parado, o
   resultado tal como a exportação o vai fazer: a UI pede-o ao backend com as
   regiões do rascunho, por isso as edições por guardar também se veem. Com o
-  vídeo a tocar mostra só os contornos, e a tira de baixo fica para os
-  controlos do leitor. Com a pré-visualização ligada **não se vê nenhum
+  vídeo parado mostra a imagem que o backend desenhou. **Com o vídeo a tocar**
+  o desfoque é desenhado ao vivo, num `canvas`, a partir dos fotogramas que o
+  navegador mostra (`live-blur.tsx`): é uma aproximação (cara em elipse, o
+  resto em mosaico) para o botão continuar a fazer efeito; ao parar, volta a
+  imagem exata. A tira de baixo fica para os controlos do leitor. Com a pré-visualização ligada **não se vê nenhum
   contorno nem etiqueta** por cima da imagem, só o resultado: uma região
   continua a poder escolher-se (clicando onde está) e só então mostra o contorno,
   a etiqueta e as pegas de redimensionar; ao desenhar uma região nova vêem-se

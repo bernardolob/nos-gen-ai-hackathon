@@ -55,11 +55,11 @@ describe("Blur preview", () => {
     previewMedia.mockResolvedValue("blob:redacted");
     show(await readySnapshot("image"));
     await screen.findByTestId("blur-preview");
-    const toggle = screen.getByRole("button", { name: /blur preview/i });
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    const toggle = screen.getByRole("button", { name: /hide blur/i });
     fireEvent.click(toggle);
     await waitFor(() => expect(screen.queryByTestId("blur-preview")).not.toBeInTheDocument());
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    // The button says what the next click does.
+    expect(toggle).toHaveTextContent(/show blur/i);
     fireEvent.click(toggle);
     expect(await screen.findByTestId("blur-preview")).toBeInTheDocument();
   });
@@ -102,10 +102,34 @@ describe("Blur preview", () => {
     previewMedia.mockResolvedValue("blob:redacted");
     show(await readySnapshot("image"));
     await screen.findByTestId("blur-preview");
-    fireEvent.click(screen.getByRole("button", { name: /blur preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /hide blur|show blur/i }));
     await waitFor(() => expect(screen.queryByTestId("blur-preview")).not.toBeInTheDocument());
     const picture = screen.getByTestId("media-container");
     expect(within(picture).getByText("Face")).toBeInTheDocument();
     expect(within(picture).getByText("ID document")).toBeInTheDocument();
+  });
+
+  it("keeps the blur while a video plays, drawn live, and lets the button turn it off", async () => {
+    // jsdom has no canvas: the live blur then just has nothing to draw on.
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    previewMedia.mockResolvedValue("blob:frame");
+    show(await readySnapshot("video"));
+    await screen.findByTestId("blur-preview");
+    const picture = screen.getByTestId("media-container");
+    const video = picture.querySelector("video") as HTMLVideoElement;
+    // Playing: the still frame gives way to the live blur, with no outlines.
+    fireEvent.play(video);
+    expect(await within(picture).findByTestId("live-blur")).toBeInTheDocument();
+    expect(within(picture).queryByTestId("blur-preview")).not.toBeInTheDocument();
+    expect(screen.getByTestId("box-r-face")).toHaveAttribute("data-outlined", "false");
+    // The button hides it: outlines are back and so is the original.
+    fireEvent.click(screen.getByRole("button", { name: /hide blur/i }));
+    await waitFor(() => expect(within(picture).queryByTestId("live-blur")).not.toBeInTheDocument());
+    expect(screen.getByTestId("box-r-face")).toHaveAttribute("data-outlined", "true");
+    // Show it again and pause: the still frame comes back.
+    fireEvent.click(screen.getByRole("button", { name: /show blur/i }));
+    fireEvent.pause(video);
+    expect(await within(picture).findByTestId("blur-preview")).toBeInTheDocument();
+    expect(within(picture).queryByTestId("live-blur")).not.toBeInTheDocument();
   });
 });
