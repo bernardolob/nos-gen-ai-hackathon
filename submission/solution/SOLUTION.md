@@ -38,8 +38,8 @@ Pontos do pipeline, pela ordem do fluxo:
 | 7 | Relatório | feito |
 | 8 | Avaliação própria | **fora de âmbito** (decisão da equipa): as execuções comparam-se à mão |
 | | Ponto de entrada que liga tudo | feito (`src/pipeline.py`), ligado ao Gemini pelo gateway (`src/gateway.py`), testado com o Gemini real |
-| | `submission/submission.txt` | preenchido com a execução 1 (gerada com o `gemini-3.5-flash`), **a refazer** com o modelo e o prompt atuais |
-| | `submission/prompt.txt` | **por preencher** (falta confirmar com a NOS o que lá vai) |
+| | `submission/submission.txt` | refeito com o prompt atual e as instruções iniciais (`user_instructions.txt`), ver "A submissão" abaixo |
+| | `submission/prompt.txt` | preenchido: o pedido exato (prompt interno, documento e instruções iniciais); falta confirmar com a NOS que é isto que lá vai |
 
 Sem a deteção, o pipeline já corre no documento do desafio e mascara o que as
 regras de segurança apanham (data de nascimento, números de identificação,
@@ -214,6 +214,48 @@ Detalhes, decisões e custo estimado em [AUDIO.md](AUDIO.md).
   a evolução que resolveria o problema (ver [DECISIONS.md](DECISIONS.md), 16).
 - **O `import fitz` está obsoleto** no PyMuPDF atual; a alternativa é
   `import pymupdf`.
+
+## A submissão
+
+Os três ficheiros da submissão vêm de uma só execução, com o Gemini pelo
+gateway:
+
+| Ficheiro | O que é |
+|---|---|
+| `submission/submission.txt` | o documento do desafio, mascarado |
+| `submission/prompt.txt` | o pedido exato: o prompt interno ([internal_prompt.txt](internal_prompt.txt)), o documento com os números de linha e as instruções iniciais, pela ordem em que o gateway os recebe |
+| [user_instructions.txt](user_instructions.txt) | as instruções iniciais do utilizador, o texto entre `<user_instructions>` |
+
+As instruções iniciais pedem para mascarar também **toda a informação de saúde**
+(o notebook dos organizadores trata-a como sensível) e as datas e durações que
+fazem parte de um facto sensível ("desde 2018", "há 5 anos", "parou há 3
+anos"), e deixam como estão os títulos, as etiquetas, o título, a data do
+relatório e a referência, como no exemplo oficial. Só **acrescentam**
+máscaras; o Sexo fica visível porque não consta da lista dos organizadores.
+
+Para refazer a submissão, a partir de `submission/solution/src`:
+
+```bash
+export GEMINI_GATEWAY_URL=... GEMINI_GATEWAY_ORIGIN=...
+python pipeline.py ../../../raw_data/document_to_anonymize.pdf \
+    --instructions-file ../user_instructions.txt --out saida
+cp saida/submission.txt ../../submission.txt
+```
+
+Depois, o `prompt.txt` tem de voltar a ser o pedido exato. O teste
+`tests/test_submission_prompt.py` falha se o prompt interno, o documento ou as
+instruções mudarem e o ficheiro ficar desatualizado.
+
+**Medido (3 execuções):** 95, 96 e 95 itens e 203, 204 e 203 `*`, sem avisos
+nem problemas na verificação, com as datas e durações dos factos sensíveis
+sempre mascaradas. Sem as instruções, o mesmo documento deu entre 182 e 204
+`*` e deixava anos como "desde 2018" visíveis. O modelo não é determinístico:
+outra execução pode diferir em poucas palavras (por exemplo "mulher").
+
+**Limites:** o backend de revisão arranca a primeira versão sem instruções (só
+as rejeições seguintes as levam), por isso esta submissão sai da linha de
+comandos e não da UI. O pedido real ao gateway leva ainda o esquema JSON de
+resposta (`response_format`), que não está em `prompt.txt`.
 
 ## Pontos em aberto
 
