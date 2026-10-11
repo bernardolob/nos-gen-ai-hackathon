@@ -106,6 +106,16 @@ Comportamento:
   extensão é tratada como áudio, não como vídeo (ver [AUDIO.md](AUDIO.md)); o
   estado vem com `kind: "audio"`.
 
+- **Tudo o que o ecrã mostra vem em inglês.** A UI é em inglês, e o backend
+  também lhe dá em inglês as mensagens de erro (`detail`, e `error` de um
+  trabalho de imagem ou vídeo) e as razões das regiões: o prompt de imagem e
+  vídeo pede-as em inglês e as que o código cria ("Potentially identifiable
+  face.") também. O código, os comentários e a documentação ficam em
+  português; `tests/test_user_facing_english.py` falha se uma mensagem ou razão
+  voltar a ficar em português. O relatório (`report.md`) e as razões dos itens
+  de texto continuam em português, porque o relatório é entregue em português e
+  a UI não os mostra.
+
 ### Privacidade
 
 Escuta só em `127.0.0.1` e o CORS só aceita as origens da UI

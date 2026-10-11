@@ -220,7 +220,7 @@ class MediaProcessor:
         """Track one reviewer-authored box in both directions."""
 
         if not region.keyframes:
-            raise MediaValidationError("A região não tem uma caixa inicial.")
+            raise MediaValidationError("The region has no starting box.")
         try:
             return _track_manual_region(
                 source, region, duration_ms, seed_time_ms)
@@ -228,7 +228,7 @@ class MediaProcessor:
             raise
         except Exception:
             raise MediaError(
-                "Não foi possível rastrear esta região.") from None
+                "This region could not be tracked.") from None
 
     def preview(self, source, content_type, regions, time_ms=0):
         """One redacted picture (JPEG bytes) with the same blur and mosaic as
@@ -267,7 +267,7 @@ def _preview_image(source, regions):
         with Image.open(source) as original:
             image = ImageOps.exif_transpose(original).convert("RGB")
     except Exception:
-        raise MediaError("Não foi possível abrir a imagem.") from None
+        raise MediaError("The image could not be opened.") from None
     _pixelate_image_regions(image, regions, 0)
     image.thumbnail((PREVIEW_MAX_SIDE, PREVIEW_MAX_SIDE))
     buffer = io.BytesIO()
@@ -281,15 +281,15 @@ def _preview_video_frame(source, regions, time_ms):
         import cv2
         import numpy as np
     except ImportError:
-        raise MediaError("O OpenCV não está instalado.") from None
+        raise MediaError("OpenCV is not installed.") from None
     capture = cv2.VideoCapture(str(source))
     try:
         if not capture.isOpened():
-            raise MediaError("Não foi possível abrir o vídeo.")
+            raise MediaError("The video could not be opened.")
         capture.set(cv2.CAP_PROP_POS_MSEC, max(0, int(time_ms)))
         ok, frame = capture.read()
         if not ok:
-            raise MediaError("Não foi possível ler esse instante do vídeo.")
+            raise MediaError("That moment of the video could not be read.")
     finally:
         capture.release()
     _pixelate_video_regions(frame, regions, time_ms, cv2, np)
@@ -301,7 +301,7 @@ def _preview_video_frame(source, regions, time_ms):
             interpolation=cv2.INTER_AREA)
     done, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
     if not done:
-        raise MediaError("Não foi possível gerar a pré-visualização.")
+        raise MediaError("The preview could not be generated.")
     return encoded.tobytes()
 
 
@@ -314,10 +314,11 @@ def _read_image(path):
             image = ImageOps.exif_transpose(source).convert("RGB")
             width, height = image.size
             if width * height > MAX_IMAGE_PIXELS:
-                raise MediaValidationError("A imagem excede 25 megapíxeis.")
+                raise MediaValidationError("The image is larger than 25 "
+                                           "megapixels.")
             if not width or not height:
                 raise MediaValidationError(
-                    "A imagem não tem dimensões válidas.")
+                    "The image has no valid size.")
             image.thumbnail((1600, 1600))
             import io
             buffer = io.BytesIO()
@@ -326,12 +327,12 @@ def _read_image(path):
     except MediaValidationError:
         raise
     except Exception:
-        raise MediaValidationError("Não foi possível ler a imagem.") from None
+        raise MediaValidationError("The image could not be read.") from None
 
 
 def _probe_video(path):
     if shutil.which("ffprobe") is None:
-        raise MediaValidationError("O ffprobe não está instalado.")
+        raise MediaValidationError("ffprobe is not installed.")
     command = [
         "ffprobe", "-v", "error", "-select_streams", "v:0",
         "-show_entries",
@@ -348,14 +349,16 @@ def _probe_video(path):
         numerator, denominator = rate.split("/")
         fps = float(numerator) / float(denominator)
     except (ValueError, KeyError, IndexError, ZeroDivisionError, TypeError):
-        raise MediaValidationError("Não foi possível ler o vídeo.") from None
+        raise MediaValidationError("The video could not be read.") from None
     if result.returncode or duration_ms <= 0 or fps <= 0:
-        raise MediaValidationError("Não foi possível ler o vídeo.")
+        raise MediaValidationError("The video could not be read.")
     if duration_ms > MAX_VIDEO_DURATION_MS:
-        raise MediaValidationError("O vídeo não pode exceder 60 segundos.")
+        raise MediaValidationError("The video cannot be longer than 60 "
+                                   "seconds.")
     if (max(width, height) > MAX_VIDEO_WIDTH or
             min(width, height) > MAX_VIDEO_HEIGHT):
-        raise MediaValidationError("O vídeo não pode exceder 1920 × 1080.")
+        raise MediaValidationError("The video cannot be larger than 1920 × "
+                                   "1080.")
     # ffprobe reports the stored raster, whereas both OpenCV decoding and the
     # browser apply a phone video's rotation metadata. Region coordinates must
     # use the dimensions of those displayed frames, not the stored raster.
@@ -368,7 +371,7 @@ def _probe_video(path):
             raise ValueError
         height, width = first_frame.shape[:2]
     except Exception:
-        raise MediaValidationError("Não foi possível ler o vídeo.") from None
+        raise MediaValidationError("The video could not be read.") from None
     return {
         "width": width, "height": height,
         "duration_ms": duration_ms, "fps": fps,
@@ -769,7 +772,7 @@ def _encode_video_preview(frame, cv2):
     encoded, data = cv2.imencode(
         ".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 86])
     if not encoded:
-        raise MediaValidationError("Falhou a extração do vídeo.")
+        raise MediaValidationError("Extracting the video failed.")
     return data.tobytes()
 
 
@@ -777,10 +780,10 @@ def _sample_video(path, info, report):
     try:
         import cv2
     except ImportError:
-        raise MediaValidationError("O OpenCV não está instalado.") from None
+        raise MediaValidationError("OpenCV is not installed.") from None
     capture = cv2.VideoCapture(str(path))
     if not capture.isOpened():
-        raise MediaValidationError("Não foi possível abrir o vídeo.")
+        raise MediaValidationError("The video could not be opened.")
     detector = _create_face_detector(cv2)
     parser = _create_face_parser(cv2)
     frame_count = max(1, round(info["duration_ms"] * info["fps"] / 1000))
@@ -817,7 +820,7 @@ def _sample_video(path, info, report):
                     box = polygon_box(polygon)
                 faces.append(MediaRegion(
                     category="biometrico", kind="face",
-                    reason="Rosto potencialmente identificável.",
+                    reason="Potentially identifiable face.",
                     confidence="certo", source="face_detector",
                     start_ms=time_ms, end_ms=time_ms,
                     keyframes=[RegionKeyframe(
@@ -847,7 +850,7 @@ def _sample_video(path, info, report):
             report("extrair fotogramas", min(index, frame_count), frame_count)
     capture.release()
     if not base_samples:
-        raise MediaValidationError("O vídeo não contém fotogramas legíveis.")
+        raise MediaValidationError("The video has no readable frames.")
     if (last_frame is not None and
             base_samples[-1][1] != previous_time_ms):
         base_samples.append((
@@ -905,7 +908,7 @@ def _detect_image_faces(jpeg):
             box = polygon_box(polygon)
         faces.append(MediaRegion(
             category="biometrico", kind="face",
-            reason="Rosto potencialmente identificável.",
+            reason="Potentially identifiable face.",
             confidence="certo", source="face_detector",
             start_ms=0, end_ms=0,
             keyframes=[RegionKeyframe(
@@ -1244,7 +1247,7 @@ def _read_video_recovery_frames(path, times, first_id=0):
         ok, frame = capture.read()
         if not ok:
             capture.release()
-            raise MediaValidationError("Não foi possível ler um fotograma.")
+            raise MediaValidationError("A frame could not be read.")
         samples.append((first_id + len(samples), time_ms,
                         _encode_video_preview(frame, cv2)))
     capture.release()
@@ -1292,7 +1295,7 @@ def _track_video_objects(path, regions, info, scene_cuts=(),
         index += 1
     capture.release()
     if not frames:
-        raise MediaValidationError("O vídeo não contém fotogramas legíveis.")
+        raise MediaValidationError("The video has no readable frames.")
     if last[0] != frames[-1][0]:
         frames.append(last)
     frame_display_ms = max(1, round(1000 / info["fps"]))
@@ -1422,14 +1425,14 @@ def _track_manual_region(path, region, duration_ms, seed_time_ms=None):
         import cv2
         import numpy as np
     except ImportError:
-        raise MediaValidationError("O OpenCV não está instalado.") from None
+        raise MediaValidationError("OpenCV is not installed.") from None
     capture = cv2.VideoCapture(str(path))
     if not capture.isOpened():
-        raise MediaValidationError("Não foi possível abrir o vídeo.")
+        raise MediaValidationError("The video could not be opened.")
     fps = capture.get(cv2.CAP_PROP_FPS)
     if not fps or not math.isfinite(fps):
         capture.release()
-        raise MediaValidationError("O vídeo não tem uma cadência válida.")
+        raise MediaValidationError("The video has no valid frame rate.")
     interval = max(1, round(fps / TRACK_SAMPLE_RATE))
     frames = []
     index, previous_time = 0, -1
@@ -1450,7 +1453,7 @@ def _track_manual_region(path, region, duration_ms, seed_time_ms=None):
         index += 1
     capture.release()
     if not frames:
-        raise MediaValidationError("O vídeo não contém fotogramas legíveis.")
+        raise MediaValidationError("The video has no readable frames.")
     requested_time = (
         region.keyframes[-1].time_ms
         if seed_time_ms is None else seed_time_ms)
@@ -1771,7 +1774,7 @@ def _blur_image_faces(image, faces, time_ms):
     try:
         import cv2
     except ImportError:
-        raise MediaError("O OpenCV não está instalado.") from None
+        raise MediaError("OpenCV is not installed.") from None
     array = np.array(image)
     for region, box in faces:
         if not _blur_face(array, box, cv2, np):
@@ -1824,7 +1827,7 @@ def _render_image(source, output, regions, content_type):
             }.get(mime, "JPEG")
             image.save(output, image_format, quality=94)
     except Exception:
-        raise MediaError("Não foi possível exportar a imagem.") from None
+        raise MediaError("The image could not be exported.") from None
 
 
 def _pixelate_video_regions(frame, regions, time_ms, cv2, np):
@@ -1873,12 +1876,12 @@ def _pixelate_video_regions(frame, regions, time_ms, cv2, np):
 
 def _render_video(source, output, regions):
     if shutil.which("ffmpeg") is None:
-        raise MediaError("O ffmpeg não está instalado.")
+        raise MediaError("ffmpeg is not installed.")
     try:
         import cv2
         import numpy as np
     except ImportError:
-        raise MediaError("O OpenCV não está instalado.") from None
+        raise MediaError("OpenCV is not installed.") from None
     capture = cv2.VideoCapture(str(source))
     fps = capture.get(cv2.CAP_PROP_FPS)
     width = round(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -1889,7 +1892,7 @@ def _render_video(source, output, regions):
     if not capture.isOpened() or not writer.isOpened():
         capture.release()
         writer.release()
-        raise MediaError("Não foi possível preparar a exportação do vídeo.")
+        raise MediaError("The video export could not be prepared.")
     index = 0
     previous_time_ms = -1
     while True:
@@ -1914,4 +1917,4 @@ def _render_video(source, output, regions):
     silent.unlink(missing_ok=True)
     if result.returncode:
         Path(output).unlink(missing_ok=True)
-        raise MediaError("Não foi possível exportar o vídeo.")
+        raise MediaError("The video could not be exported.")

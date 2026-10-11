@@ -103,19 +103,19 @@ INSTRUCTIONS_HEADER = (
 # as observações das rejeições.
 MAX_INITIAL_INSTRUCTIONS = 1500
 INITIAL_TOO_LONG = (
-    "As instruções iniciais são demasiado compridas (máximo %d caracteres)."
+    "The initial instructions are too long (maximum %d characters)."
     % MAX_INITIAL_INSTRUCTIONS)
-MODEL_FAILED = "Não foi possível gerar a nova versão. Tente outra vez."
-AUDIO_OFF = ("A censura de áudio não está disponível: falta a "
-             "ELEVENLABS_API_KEY ou o ffmpeg.")
-TRANSCRIBE_FAILED = "Não foi possível transcrever o áudio. Tente outra vez."
-NO_SPEECH = "O áudio não tem fala reconhecível."
-ALIGN_FAILED = ("Não foi possível alinhar a transcrição com o áudio; nada "
-                "foi censurado. Tente outra vez.")
-REDACT_FAILED = "Não foi possível censurar o áudio. Tente outra vez."
-PDF_FAILED = "Não foi possível gerar o PDF anonimizado. Tente outra vez."
-PREVIEW_FAILED = "Não foi possível gerar a pré-visualização."
-NO_PDF = "Esta revisão não vem de um PDF."
+MODEL_FAILED = "The new version could not be generated. Try again."
+AUDIO_OFF = ("Audio censoring is not available: the transcription service "
+             "(the gateway or ELEVENLABS_API_KEY) or ffmpeg is missing.")
+TRANSCRIBE_FAILED = "The audio could not be transcribed. Try again."
+NO_SPEECH = "The audio has no recognizable speech."
+ALIGN_FAILED = ("The transcript could not be aligned with the audio; "
+                "nothing was censored. Try again.")
+REDACT_FAILED = "The audio could not be censored. Try again."
+PDF_FAILED = "The anonymized PDF could not be generated. Try again."
+PREVIEW_FAILED = "The preview could not be generated."
+NO_PDF = "This review does not come from a PDF."
 
 
 def ffmpeg_available():
@@ -231,7 +231,7 @@ class ReviewSession:
         devolver o PDF anonimizado (ver ``pdf_path``).
         """
         if not any(line.strip() for line in lines):
-            raise ReviewError(422, "O documento não tem texto.")
+            raise ReviewError(422, "The document has no text.")
         with self.lock:
             result = self._run(lines, [], initial)
             self.job_number += 1
@@ -302,7 +302,7 @@ class ReviewSession:
         """Caminho do áudio censurado da versão atual."""
         with self.lock:
             if self._censored is None or not self._censored.exists():
-                raise ReviewError(404, "Ainda não há áudio censurado.")
+                raise ReviewError(404, "There is no censored audio yet.")
             return self._censored
 
     def load_media(self, body, content_type, filename="media", initial=None):
@@ -310,15 +310,15 @@ class ReviewSession:
 
         if self.media_processor is None:
             raise ReviewError(
-                503, "O modelo multimodal não está configurado ou não "
-                     "suporta imagem/vídeo.")
+                503, "The multimodal model is not configured or does not "
+                     "support images and video.")
         kind = supported_media_kind(content_type)
         if kind is None:
-            raise ReviewError(415, "Envie uma imagem ou vídeo suportado.")
+            raise ReviewError(415, "Send a supported image or video.")
         limit = MAX_IMAGE_BYTES if kind == "image" else MAX_VIDEO_BYTES
         if len(body) > limit:
-            label = "imagem" if kind == "image" else "vídeo"
-            raise ReviewError(413, "O %s é demasiado grande." % label)
+            label = "image" if kind == "image" else "video"
+            raise ReviewError(413, "The %s is too large." % label)
         with self.lock:
             self.job_number += 1
             job = self.job_number
@@ -376,19 +376,20 @@ class ReviewSession:
         with self.lock:
             self._require_media_ready()
             if manifest.attempt != self.attempt:
-                raise ReviewError(409, "A versão em revisão já mudou.")
+                raise ReviewError(409, "The version under review has "
+                                       "already changed.")
             duration = (self.media or {}).get("duration_ms", 0)
             for region in manifest.regions:
                 if region.end_ms < region.start_ms:
                     raise ReviewError(
-                        422, "Um intervalo de ocultação é inválido.")
+                        422, "A hiding interval is not valid.")
                 if self.kind == "image" and (
                         region.start_ms != 0 or region.end_ms != 0):
                     raise ReviewError(
-                        422, "Uma região de imagem deve usar 0 ms.")
+                        422, "An image region must use 0 ms.")
                 if self.kind == "video" and region.end_ms > duration:
                     raise ReviewError(
-                        422, "Uma região excede a duração do vídeo.")
+                        422, "A region goes past the end of the video.")
             self.regions = [region.model_copy(deep=True)
                             for region in manifest.regions]
             self.approved = False
@@ -400,12 +401,13 @@ class ReviewSession:
         with self.lock:
             self._require_media_ready()
             if self.kind != "video":
-                raise ReviewError(409, "Só é possível rastrear num vídeo.")
+                raise ReviewError(409, "Only a video can be tracked.")
             if request.attempt != self.attempt:
-                raise ReviewError(409, "A versão em revisão já mudou.")
+                raise ReviewError(409, "The version under review has "
+                                       "already changed.")
             duration = (self.media or {}).get("duration_ms", 0)
             if not 0 <= request.seed_time_ms <= duration:
-                raise ReviewError(422, "O instante de rastreio é inválido.")
+                raise ReviewError(422, "The tracking time is not valid.")
             source = self.source_path
             job = self.job_number
         tracked = self.media_processor.track(
@@ -414,7 +416,8 @@ class ReviewSession:
         with self.lock:
             if (job != self.job_number or
                     request.attempt != self.attempt):
-                raise ReviewError(409, "A versão em revisão já mudou.")
+                raise ReviewError(409, "The version under review has "
+                                       "already changed.")
         return tracked
 
     def preview_media(self, request):
@@ -423,10 +426,11 @@ class ReviewSession:
         with self.lock:
             self._require_media_ready()
             if request.attempt != self.attempt:
-                raise ReviewError(409, "A versão em revisão já mudou.")
+                raise ReviewError(409, "The version under review has "
+                                       "already changed.")
             duration = (self.media or {}).get("duration_ms", 0)
             if self.kind == "video" and not 0 <= request.time_ms <= duration:
-                raise ReviewError(422, "O instante pedido é inválido.")
+                raise ReviewError(422, "The requested time is not valid.")
             source, content_type = self.source_path, self.content_type
             regions = [region.model_copy(deep=True)
                        for region in request.regions]
@@ -438,7 +442,8 @@ class ReviewSession:
             raise ReviewError(502, PREVIEW_FAILED) from None
         with self.lock:
             if job != self.job_number or request.attempt != self.attempt:
-                raise ReviewError(409, "A versão em revisão já mudou.")
+                raise ReviewError(409, "The version under review has "
+                                       "already changed.")
         return data
 
     def source_file(self):
@@ -450,7 +455,7 @@ class ReviewSession:
         with self.lock:
             if not self.approved or not self.output_path:
                 raise ReviewError(
-                    409, "O ficheiro anonimizado ainda não está pronto.")
+                    409, "The anonymized file is not ready yet.")
             return self.output_path, (
                 self.content_type
                 if self.kind == "image" else "video/mp4")
@@ -460,7 +465,8 @@ class ReviewSession:
         with self.lock:
             self._require_document()
             if version.attempt != self.attempt:
-                raise ReviewError(409, "A versão em revisão já mudou.")
+                raise ReviewError(409, "The version under review has "
+                                       "already changed.")
             reasons = list(self.reasons)
             if version.reason.strip():
                 reasons.append(version.reason.strip())
@@ -486,7 +492,8 @@ class ReviewSession:
         with self.lock:
             self._require_media_ready()
             if version.attempt != self.attempt:
-                raise ReviewError(409, "A versão em revisão já mudou.")
+                raise ReviewError(409, "The version under review has "
+                                       "already changed.")
             reasons = list(self.reasons)
             if version.reason.strip():
                 reasons.append(version.reason.strip())
@@ -589,17 +596,17 @@ class ReviewSession:
 
     def _require_document(self):
         if not self.lines:
-            raise ReviewError(409, "Ainda não há nenhum documento.")
+            raise ReviewError(409, "There is no document yet.")
 
     def _require_media(self):
         if self.kind not in {"image", "video"} or self.source_path is None:
-            raise ReviewError(409, "Ainda não há nenhuma imagem ou vídeo.")
+            raise ReviewError(409, "There is no image or video yet.")
 
     def _require_media_ready(self):
         self._require_media()
         if self.status != "ready":
             raise ReviewError(
-                409, "A análise multimédia ainda não terminou.")
+                409, "The image or video analysis has not finished yet.")
 
     def _set(self, result):
         self.result = result
@@ -660,8 +667,8 @@ def build_instructions(reasons, initial=None):
         if size > pipeline.MAX_INSTRUCTIONS:
             if not kept:
                 raise ReviewError(
-                    422, "As observações são demasiado compridas para as "
-                    "instruções iniciais e o limite de %d caracteres."
+                    422, "The feedback does not fit, with the initial "
+                         "instructions, in the %d-character limit."
                     % pipeline.MAX_INSTRUCTIONS)
             break
         kept.append(reason)
@@ -692,7 +699,7 @@ def initial_instructions(header):
 def lines_from_upload(content_type, body):
     """Linhas do documento enviado (PDF ou texto UTF-8)."""
     if len(body) > MAX_DOCUMENT_BYTES:
-        raise ReviewError(413, "O documento é demasiado grande.")
+        raise ReviewError(413, "The document is too large.")
     kind = content_type.split(";")[0].strip().lower()
     if kind == "application/pdf":
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
@@ -702,17 +709,17 @@ def lines_from_upload(content_type, body):
                 return pipeline.read_lines(path)
             except (RuntimeError, OSError):
                 raise ReviewError(
-                    422, "Não foi possível ler o PDF.") from None
+                    422, "The PDF could not be read.") from None
     if kind == "text/plain":
         try:
             text = body.decode("utf-8")
         except UnicodeDecodeError:
             raise ReviewError(
-                422, "O texto tem de estar em UTF-8.") from None
+                422, "The text must be UTF-8.") from None
         import pdf_extractor
         text = pdf_extractor.remove_empty_lines(text)
         return detection.normalize_lines(text.split("\n")) if text else []
-    raise ReviewError(415, "Envie um PDF ou texto simples (UTF-8).")
+    raise ReviewError(415, "Send a PDF or plain text (UTF-8).")
 
 
 AUDIO_ONLY_CONTAINERS = {
@@ -761,12 +768,12 @@ def audio_only_video(content_type, body):
 def audio_suffix(content_type, body):
     """Extensão do áudio enviado, validando o tipo e o tamanho."""
     if len(body) > MAX_AUDIO_BYTES:
-        raise ReviewError(413, "O áudio é demasiado grande.")
+        raise ReviewError(413, "The audio is too large.")
     kind = content_type.split(";")[0].strip().lower()
     if kind not in AUDIO_TYPES:
-        raise ReviewError(415, "Envie áudio mp3, m4a ou wav.")
+        raise ReviewError(415, "Send mp3, m4a or wav audio.")
     if not body:
-        raise ReviewError(422, "O áudio está vazio.")
+        raise ReviewError(422, "The audio is empty.")
     return AUDIO_TYPES[kind]
 
 
