@@ -150,7 +150,7 @@ export function MaskedText({
                   return (
                     <mark
                       key={partIdx}
-                      className="rounded-sm bg-primary px-1 text-primary-foreground"
+                      className="masked-mark rounded-sm px-1 font-mono"
                       aria-label="redacted data"
                     >
                       {part.text}
@@ -163,7 +163,7 @@ export function MaskedText({
                     <TooltipTrigger asChild>
                       <mark
                         tabIndex={0}
-                        className="cursor-pointer rounded-sm bg-primary px-1 text-primary-foreground transition-all duration-150 hover:opacity-90 hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="masked-mark cursor-pointer rounded-sm px-1 font-mono transition-all duration-150 hover:opacity-90 hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary"
                         aria-label={`redacted: ${part.originalWord}`}
                       >
                         {part.text}
@@ -774,7 +774,7 @@ export function ReviewWorkspace({
                 </div>
               </div>
               <div key={activeSnapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
-                <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
+                <div className="max-h-[34rem] overflow-y-auto p-6 clean-scrollbar" tabIndex={0} aria-label="Anonymized text">
                   <MaskedText
                     text={activeSnapshot.text}
                     originalText={activeSnapshot.original_text}
@@ -949,7 +949,7 @@ export function ReviewWorkspace({
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">“{h.reason}”</p>
                 {!isMedia && (
-                  <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">
+                  <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3 clean-scrollbar">
                     <MaskedText text={h.text} originalText={activeSnapshot.original_text} className="text-xs leading-6" />
                   </div>
                 )}
