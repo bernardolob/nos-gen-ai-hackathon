@@ -143,6 +143,12 @@ git config user.name "O Teu Nome"
 git config user.email "o-teu-email@exemplo.com"
 ```
 
+Usa um email que esteja associado à tua conta do GitHub (Settings → Emails). Se
+não estiver, os commits não aparecem como teus nem contam nas tuas
+contribuições. Quem os faz com ferramentas automáticas (como um assistente de
+código) deve confirmar que a mensagem não tem uma linha `Co-Authored-By` de
+terceiros, para a autoria ficar só de quem os pediu.
+
 ## Como acrescentar um componente
 
 1. Cria o branch `feature/<componente>` a partir da `main`.
