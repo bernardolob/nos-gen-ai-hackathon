@@ -58,9 +58,10 @@ Comportamento:
 
 ### Áudio
 
-- **Disponível só com** `ELEVENLABS_API_KEY` e `ffmpeg`/`ffprobe` instalados.
-  A chave é **do servidor**, não de quem usa a UI: o utilizador só envia o
-  áudio (ver [DECISIONS.md](DECISIONS.md), 16).
+- **Disponível só com** o gateway da Cloudflare (ou `ELEVENLABS_API_KEY`) e
+  `ffmpeg`/`ffprobe` instalados. A chave do ElevenLabs está no Worker, não em
+  quem usa a UI: o utilizador só envia o áudio (ver
+  [DECISIONS.md](DECISIONS.md), 16).
   Sem eles `audio_enabled` é `false` e `POST /api/audio` responde 503; a UI
   deve esconder ou desativar o envio de áudio.
 - **O áudio original sai da máquina.** Vai para o ElevenLabs, **ainda com os
@@ -140,7 +141,7 @@ pip install -r ../requirements.txt
 export GEMINI_GATEWAY_URL=https://nos-gemini-gateway.jnhorta05.workers.dev
 export GEMINI_GATEWAY_ORIGIN=http://localhost:5173
 
-export ELEVENLABS_API_KEY=...                              # opcional (áudio)
+export ELEVENLABS_API_KEY=...        # opcional: sem ela, o áudio usa o gateway
 python user_validation.py            # http://127.0.0.1:8000
 
 # UI, a partir de submission/solution/Lovable_UI_JunctionX
