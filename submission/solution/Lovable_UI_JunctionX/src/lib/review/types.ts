@@ -7,7 +7,24 @@ export interface HistoryEntry {
 }
 
 /** What is under review: a text document (PDF or text) or an audio file. */
-export type ReviewKind = "text" | "audio" | "image" | "video";
+export type ReviewKind = "text" | "audio" | "image" | "video" | "document";
+
+export interface DocumentImage {
+  id: string;
+  width: number;
+  height: number;
+  source_url: string;
+  placements: string[];
+  regions: import("@/components/review/media-editor").MediaRegion[];
+}
+
+export interface DocumentInfo {
+  id: string;
+  format: "pdf" | "docx";
+  filename: string;
+  images: DocumentImage[];
+  output_url: string | null;
+}
 
 /** Where an image/video review is: analysis or export running, done, or failed. */
 export type ReviewStatus = "idle" | "processing" | "exporting" | "ready" | "failed" | "approved";
@@ -20,6 +37,7 @@ export type ReviewStatus = "idle" | "processing" | "exporting" | "ready" | "fail
  * at `audio_url` (see `censoredAudioUrl` in api.ts).
  */
 export interface Snapshot {
+  document: DocumentInfo | null;
   has_document: boolean;
   kind: ReviewKind;
   attempt: number;
@@ -49,6 +67,7 @@ export interface Snapshot {
 }
 
 export const EMPTY_SNAPSHOT: Snapshot = {
+  document: null,
   has_document: false,
   kind: "text",
   attempt: 0,

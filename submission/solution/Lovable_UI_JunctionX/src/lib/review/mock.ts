@@ -1,4 +1,5 @@
 import { ApiError, EMPTY_SNAPSHOT, MAX_REASON_CHARS, type Snapshot } from "./types";
+import type { MediaRegion } from "@/components/review/media-editor";
 
 /** In-memory mock of the review backend, following the same snapshot contract. */
 
@@ -28,7 +29,8 @@ export function maskWords(text: string, strict: boolean): string {
         const clean = word.replace(/[.,]+$/, "");
         const suffix = word.slice(clean.length);
         const hasDigit = /\d/.test(clean);
-        const isName = offset > 0 && /^\p{Lu}\p{Ll}+$/u.test(clean) && !/^(Dr|Tax|Phone)$/.test(clean);
+        const isName =
+          offset > 0 && /^\p{Lu}\p{Ll}+$/u.test(clean) && !/^(Dr|Tax|Phone)$/.test(clean);
         if (hasDigit || isName || (strict && clinical.test(clean))) return "*" + suffix;
         return word;
       }),
@@ -107,6 +109,69 @@ export async function mockUpload(text: string, usedSample = false): Promise<Snap
     attempt: 1,
     text: maskWords(source, false),
     warnings: 1,
+    status: "ready",
+  };
+  return structuredClone(state);
+}
+
+export async function mockUploadDocument(
+  format: "pdf" | "docx",
+  filename: string,
+): Promise<Snapshot> {
+  await mockUpload(SAMPLE_TEXT, true);
+  const sample = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="240"><rect width="480" height="240" fill="#e2e8f0"/><rect x="24" y="24" width="144" height="192" rx="8" fill="#64748b"/><circle cx="96" cy="86" r="36" fill="#cbd5e1"/><path d="M40 192v-24a56 56 0 0 1 112 0v24" fill="#cbd5e1"/><text x="200" y="70" font-size="20">SAMPLE DOCUMENT</text><text x="200" y="110" font-size="16">Name: Maria Santos</text><text x="200" y="145" font-size="16">ID: 123456789</text></svg>`;
+  state = {
+    ...state,
+    kind: "document",
+    document: {
+      id: "demo-document",
+      format,
+      filename,
+      output_url: null,
+      images: [
+        {
+          id: "demo-image",
+          width: 480,
+          height: 240,
+          source_url: `data:image/svg+xml,${encodeURIComponent(sample)}`,
+          placements: [format === "pdf" ? "Page 1" : "Body · image 1"],
+          regions: [
+            {
+              id: "demo-mask",
+              category: "identificacao",
+              kind: "text",
+              confidence: "certo",
+              source: "gemini",
+              reason: "Sample identifying details",
+              start_ms: 0,
+              end_ms: 0,
+              keyframes: [{ time_ms: 0, box: { x: 0.4, y: 0.34, width: 0.55, height: 0.32 } }],
+            },
+          ],
+        },
+      ],
+    },
+  };
+  return structuredClone(state);
+}
+
+export async function mockDocumentRegions(
+  imageId: string,
+  attempt: number,
+  regions: MediaRegion[],
+): Promise<Snapshot> {
+  if (state.approved || attempt !== state.attempt)
+    throw new ApiError(409, "The version under review has changed.");
+  if (!state.document?.images.some((image) => image.id === imageId))
+    throw new ApiError(404, "Image not found.");
+  state = {
+    ...state,
+    document: {
+      ...state.document,
+      images: state.document.images.map((image) =>
+        image.id === imageId ? { ...image, regions: structuredClone(regions) } : image,
+      ),
+    },
   };
   return structuredClone(state);
 }
@@ -134,13 +199,17 @@ export async function mockCurrent(): Promise<Snapshot> {
 
 export async function mockReject(attempt: number, reason: string): Promise<Snapshot> {
   if (!state.has_document) throw new ApiError(409, "There is no document under review yet.");
-  if (attempt !== state.attempt) throw new ApiError(409, "The version under review has already changed.");
+  if (attempt !== state.attempt)
+    throw new ApiError(409, "The version under review has already changed.");
   if (reason.length > MAX_REASON_CHARS)
     throw new ApiError(422, "The feedback is longer than 2000 characters.");
   const text = maskWords(source, state.attempt % 2 === 1);
   state = {
     ...state,
-    history: [...state.history, { attempt: state.attempt, text: state.text, reason, regions: null }],
+    history: [
+      ...state.history,
+      { attempt: state.attempt, text: state.text, reason, regions: null },
+    ],
     attempt: state.attempt + 1,
     text,
     approved: false,

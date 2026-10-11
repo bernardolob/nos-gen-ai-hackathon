@@ -4,6 +4,7 @@ import {
   audioContentTypeFor,
   censoredAudioUrl,
   contentTypeFor,
+  DOCX_TYPE,
   isAudioFile,
   parseError,
   uploadAudio,
@@ -11,7 +12,14 @@ import {
   uploadFile,
   wasSampleSubstituted,
 } from "@/lib/review/api";
-import { mockApprove, mockReject, mockUpload, mockUploadAudio, resetMock, SAMPLE_TRANSCRIPT } from "@/lib/review/mock";
+import {
+  mockApprove,
+  mockReject,
+  mockUpload,
+  mockUploadAudio,
+  resetMock,
+  SAMPLE_TRANSCRIPT,
+} from "@/lib/review/mock";
 import { EMPTY_SNAPSHOT, MAX_AUDIO_BYTES } from "@/lib/review/types";
 
 describe("review contract", () => {
@@ -21,7 +29,9 @@ describe("review contract", () => {
     const first = await mockUpload("Utente Maria Santos, NIF 245789123.");
     const next = await mockReject(first.attempt, "ocultar mais");
     expect(next.attempt).toBe(2);
-    expect(next.history).toEqual([{ attempt: 1, text: first.text, reason: "ocultar mais", regions: null }]);
+    expect(next.history).toEqual([
+      { attempt: 1, text: first.text, reason: "ocultar mais", regions: null },
+    ]);
   });
 
   it("reject with a stale attempt fails with 409", async () => {
@@ -32,18 +42,24 @@ describe("review contract", () => {
   it("uploads PDFs as application/pdf and text files as text/plain", () => {
     expect(contentTypeFor(new File(["x"], "a.pdf"))).toBe("application/pdf");
     expect(contentTypeFor(new File(["x"], "a.txt"))).toBe("text/plain");
-    expect(contentTypeFor(new File(["x"], "a.docx"))).toBeNull();
+    expect(contentTypeFor(new File(["x"], "a.docx"))).toBe(DOCX_TYPE);
+    expect(contentTypeFor(new File(["x"], "a.doc"))).toBeNull();
   });
 
   it("falls back to an English message for known error statuses", async () => {
     const res = new Response(JSON.stringify({ detail: 42 }), { status: 502 });
     const err = await parseError(res);
     expect(err.status).toBe(502);
-    expect(err.message).toBe("The model did not respond. The current version is unchanged; try again.");
+    expect(err.message).toBe(
+      "The model did not respond. The current version is unchanged; try again.",
+    );
   });
 
   it("passes through the backend's detail message", async () => {
-    const res = new Response(JSON.stringify({ detail: "The version under review has already changed." }), { status: 409 });
+    const res = new Response(
+      JSON.stringify({ detail: "The version under review has already changed." }),
+      { status: 409 },
+    );
     const err = await parseError(res);
     expect(err.status).toBe(409);
     expect(err.message).toBe("The version under review has already changed.");
@@ -69,7 +85,12 @@ describe("text snapshot", () => {
   });
 
   it("the empty snapshot is text, with no audio and audio off", () => {
-    expect(EMPTY_SNAPSHOT).toMatchObject({ kind: "text", audio_url: null, audio_ranges: 0, audio_enabled: false });
+    expect(EMPTY_SNAPSHOT).toMatchObject({
+      kind: "text",
+      audio_url: null,
+      audio_ranges: 0,
+      audio_enabled: false,
+    });
   });
 });
 
@@ -120,7 +141,9 @@ describe("audio contract", () => {
     expect(next.attempt).toBe(2);
     expect(next.audio_url).toBe("/api/audio/current");
     expect(next.audio_ranges).toBeGreaterThan(first.audio_ranges);
-    expect(next.history).toEqual([{ attempt: 1, text: first.text, reason: "also hide the diagnosis", regions: null }]);
+    expect(next.history).toEqual([
+      { attempt: 1, text: first.text, reason: "also hide the diagnosis", regions: null },
+    ]);
   });
 
   it("approving audio keeps the audio fields", async () => {
@@ -148,7 +171,8 @@ describe("audio contract", () => {
     expect(audio.kind).toBe("audio");
     // a PDF: the demo does not read it (jsdom files have no .text())
     const doc = await uploadFile(new File(["x"], "a.pdf"));
-    expect(doc.kind).toBe("text");
+    expect(doc.kind).toBe("document");
+    expect(doc.document?.format).toBe("pdf");
   }, 15000);
 });
 

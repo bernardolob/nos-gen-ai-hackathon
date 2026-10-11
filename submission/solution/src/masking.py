@@ -63,6 +63,27 @@ def mask_lines(lines, items):
     Devolve ``(linhas_mascaradas, avisos)``. Cada aviso é um dicionário com
     ``line``, ``text`` e ``problem``.
     """
+    edits, warnings = plan_masks(lines, items)
+    return apply_edits(lines, edits), warnings
+
+
+def apply_edits(lines, edits):
+    """Apply ordered source edits without changing their source offsets."""
+    masked = list(lines)
+    for edit in reversed(edits):
+        index = edit["line"] - 1
+        line = masked[index]
+        masked[index] = (line[:edit["start"]] + edit["replacement"] +
+                         line[edit["end"]:])
+    return masked
+
+
+def plan_masks(lines, items):
+    """Return exact, merged source edits and the usual masking warnings.
+
+    Lines are one-based; start/end are zero-based, half-open NFC offsets.
+    Export adapters use these edits instead of rediscovering sensitive text.
+    """
     spans = [[] for _ in lines]
     warnings = []
     for item in items:
@@ -88,8 +109,13 @@ def mask_lines(lines, items):
                     {"line": skipped + 1, "text": text},
                     "não propagado: parece fazer parte do nome de uma "
                     "instituição"))
-    masked = [_apply(line, spans[i]) for i, line in enumerate(lines)]
-    return masked, warnings
+    edits = [
+        {"line": index + 1, "start": start, "end": end,
+         "replacement": _mask_span(line[start:end])}
+        for index, line in enumerate(lines)
+        for start, end in _merge(spans[index])
+    ]
+    return edits, warnings
 
 
 def _warning(item, problem):

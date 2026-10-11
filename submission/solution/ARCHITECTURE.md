@@ -1,5 +1,9 @@
 # Arquitetura
 
+A revisão local de PDF e Word (.docx) preserva o ficheiro e permite censurar
+as imagens incorporadas, além do texto. Ver [DOCUMENTS.md](DOCUMENTS.md).
+O fluxo de submissão TXT abaixo continua a ser o fluxo da linha de comandos.
+
 Como o sistema está organizado, o que cada componente recebe e devolve, e em
 que estado está. O ponto de entrada da documentação é o
 [SOLUTION.md](SOLUTION.md).

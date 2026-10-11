@@ -1,5 +1,9 @@
 # Solução
 
+A revisão local também censura imagens dentro de PDF e Word (.docx), com
+edição manual das máscaras e download no formato original. Ver
+[DOCUMENTS.md](DOCUMENTS.md).
+
 Sistema que deteta dados pessoais e sensíveis num documento (RGPD) e os
 oculta, trocando **cada palavra sensível por um `*`**, sem mudar mais nada. Gera
 também um relatório a explicar o que foi ocultado e porquê.

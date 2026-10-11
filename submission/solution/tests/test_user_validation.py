@@ -79,7 +79,15 @@ def test_a_pdf_upload():
     response = api.post("/api/document", content=RAW_PDF.read_bytes(),
                         headers={"Content-Type": "application/pdf"})
     assert response.status_code == 200
-    assert len(response.json()["text"].split("\n")) == 60
+    import time
+    deadline = time.monotonic() + 5
+    data = response.json()
+    while data["status"] == "processing" and time.monotonic() < deadline:
+        time.sleep(0.01)
+        data = api.get("/api/current").json()
+    assert data["kind"] == "document"
+    assert data["status"] == "ready"
+    assert len(data["text"].split("\n")) == 60
 
 
 def test_a_corrupt_pdf_is_a_clean_error():

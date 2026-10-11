@@ -38,6 +38,7 @@ import detection
 import gateway
 import gemini_adapter
 import pipeline
+from documents import DOCX_TYPE, PDF_TYPE, DocumentError, open_document
 from audio import (
     AlignmentError,
     ConfigurationError,
@@ -117,6 +118,15 @@ class RejectedVersion(BaseModel):
     regions: int | None = None
 
 
+class RejectionRequest(RejectedVersion):
+    document_id: str | None = None
+
+
+class DocumentApproval(BaseModel):
+    attempt: int
+    document_id: str
+
+
 class RegionTrackRequest(BaseModel):
     attempt: int
     seed_time_ms: int
@@ -145,6 +155,7 @@ class ReviewSession:
         self.media_processor = media_processor
         self.lock = threading.Lock()
         self._folder = None
+        self._document_folder = None
         self.storage = tempfile.TemporaryDirectory(
             prefix="veu-review-", ignore_cleanup_errors=True)
         self.job_number = 0
@@ -164,6 +175,11 @@ class ReviewSession:
 
     def _reset(self):
         self._close_audio()
+        if self._document_folder is not None:
+            self._document_folder.cleanup()
+            self._document_folder = None
+        self.document = None
+        self.document_filename = ""
         self.kind = "text"
         self.lines = []
         self.status = "idle"
@@ -185,7 +201,11 @@ class ReviewSession:
     def close(self):
         """Apaga os ficheiros da sessão e fecha o processador multimédia."""
         with self.lock:
+            self.job_number += 1
             self._close_audio()
+            if self._document_folder is not None:
+                self._document_folder.cleanup()
+                self._document_folder = None
         if self.media_processor is not None:
             self.media_processor.close()
         self.storage.cleanup()
@@ -213,6 +233,201 @@ class ReviewSession:
             self.lines = lines
             self.status = "ready"
             self._set(result)
+
+    def load_document(self, body, content_type, filename):
+        """Validate before replacing the current session, then analyze."""
+        if len(body) > MAX_DOCUMENT_BYTES:
+            raise ReviewError(413, "O documento é demasiado grande.")
+        mime = content_type.split(";", 1)[0].strip().lower()
+        folder = tempfile.TemporaryDirectory(
+            prefix="veu-document-", ignore_cleanup_errors=True)
+        source = Path(folder.name) / (
+            "source.pdf" if mime == PDF_TYPE else "source.docx")
+        try:
+            source.write_bytes(body)
+            document = open_document(source, mime, folder.name)
+            if document.images and self.media_processor is None:
+                raise ReviewError(503, "O modelo multimodal não está "
+                                  "configurado para analisar imagens.")
+        except DocumentError as error:
+            folder.cleanup()
+            raise ReviewError(422, str(error)) from None
+        except BaseException:
+            folder.cleanup()
+            raise
+        with self.lock:
+            self.job_number += 1
+            job = self.job_number
+            self._clear_files()
+            self._reset()
+            self._document_folder = folder
+            self.document = document
+            self.document_filename = _safe_filename(filename)
+            self.source_path = source
+            self.content_type = mime
+            self.kind = "document"
+            self.lines = document.lines
+            self.status = "processing"
+        threading.Thread(target=self._analyze_document,
+                         args=(job, document, []), daemon=True).start()
+
+    def _document_progress(self, job, stage, completed, total):
+        with self.lock:
+            if job == self.job_number:
+                self.progress = {"stage": stage, "completed": completed,
+                                 "total": total}
+
+    def _analyze_document(self, job, document, reasons):
+        try:
+            self._document_progress(job, "analisar texto", 0,
+                                    len(document.images) + 1)
+            result = self._run(document.lines, reasons)
+            instructions = build_instructions(reasons)
+            analyzed, model = [], None
+            for index, image in enumerate(document.images):
+                with self.lock:
+                    if job != self.job_number:
+                        return
+                self._document_progress(job, "analisar imagens", index + 1,
+                                        len(document.images) + 1)
+                _, _, regions, identity = self.media_processor.analyze(
+                    image.path, "image/png", None, instructions)
+                analyzed.append((image, regions))
+                model = identity.as_dict()
+        except Exception as error:
+            self._document_failure(job, error)
+            return
+        with self.lock:
+            if job != self.job_number:
+                return
+            for image, regions in analyzed:
+                image.regions = regions
+            self._set(result)
+            self.model = model
+            self.status = "ready"
+            self.failure = ""
+            self.progress = {"stage": "análise concluída",
+                             "completed": len(document.images) + 1,
+                             "total": len(document.images) + 1}
+
+    def _document_failure(self, job, error):
+        with self.lock:
+            if job == self.job_number:
+                self.status = "failed"
+                self.approved = False
+                self.output_path = None
+                self.failure = (str(error) if isinstance(
+                    error, (ReviewError, DocumentError, MediaError))
+                    else "Não foi possível processar o documento.")
+                if isinstance(error, ReviewError):
+                    self.failure = error.message
+
+    def _require_document_ready(self):
+        if self.kind != "document" or self.document is None:
+            raise ReviewError(409, "Ainda não há um PDF ou Word em revisão.")
+        if self.status != "ready":
+            raise ReviewError(409, "O processamento ainda não terminou.")
+
+    def document_image(self, image_id, attempt):
+        with self.lock:
+            self._require_document_ready()
+            if attempt != self.attempt:
+                raise ReviewError(409, "A versão em revisão já mudou.")
+            image = next((i for i in self.document.images
+                          if i.id == image_id), None)
+            if image is None:
+                raise ReviewError(404, "Imagem não encontrada.")
+            return image.path
+
+    def update_document_regions(self, image_id, manifest):
+        with self.lock:
+            self._require_document_ready()
+            if self.approved:
+                raise ReviewError(409, "O documento já foi aprovado.")
+            if manifest.attempt != self.attempt:
+                raise ReviewError(409, "A versão em revisão já mudou.")
+            image = next((i for i in self.document.images
+                          if i.id == image_id), None)
+            if image is None:
+                raise ReviewError(404, "Imagem não encontrada.")
+            if len({r.id for r in manifest.regions}) != len(manifest.regions):
+                raise ReviewError(422, "Identificadores de região duplicados.")
+            if any(r.start_ms or r.end_ms or len(r.keyframes) != 1 or
+                   r.keyframes[0].time_ms for r in manifest.regions):
+                raise ReviewError(422, "As regiões de imagem devem usar 0 ms.")
+            image.regions = [r.model_copy(deep=True) for r in manifest.regions]
+
+    def reanalyze_document(self, version):
+        with self.lock:
+            self._require_document_ready()
+            if self.approved:
+                raise ReviewError(409, "O documento já foi aprovado.")
+            if version.attempt != self.attempt:
+                raise ReviewError(409, "A versão em revisão já mudou.")
+            if version.document_id != self.document.id:
+                raise ReviewError(409, "O documento em revisão já mudou.")
+            reasons = self.reasons + ([version.reason.strip()]
+                                      if version.reason.strip() else [])
+            build_instructions(reasons)
+            self.history.append(RejectedVersion(
+                attempt=self.attempt, text=self.text, reason=version.reason,
+                regions=sum(len(i.regions) for i in self.document.images)))
+            self.reasons = reasons
+            self.attempt += 1
+            self.approved = False
+            self.output_path = None
+            self.failure = ""
+            self.status = "processing"
+            self.job_number += 1
+            job, document = self.job_number, self.document
+        threading.Thread(target=self._analyze_document,
+                         args=(job, document, reasons), daemon=True).start()
+
+    def approve_document(self, version=None):
+        with self.lock:
+            self._require_document_ready()
+            if (version is None or version.attempt != self.attempt or
+                    version.document_id != self.document.id):
+                raise ReviewError(409, "O documento em revisão já mudou.")
+            if self.approved:
+                return
+            self.status = "exporting"
+            self.job_number += 1
+            job, document = self.job_number, self.document
+            edits = list(self.result["edits"])
+            regions = {i.id: [r.model_copy(deep=True) for r in i.regions]
+                       for i in document.images}
+            output = Path(self._document_folder.name) / (
+                "anonymized." + document.format)
+        threading.Thread(target=self._render_document,
+                         args=(job, document, edits, regions, output),
+                         daemon=True).start()
+
+    def _render_document(self, job, document, edits, regions, output):
+        try:
+            self._document_progress(job, "exportar documento", 0, 1)
+            document.render(output, edits, regions)
+        except Exception as error:
+            output.unlink(missing_ok=True)
+            self._document_failure(job, error)
+            return
+        with self.lock:
+            if job != self.job_number:
+                output.unlink(missing_ok=True)
+                return
+            self.output_path = output
+            self.status = "ready"
+            self.approved = True
+            self.progress = {"stage": "exportação concluída",
+                             "completed": 1, "total": 1}
+
+    def document_output(self):
+        with self.lock:
+            self._require_document_ready()
+            if not self.approved or self.output_path is None:
+                raise ReviewError(
+                    409, "O documento aprovado ainda não está pronto.")
+            return self.output_path, self.content_type
 
     def load_audio(self, body, suffix):
         """Começa uma revisão nova com um áudio.
@@ -429,6 +644,8 @@ class ReviewSession:
         thread.start()
 
     def approve(self):
+        if self.kind == "document":
+            return self.approve_document()
         with self.lock:
             if self.kind in ("text", "audio"):
                 self._require_document()
@@ -494,10 +711,12 @@ class ReviewSession:
                 "approved": self.approved,
                 "history": [v.model_dump() for v in self.history],
                 "mode": (
-                    "multimodal" if self.kind in ("image", "video")
+                    "multimodal" if (self.kind in ("image", "video") or
+                                     (self.document and self.document.images))
                     else "model" if self.generate else "rules"),
                 "warnings": len(result["warnings"]) if result else 0,
                 "issues": len(result["issues"]) if result else 0,
+                "document": None,
             }
             snapshot.update({
                 "media": dict(self.media or {}),
@@ -505,6 +724,10 @@ class ReviewSession:
                 "model": self.model,
                 "error": self.failure,
             })
+            if self.document is not None:
+                snapshot["document"] = self.document.snapshot(
+                    self.document_filename,
+                    "/api/document/output" if self.approved else None)
             return snapshot
 
     def _require_document(self):
@@ -665,6 +888,12 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
     app.state.session = session
     atexit.register(session.close)
 
+    @app.middleware("http")
+    async def prevent_review_caching(request, call_next):
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.exception_handler(ReviewError)
     async def review_error(_request, error):
         return JSONResponse(
@@ -674,6 +903,13 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
     async def upload(request: Request):
         body = await request.body()
         content_type = request.headers.get("content-type", "")
+        mime = content_type.split(";", 1)[0].strip().lower()
+        if mime in {PDF_TYPE, DOCX_TYPE}:
+            await run_in_threadpool(
+                session.load_document, body, mime,
+                request.headers.get("x-file-name", "document." +
+                                    ("pdf" if mime == PDF_TYPE else "docx")))
+            return session.snapshot()
         if supported_media_kind(content_type):
             session.load_media(
                 body, content_type,
@@ -717,16 +953,21 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
         }
 
     @app.post("/api/reject")
-    def reject(version: RejectedVersion):
-        if session.kind in ("text", "audio"):
+    def reject(version: RejectionRequest):
+        if session.kind == "document":
+            session.reanalyze_document(version)
+        elif session.kind in ("text", "audio"):
             session.reject(version)
         else:
             session.reanalyze_media(version)
         return session.snapshot()
 
     @app.post("/api/approve")
-    def approve():
-        session.approve()
+    def approve(version: DocumentApproval | None = None):
+        if session.kind == "document":
+            session.approve_document(version)
+        else:
+            session.approve()
         data = session.snapshot()
         if data["kind"] in ("text", "audio"):
             data["status"] = "approved"
@@ -741,6 +982,25 @@ def create_app(generate=None, origins=None, scribe=None, sounds=None,
     async def track_region(request: RegionTrackRequest):
         region = await run_in_threadpool(session.track_region, request)
         return region.model_dump()
+
+    @app.get("/api/document/images/{image_id}")
+    def document_image(image_id: str, attempt: int):
+        return FileResponse(
+            session.document_image(image_id, attempt), media_type="image/png",
+            headers={"Cache-Control": "no-store"})
+
+    @app.put("/api/document/images/{image_id}/regions")
+    def document_regions(image_id: str, manifest: RegionManifest):
+        session.update_document_regions(image_id, manifest)
+        return session.snapshot()
+
+    @app.get("/api/document/output")
+    def document_output():
+        path, mime = session.document_output()
+        return FileResponse(
+            path, media_type=mime,
+            filename="document_anonimizado" + path.suffix,
+            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/media/source")
     def media_source():

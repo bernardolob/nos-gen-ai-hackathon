@@ -1,20 +1,57 @@
-import { useState } from "react";
-import { AlertTriangle, Check, CheckCircle2, Copy, Download, History, Loader2, RotateCcw, ShieldCheck, ThumbsDown, ThumbsUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Copy,
+  Download,
+  History,
+  Loader2,
+  RotateCcw,
+  ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { MAX_REASON_CHARS, type HistoryEntry, type Snapshot } from "@/lib/review/types";
-import { censoredAudioUrl } from "@/lib/review/api";
+import {
+  censoredAudioUrl,
+  documentOutputUrl,
+  reviewApiUrl,
+  saveDocumentRegions,
+} from "@/lib/review/api";
+import { MediaReview, type MediaRegion } from "./media-editor";
 
 export function MaskedText({ text, className = "" }: { text: string; className?: string }) {
   const parts = text.split(/(\*+)/);
   return (
-    <pre className={`whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground ${className}`}>
+    <pre
+      className={`whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground ${className}`}
+    >
       {parts.map((p, i) =>
         p.startsWith("*") ? (
-          <mark key={i} className="rounded-sm bg-primary px-1 text-primary-foreground" aria-label="redacted data">
+          <mark
+            key={i}
+            className="rounded-sm bg-primary px-1 text-primary-foreground"
+            aria-label="redacted data"
+          >
             {p}
           </mark>
         ) : (
@@ -25,11 +62,23 @@ export function MaskedText({ text, className = "" }: { text: string; className?:
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string | number; tone?: "warn" | undefined }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone?: "warn" | undefined;
+}) {
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${tone === "warn" ? "text-destructive" : "text-foreground"}`}>{value}</p>
+      <p
+        className={`mt-1 text-lg font-bold ${tone === "warn" ? "text-destructive" : "text-foreground"}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -55,6 +104,47 @@ export function ReviewWorkspace({
 }) {
   const isAudio = snapshot.kind === "audio";
   const audioUrl = censoredAudioUrl(snapshot);
+  const document = snapshot.document;
+  const images = document?.images ?? [];
+  const [tab, setTab] = useState<"text" | "images">("text");
+  const [selectedImage, setSelectedImage] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, MediaRegion[]>>({});
+  const [savingImages, setSavingImages] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const sessionKey = `${document?.id ?? ""}:${snapshot.attempt}`;
+  const [draftKey, setDraftKey] = useState(sessionKey);
+  if (draftKey !== sessionKey) {
+    setDraftKey(sessionKey);
+    setDrafts({});
+    setSelectedImage("");
+    setImageError("");
+  }
+  const image = images.find((item) => item.id === selectedImage) ?? images[0];
+  const processing = snapshot.status === "processing" || snapshot.status === "exporting";
+  const actionsDisabled = busy || processing || savingImages || snapshot.status === "failed";
+
+  useEffect(() => {
+    if (snapshot.kind === "document" && !snapshot.text && images.length) setTab("images");
+  }, [sessionKey, snapshot.kind, snapshot.text, images.length]);
+
+  const saveImages = async () => {
+    setSavingImages(true);
+    setImageError("");
+    try {
+      for (const item of images) {
+        if (drafts[item.id]) await saveDocumentRegions(item.id, snapshot.attempt, drafts[item.id]!);
+      }
+      return true;
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : "Could not save image masks.");
+      return false;
+    } finally {
+      setSavingImages(false);
+    }
+  };
+  const approveWithImages = async () => {
+    if (!document || (await saveImages())) onApprove();
+  };
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -71,8 +161,10 @@ export function ReviewWorkspace({
   };
 
   const download = () => {
-    const url = URL.createObjectURL(new Blob([snapshot.text], { type: "text/plain;charset=utf-8" }));
-    const a = document.createElement("a");
+    const url = URL.createObjectURL(
+      new Blob([snapshot.text], { type: "text/plain;charset=utf-8" }),
+    );
+    const a = globalThis.document.createElement("a");
     a.href = url;
     a.download = `anonymized-document-v${snapshot.attempt}.txt`;
     a.click();
@@ -92,12 +184,12 @@ export function ReviewWorkspace({
       if (!res.ok) throw new Error(`Download failed: ${res.status}`);
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = globalThis.document.createElement("a");
       a.href = blobUrl;
       a.download = "censored-audio.m4a";
-      document.body.appendChild(a);
+      globalThis.document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      globalThis.document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (err) {
       setAudioError(err instanceof Error ? err.message : "Failed to download audio.");
@@ -107,7 +199,11 @@ export function ReviewWorkspace({
   };
 
   const steps: { title: string; note: string; state: "done" | "now" | "todo" }[] = [
-    { title: isAudio ? "Audio received" : "Document received", note: isAudio ? "Transcribed" : "Analyzed", state: "done" },
+    {
+      title: isAudio ? "Audio received" : "Document received",
+      note: isAudio ? "Transcribed" : "Analyzed",
+      state: "done",
+    },
     {
       title: "Manual review",
       note: `Attempt ${snapshot.attempt}`,
@@ -141,7 +237,9 @@ export function ReviewWorkspace({
                 {s.state === "done" && <Check className="h-4 w-4" aria-hidden />}
               </span>
               <span>
-                <b className={`block text-[15px] ${s.state === "todo" ? "text-muted-foreground" : "text-foreground"}`}>
+                <b
+                  className={`block text-[15px] ${s.state === "todo" ? "text-muted-foreground" : "text-foreground"}`}
+                >
                   {s.title}
                 </b>
                 <small className="text-[13px] text-muted-foreground">{s.note}</small>
@@ -152,121 +250,310 @@ export function ReviewWorkspace({
       </aside>
 
       <div className="flex min-w-0 flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Attempt" value={snapshot.attempt} />
-        {isAudio ? (
-          <Stat label="Replaced stretches" value={snapshot.audio_ranges} />
-        ) : (
-          <Stat label="Masked words" value={masks} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Attempt" value={snapshot.attempt} />
+          {isAudio ? (
+            <Stat label="Replaced stretches" value={snapshot.audio_ranges} />
+          ) : (
+            <Stat label="Masked words" value={masks} />
+          )}
+          <Stat
+            label="Warnings"
+            value={snapshot.warnings}
+            tone={snapshot.warnings > 0 ? "warn" : undefined}
+          />
+          <Stat
+            label="Issues"
+            value={snapshot.issues}
+            tone={snapshot.issues > 0 ? "warn" : undefined}
+          />
+        </div>
+
+        {snapshot.mode === "rules" && (
+          <p className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
+            Rules-only mode: feedback does not change the text.
+          </p>
         )}
-        <Stat label="Warnings" value={snapshot.warnings} tone={snapshot.warnings > 0 ? "warn" : undefined} />
-        <Stat label="Issues" value={snapshot.issues} tone={snapshot.issues > 0 ? "warn" : undefined} />
-      </div>
 
-      {snapshot.mode === "rules" && (
-        <p className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
-          Rules-only mode: feedback does not change the text.
-        </p>
-      )}
-
-      {error && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-card px-4 py-3">
-          <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden />
-          <p className="min-w-0 flex-1 text-sm text-foreground">{error}</p>
-          {onRetry && (
-            <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
-              <RotateCcw aria-hidden /> Try again
-            </Button>
-          )}
-        </div>
-      )}
-
-      {snapshot.approved && (
-        <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-accent px-4 py-3 text-sm font-medium text-foreground">
-          <CheckCircle2 className="h-5 w-5 text-primary" aria-hidden /> Version {snapshot.attempt} approved.
-        </div>
-      )}
-
-      {isAudio && (
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="text-base font-bold text-foreground">Censored audio</h3>
-          <div className="mt-4">
-            {audioUrl ? (
-              <audio
-                key={snapshot.attempt}
-                controls
-                preload="metadata"
-                src={audioUrl}
-                className="w-full"
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">No audio available</p>
-            )}
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">Each masked word was replaced by a sound.</p>
-          {audioError && (
-            <p role="alert" className="mt-2 text-sm text-destructive">{audioError}</p>
-          )}
-        </div>
-      )}
-
-      <section className="relative">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-bold text-foreground">
-            {isAudio ? "Masked transcript" : `Version ${snapshot.attempt}`}
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)} disabled={busy}>
-              <History aria-hidden /> History ({snapshot.history.length})
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={async () => {
-                await navigator.clipboard.writeText(snapshot.text);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-            >
-              <Copy aria-hidden /> {copied ? "Copied!" : "Copy"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={download} disabled={busy}>
-              <Download aria-hidden /> Download .txt
-            </Button>
-            {isAudio && (
-              <Button variant="ghost" size="sm" onClick={downloadAudio} disabled={busy || downloadingAudio}>
-                {downloadingAudio ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download aria-hidden />} Download audio
+        {error && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 bg-card px-4 py-3"
+          >
+            <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden />
+            <p className="min-w-0 flex-1 text-sm text-foreground">{error}</p>
+            {onRetry && (
+              <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
+                <RotateCcw aria-hidden /> Try again
               </Button>
             )}
           </div>
-        </div>
-        {/* The frame clips the scan effect; the inner box is the one that scrolls. */}
-        <div key={snapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
-          <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
-            <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
-          </div>
-        </div>
-        {busy && (
-          <div className="absolute inset-0 top-10 grid place-items-center rounded-lg bg-background/60" role="status">
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium text-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden /> {busyMessage}
-            </div>
+        )}
+
+        {snapshot.approved && (
+          <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-accent px-4 py-3 text-sm font-medium text-foreground">
+            <CheckCircle2 className="h-5 w-5 text-primary" aria-hidden /> Version {snapshot.attempt}{" "}
+            approved.
           </div>
         )}
-      </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="outline" onClick={onNewDocument} disabled={busy}>New document</Button>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setRejectOpen(true)} disabled={busy || snapshot.approved}>
-            <ThumbsDown aria-hidden /> Reject
+        {isAudio && (
+          <div className="rounded-lg border border-border bg-card p-6">
+            <h3 className="text-base font-bold text-foreground">Censored audio</h3>
+            <div className="mt-4">
+              {audioUrl ? (
+                <audio
+                  key={snapshot.attempt}
+                  controls
+                  preload="metadata"
+                  src={audioUrl}
+                  className="w-full"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">No audio available</p>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Each masked word was replaced by a sound.
+            </p>
+            {audioError && (
+              <p role="alert" className="mt-2 text-sm text-destructive">
+                {audioError}
+              </p>
+            )}
+          </div>
+        )}
+
+        {document && (
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="tablist"
+            aria-label="Document review"
+          >
+            <Button
+              role="tab"
+              aria-selected={tab === "text"}
+              variant={tab === "text" ? "default" : "outline"}
+              onClick={() => setTab("text")}
+            >
+              Text
+            </Button>
+            <Button
+              role="tab"
+              aria-selected={tab === "images"}
+              variant={tab === "images" ? "default" : "outline"}
+              onClick={() => setTab("images")}
+            >
+              Images ({images.length})
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {document.filename} · {document.format.toUpperCase()}
+            </span>
+          </div>
+        )}
+        {processing && (
+          <div role="status" className="rounded-lg border border-border bg-card p-5">
+            <p className="mb-2 flex items-center gap-2 text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {snapshot.progress.stage || "Processing document…"}
+            </p>
+            <progress
+              className="w-full"
+              max={Math.max(1, snapshot.progress.total)}
+              value={snapshot.progress.completed}
+            />
+          </div>
+        )}
+        {snapshot.status === "failed" && (
+          <p role="alert" className="text-sm text-destructive">
+            {snapshot.error || "Document processing failed. Start a new review to retry."}
+          </p>
+        )}
+        {imageError && (
+          <p role="alert" className="text-sm text-destructive">
+            {imageError}
+          </p>
+        )}
+        {document && tab === "images" && !processing && snapshot.status !== "failed" && (
+          <section
+            className="rounded-2xl border border-border bg-card p-5"
+            aria-label="Document images"
+          >
+            {images.length === 0 ? (
+              <p className="text-sm text-muted-foreground">This document has no embedded images.</p>
+            ) : (
+              <>
+                <label className="mb-4 block text-sm font-medium">
+                  Image
+                  <select
+                    className="ml-2 max-w-full rounded-md border border-border bg-background p-2 text-foreground"
+                    value={image?.id ?? ""}
+                    onChange={(event) => setSelectedImage(event.target.value)}
+                    disabled={savingImages}
+                  >
+                    {images.map((item, index) => (
+                      <option key={item.id} value={item.id}>
+                        Image {index + 1} · {item.placements.join(", ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Masks apply to all {image?.placements.length} placements of this image:{" "}
+                  {image?.placements.join(", ")}.
+                </p>
+                {image && (
+                  <MediaReview
+                    key={image.id}
+                    api={reviewApiUrl}
+                    attempt={snapshot.attempt}
+                    kind="image"
+                    media={{ ...image, filename: document.filename }}
+                    regions={drafts[image.id] ?? image.regions}
+                    disabled={actionsDisabled || snapshot.approved}
+                    onChange={(regions) =>
+                      setDrafts((current) => ({ ...current, [image.id]: regions }))
+                    }
+                    onSave={async () => {
+                      await saveImages();
+                    }}
+                  />
+                )}
+              </>
+            )}
+          </section>
+        )}
+        {(!document || tab === "text") && (
+          <section className="relative">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-bold text-foreground">
+                {isAudio ? "Masked transcript" : `Version ${snapshot.attempt}`}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setHistoryOpen(true)}
+                  disabled={busy}
+                >
+                  <History aria-hidden /> History ({snapshot.history.length})
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(snapshot.text);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                >
+                  <Copy aria-hidden /> {copied ? "Copied!" : "Copy"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={download} disabled={busy}>
+                  <Download aria-hidden /> Download .txt
+                </Button>
+                {isAudio && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={downloadAudio}
+                    disabled={busy || downloadingAudio}
+                  >
+                    {downloadingAudio ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Download aria-hidden />
+                    )}{" "}
+                    Download audio
+                  </Button>
+                )}
+                {document && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={actionsDisabled || !documentOutputUrl(snapshot)}
+                    onClick={() => {
+                      const url = documentOutputUrl(snapshot);
+                      if (url) window.location.assign(url);
+                    }}
+                  >
+                    <Download aria-hidden /> Download .{document.format}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {/* The frame clips the scan effect; the inner box is the one that scrolls. */}
+            <div
+              key={snapshot.attempt}
+              className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card"
+              aria-busy={busy}
+            >
+              <div
+                className="max-h-[34rem] overflow-y-auto p-6"
+                tabIndex={0}
+                aria-label="Anonymized text"
+              >
+                {document && !snapshot.text ? (
+                  <p className="text-sm text-muted-foreground">
+                    No extractable text. Review scanned content in the Images tab.
+                  </p>
+                ) : (
+                  <MaskedText
+                    text={snapshot.text}
+                    className={`stage-pv ${busy ? "opacity-40" : ""}`}
+                  />
+                )}
+              </div>
+            </div>
+            {busy && (
+              <div
+                className="absolute inset-0 top-10 grid place-items-center rounded-lg bg-background/60"
+                role="status"
+              >
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium text-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden />{" "}
+                  {busyMessage}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {document && tab === "images" && (
+          <Button
+            variant="outline"
+            disabled={actionsDisabled || !documentOutputUrl(snapshot)}
+            onClick={() => {
+              const url = documentOutputUrl(snapshot);
+              if (url) window.location.assign(url);
+            }}
+          >
+            <Download aria-hidden /> Download approved .{document.format}
           </Button>
-          <Button onClick={onApprove} disabled={busy || snapshot.approved} className="h-10 px-5">
-            <ThumbsUp aria-hidden /> Approve version
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button variant="outline" onClick={onNewDocument} disabled={busy}>
+            New document
           </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setRejectOpen(true)}
+              disabled={actionsDisabled || snapshot.approved}
+            >
+              <ThumbsDown aria-hidden /> Reject
+            </Button>
+            <Button
+              onClick={() => void approveWithImages()}
+              disabled={actionsDisabled || snapshot.approved}
+              className="h-10 px-5"
+            >
+              <ThumbsUp aria-hidden /> Approve version
+            </Button>
+          </div>
         </div>
-      </div>
       </div>
 
       <aside aria-label="Review details" className="rounded-2xl border border-border bg-card p-5">
@@ -276,7 +563,9 @@ export function ReviewWorkspace({
           </span>
           <span
             className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-              snapshot.approved ? "border-ok/40 bg-ok/10 text-ok" : "border-warn/40 bg-warn/10 text-warn"
+              snapshot.approved
+                ? "border-ok/40 bg-ok/10 text-ok"
+                : "border-warn/40 bg-warn/10 text-warn"
             }`}
           >
             {snapshot.approved ? "Approved" : "In review"}
@@ -294,14 +583,18 @@ export function ReviewWorkspace({
             Type <b className="font-semibold text-foreground">{isAudio ? "Audio" : "Document"}</b>
           </div>
           <div className="flex justify-between py-3">
-            Mode <b className="font-semibold text-foreground">{snapshot.mode === "rules" ? "Rules only" : "AI + rules"}</b>
+            Mode{" "}
+            <b className="font-semibold text-foreground">
+              {snapshot.mode === "rules" ? "Rules only" : "AI + rules"}
+            </b>
           </div>
         </div>
         <div className="mt-1.5 border-t border-border pt-4 text-[13px] text-muted-foreground">
           <b className="mb-1.5 flex items-center gap-2 text-sm text-foreground">
             <ShieldCheck className="h-4 w-4 text-ok" aria-hidden /> Temporary session
           </b>
-          Nothing is stored after you close the review. The original is never shown here.
+          Files stay in the temporary server session and are removed when another review starts or
+          the server closes.
         </div>
       </aside>
 
@@ -323,10 +616,16 @@ export function ReviewWorkspace({
             placeholder="E.g.: also hide the clinic name - or: do not hide medical information."
             aria-label="Feedback"
           />
-          <p className="text-right text-xs text-muted-foreground">{reason.length} / {MAX_REASON_CHARS}</p>
+          <p className="text-right text-xs text-muted-foreground">
+            {reason.length} / {MAX_REASON_CHARS}
+          </p>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRejectOpen(false)}>Cancel</Button>
-            <Button onClick={submitReject} disabled={!reason.trim()}>Generate new version</Button>
+            <Button variant="ghost" onClick={() => setRejectOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitReject} disabled={!reason.trim()}>
+              Generate new version
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -338,12 +637,16 @@ export function ReviewWorkspace({
             <SheetDescription>Newest first.</SheetDescription>
           </SheetHeader>
           <div className="mt-6 flex flex-col gap-4 px-4 pb-6">
-            {snapshot.history.length === 0 && <p className="text-sm text-muted-foreground">No rejected versions yet.</p>}
+            {snapshot.history.length === 0 && (
+              <p className="text-sm text-muted-foreground">No rejected versions yet.</p>
+            )}
             {[...snapshot.history].reverse().map((h: HistoryEntry) => (
               <article key={h.attempt} className="rounded-lg border border-border bg-card p-4">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-bold text-foreground">Attempt {h.attempt}</p>
-                  {isAudio && <span className="text-xs font-medium text-muted-foreground">Transcript</span>}
+                  {isAudio && (
+                    <span className="text-xs font-medium text-muted-foreground">Transcript</span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">“{h.reason}”</p>
                 <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">

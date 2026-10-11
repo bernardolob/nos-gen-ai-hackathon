@@ -1,5 +1,9 @@
 # Anonimização de imagens e vídeos
 
+Imagens incorporadas em PDF e Word (.docx) usam este mesmo processador.
+A extração, revisão por imagem e exportação do documento estão descritas em
+[DOCUMENTS.md](DOCUMENTS.md).
+
 A revisão manual aceita fotografias e vídeos, além de PDF e texto. A análise
 visual só arranca quando existe um modelo explicitamente autorizado para
 **imagem, vídeo e saída JSON estruturada**. Não há fallback para um modelo de

@@ -1,4 +1,4 @@
-﻿@import "tailwindcss" source(none);
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @source "../src";
 
@@ -258,3 +258,31 @@
   .stage-scan.stage-frame::before { animation: scan 1.3s ease-in-out 0.3s both; }
 }
 @media (prefers-reduced-motion: reduce) { .marquee-track [aria-hidden] { display: none; } }
+.media-editor { background: var(--card); }
+.media-stage { position: relative; width: 100%; overflow: hidden; background: var(--muted); line-height: 0; touch-action: none; user-select: none; margin: 0 auto; }
+.media-stage > img, .media-stage > video { width: 100%; height: 100%; display: block; object-fit: contain; }
+.redaction-preview { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.region-layer { position: absolute; inset: 0; pointer-events: none; }
+.redaction-region { position: absolute; border: 1px solid transparent; cursor: move; pointer-events: auto; line-height: normal; }
+.redaction-region.pending { background: var(--primary); }
+.redaction-region.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--primary); }
+.redaction-region:hover { border-color: var(--primary); }
+.redaction-region.polygon { border: 0; box-shadow: none; background: transparent; }
+.region-polygon { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.region-polygon polygon { fill: transparent; stroke: transparent; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.redaction-region.polygon:hover .region-polygon polygon, .redaction-region.polygon.selected .region-polygon polygon { stroke: var(--primary); stroke-width: 3; }
+.redaction-region.polygon.pending .region-polygon polygon { fill: var(--primary); }
+.redaction-region.drawing { pointer-events: none; border: 1px dashed var(--primary); background: color-mix(in srgb, var(--primary) 35%, transparent); }
+.region-handle { position: absolute; right: -7px; bottom: -7px; width: 15px; height: 15px; border: 2px solid var(--background); border-radius: 3px; background: var(--primary); cursor: nwse-resize; padding: 0; }
+.media-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding: 14px 0; }
+.media-tools strong { display: block; font-size: 14px; }
+.media-tools small { display: flex; align-items: center; gap: 5px; margin-top: 5px; color: var(--muted-foreground); font-size: 12px; }
+.media-tool-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.media-track-error { color: var(--destructive); font-size: 12px; }
+.region-inspector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px 0; border-top: 1px solid var(--border); }
+.region-inspector span { display: block; color: var(--muted-foreground); font-size: 12px; }
+.region-inspector strong { font-size: 12px; overflow-wrap: anywhere; }
+.region-inspector p { grid-column: 1 / -1; color: var(--muted-foreground); font-size: 12px; }
+.media-add-note { display: flex; gap: 5px; align-items: center; color: var(--muted-foreground); font-size: 12px; }
+
+﻿

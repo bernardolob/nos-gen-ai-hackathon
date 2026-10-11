@@ -117,11 +117,13 @@ def run(lines, generate=None, user_instructions=None, include_values=False):
         kept_visible = dropped + dropped_rules
     model_items, label_changes = labels.keep_labels(lines, model_items)
     items = model_items + rule_items
-    masked, mask_warnings = masking.mask_lines(lines, items)
+    edits, mask_warnings = masking.plan_masks(lines, items)
+    masked = masking.apply_edits(lines, edits)
     warnings = warnings + mask_warnings
     return {
         "masked": masked,
         "items": items,
+        "edits": edits,
         "warnings": warnings,
         "label_changes": label_changes,
         "kept_visible": kept_visible,

@@ -23,10 +23,14 @@ export const Route = createFileRoute("/")({
       { title: "Document Anonymizer" },
       {
         name: "description",
-        content: "Upload a document, review the anonymized version, reject with feedback or approve (GDPR).",
+        content:
+          "Upload a document, review the anonymized version, reject with feedback or approve (GDPR).",
       },
       { property: "og:title", content: "Document Anonymizer" },
-      { property: "og:description", content: "Review of anonymized documents with personal and sensitive data (GDPR)." },
+      {
+        property: "og:description",
+        content: "Review of anonymized documents with personal and sensitive data (GDPR).",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -34,7 +38,8 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const message = (e: unknown) => (e instanceof Error ? e.message : "Something unexpected went wrong.");
+const message = (e: unknown) =>
+  e instanceof Error ? e.message : "Something unexpected went wrong.";
 
 function Index() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -78,6 +83,28 @@ function Index() {
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    if (snapshot?.status !== "processing" && snapshot?.status !== "exporting") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const current = await getCurrent();
+        if (!cancelled) {
+          setSnapshot(current);
+          setError(null);
+        }
+      } catch (error) {
+        if (!cancelled) setError(message(error));
+      }
+      if (!cancelled) timer = setTimeout(poll, 1000);
+    };
+    timer = setTimeout(poll, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [snapshot?.status]);
 
   const upload = async () => {
     if (!file || uploading) return;
@@ -96,7 +123,11 @@ function Index() {
     }
   };
 
-  const runAction = async (label: string, fn: () => Promise<Snapshot>, again: () => void): Promise<boolean> => {
+  const runAction = async (
+    label: string,
+    fn: () => Promise<Snapshot>,
+    again: () => void,
+  ): Promise<boolean> => {
     setBusy(true);
     setBusyMessage(label);
     setError(null);
@@ -125,12 +156,22 @@ function Index() {
   const reject = (reason: string): Promise<boolean> => {
     if (!snapshot) return Promise.resolve(false);
     const { attempt, text } = snapshot;
-    const go = () => runAction("Generating a new version... (about 8 s)", () => rejectVersion(attempt, text, reason), () => void go());
+    const go = () =>
+      runAction(
+        "Generating a new version...",
+        () => rejectVersion(attempt, text, reason, snapshot.document?.id),
+        () => void go(),
+      );
     return go();
   };
 
   const approve = () => {
-    const go = () => void runAction("Approving...", approveVersion, go);
+    const go = () =>
+      void runAction(
+        "Approving...",
+        () => approveVersion(snapshot?.attempt, snapshot?.document?.id),
+        go,
+      );
     go();
   };
 
@@ -166,30 +207,60 @@ function Index() {
         {showUpload ? (
           <section className="hero-glow pb-12 pt-12 text-center sm:pb-16 sm:pt-20">
             <span className="reveal mb-6 inline-block rounded-full border border-border bg-card px-3.5 py-1.5 text-xs text-muted-foreground sm:text-[13px]">
-              ✨ Privacy by design · {isMockMode ? "Demo mode" : snapshot?.mode === "rules" ? "Connected · rules only" : "Connected to server"}
+              ✨ Privacy by design ·{" "}
+              {isMockMode
+                ? "Demo mode"
+                : snapshot?.mode === "rules"
+                  ? "Connected · rules only"
+                  : "Connected to server"}
             </span>
-            <h1 className="gradient-text reveal mx-auto mb-5 max-w-[780px] text-[clamp(2.3rem,6vw,4rem)] font-bold leading-[1.06] tracking-[-0.035em]" style={{ "--d": "0.1s" } as CSSProperties}>
+            <h1
+              className="gradient-text reveal mx-auto mb-5 max-w-[780px] text-[clamp(2.3rem,6vw,4rem)] font-bold leading-[1.06] tracking-[-0.035em]"
+              style={{ "--d": "0.1s" } as CSSProperties}
+            >
               Share the document, not the data.
             </h1>
-            <p className="reveal mx-auto max-w-[520px] text-[1.05rem] text-muted-foreground" style={{ "--d": "0.2s" } as CSSProperties}>
-              Documents and audio, anonymized in seconds. Every redaction is yours to review before it is final.
+            <p
+              className="reveal mx-auto max-w-[520px] text-[1.05rem] text-muted-foreground"
+              style={{ "--d": "0.2s" } as CSSProperties}
+            >
+              Documents and audio, anonymized in seconds. Every redaction is yours to review before
+              it is final.
             </p>
 
-            <div className="reveal mx-auto mt-10 max-w-[640px] text-left" style={{ "--d": "0.3s" } as CSSProperties}>
+            <div
+              className="reveal mx-auto mt-10 max-w-[640px] text-left"
+              style={{ "--d": "0.3s" } as CSSProperties}
+            >
               {initialising ? (
-                <div className="flex items-center justify-center gap-3 p-16 text-sm text-muted-foreground" role="status">
-                  <Loader2 className="h-5 w-5 animate-spin text-brand" aria-hidden /> Loading the current review...
+                <div
+                  className="flex items-center justify-center gap-3 p-16 text-sm text-muted-foreground"
+                  role="status"
+                >
+                  <Loader2 className="h-5 w-5 animate-spin text-brand" aria-hidden /> Loading the
+                  current review...
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
                   {wantsNew && (
-                    <Button variant="ghost" className="self-start" onClick={() => { setWantsNew(false); setError(null); }} disabled={uploading}>
+                    <Button
+                      variant="ghost"
+                      className="self-start"
+                      onClick={() => {
+                        setWantsNew(false);
+                        setError(null);
+                      }}
+                      disabled={uploading}
+                    >
                       ← Back to current review
                     </Button>
                   )}
                   <UploadStep
                     file={file}
-                    onFile={(f) => { setFile(f); setError(null); }}
+                    onFile={(f) => {
+                      setFile(f);
+                      setError(null);
+                    }}
                     onAnalyze={upload}
                     loading={uploading}
                     status={
@@ -198,7 +269,11 @@ function Index() {
                         : "Analyzing the document... (about 8 s)"
                     }
                     error={error}
-                    errorTitle={file ? "The document could not be analyzed" : "Could not load the current review"}
+                    errorTitle={
+                      file
+                        ? "The document could not be analyzed"
+                        : "Could not load the current review"
+                    }
                     onRetry={() => (file ? void upload() : void load())}
                     audioEnabled={snapshot?.audio_enabled ?? false}
                   />
@@ -220,7 +295,11 @@ function Index() {
                 </div>
                 <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   <span className="h-1.5 w-1.5 rounded-full bg-ok" />
-                  {isMockMode ? "Demo mode" : snapshot.mode === "rules" ? "Connected · rules only" : "Connected to server"}
+                  {isMockMode
+                    ? "Demo mode"
+                    : snapshot.mode === "rules"
+                      ? "Connected · rules only"
+                      : "Connected to server"}
                 </span>
               </div>
               {sampleNotice && (
@@ -255,8 +334,12 @@ function Index() {
 
       <footer className="border-t border-border px-4 py-5 text-xs text-muted-foreground sm:px-6">
         <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-3">
-          <span className="flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5" aria-hidden /> Data protection · GDPR</span>
-          <span className="flex items-center gap-2">{isMockMode ? "Demo document with dummy data" : "Review connected to the server"}</span>
+          <span className="flex items-center gap-2">
+            <LockKeyhole className="h-3.5 w-3.5" aria-hidden /> Data protection · GDPR
+          </span>
+          <span className="flex items-center gap-2">
+            {isMockMode ? "Demo document with dummy data" : "Review connected to the server"}
+          </span>
         </div>
       </footer>
     </div>
