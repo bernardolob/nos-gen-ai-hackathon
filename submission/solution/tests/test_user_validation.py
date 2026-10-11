@@ -93,7 +93,7 @@ def test_a_corrupt_pdf_is_a_clean_error():
 def test_unsupported_and_invalid_uploads():
     api = client()
     wrong = api.post("/api/document", content=b"x",
-                     headers={"Content-Type": "image/png"})
+                     headers={"Content-Type": "application/octet-stream"})
     assert wrong.status_code == 415
     latin = api.post("/api/document", content="Ação".encode("latin-1"),
                      headers={"Content-Type": "text/plain"})

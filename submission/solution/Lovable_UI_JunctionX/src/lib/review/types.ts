@@ -2,10 +2,15 @@ export interface HistoryEntry {
   attempt: number;
   text: string;
   reason: string;
+  /** Regions of the rejected version (image/video only), else null. */
+  regions: number | null;
 }
 
 /** What is under review: a text document (PDF or text) or an audio file. */
-export type ReviewKind = "text" | "audio";
+export type ReviewKind = "text" | "audio" | "image" | "video";
+
+/** Where an image/video review is: analysis or export running, done, or failed. */
+export type ReviewStatus = "idle" | "processing" | "exporting" | "ready" | "failed" | "approved";
 
 /**
  * The review state, exactly as the backend returns it (GET /api/current and
@@ -21,7 +26,10 @@ export interface Snapshot {
   text: string;
   approved: boolean;
   history: HistoryEntry[];
-  mode: "model" | "rules";
+  /** "multimodal" is an image or video review. */
+  mode: "model" | "rules" | "multimodal";
+  status: ReviewStatus;
+  progress: { stage: string; completed: number; total: number };
   warnings: number;
   issues: number;
   /** Path of the censored audio (e.g. "/api/audio/current"), or null. */
@@ -30,6 +38,14 @@ export interface Snapshot {
   audio_ranges: number;
   /** Audio censoring is available (the backend has the key and ffmpeg). */
   audio_enabled: boolean;
+  /** Image/video only (empty otherwise): source_url, size, duration, output_url... */
+  media: Record<string, unknown>;
+  /** Image/video only: the regions to hide (never any recognised text). */
+  regions: Record<string, unknown>[];
+  /** Image/video only: the model that analysed it, or null. */
+  model: Record<string, unknown> | null;
+  /** Image/video only: why the analysis failed, or "". */
+  error: string;
 }
 
 export const EMPTY_SNAPSHOT: Snapshot = {
@@ -45,6 +61,12 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   audio_url: null,
   audio_ranges: 0,
   audio_enabled: false,
+  status: "idle",
+  progress: { stage: "", completed: 0, total: 0 },
+  media: {},
+  regions: [],
+  model: null,
+  error: "",
 };
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;

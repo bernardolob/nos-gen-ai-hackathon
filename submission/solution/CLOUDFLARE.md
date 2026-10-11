@@ -3,7 +3,7 @@
 The browser-facing deployment uses this request path:
 
 ```text
-browser
+browser / local review backend
   -> Cloudflare Worker (validation, CORS, and per-IP rate limit)
   -> Gemini REST API (server-held GEMINI_API_KEY)
 ```
@@ -23,6 +23,8 @@ The edge exposes only:
 | `GET` | `/health` | Worker liveness; does not call Gemini |
 | `OPTIONS` | `/api/v1/generate` | Browser CORS preflight |
 | `POST` | `/api/v1/generate` | Rate-limited Gemini generation |
+| `GET` | `/api/v1/media/capabilities` | Verifies the configured media model |
+| `POST` | `/api/v1/media/analyze` | Analyzes up to eight sampled JPEG frames |
 
 ## Configure
 
@@ -43,8 +45,9 @@ Create the Gemini secret interactively:
 npx wrangler secret put GEMINI_API_KEY
 ```
 
-The `API_RATE_LIMITER` binding permits ten generation requests per client IP
-per minute. Give its `namespace_id` a distinct positive integer if the
+The `API_RATE_LIMITER` binding permits 60 generation requests per client IP
+per minute. This covers both analysis passes over a 60-second video's bounded
+frame batches. Give its `namespace_id` a distinct positive integer if the
 Cloudflare account already uses namespace `1001` for another rate limiter.
 
 ## Validate and deploy
@@ -88,3 +91,9 @@ request or response bodies and sends `store: false` to Gemini. Keep body logging
 disabled in any additional observability or error-reporting integration. Check
 Google's current Gemini terms before using free-tier processing for personal or
 confidential information.
+
+For media, the local backend decodes videos and submits only sampled JPEG
+frames in bounded batches. The Worker validates JPEG magic bytes, turns each
+frame into a Gemini `inlineData` image part, requests schema-constrained JSON,
+and validates the result before returning it. Whole video files and the Gemini
+API key never enter the browser.
