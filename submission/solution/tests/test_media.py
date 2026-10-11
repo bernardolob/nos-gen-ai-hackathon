@@ -37,6 +37,8 @@ from media.pipeline import (  # noqa: E402
     _capture_time_ms,
     _extend_face_tracks_to_edges,
     _link_regions,
+    _merge_face_regions,
+    _merge_image_regions,
     _pixelate_video_regions,
     _polygon_from_face_classes,
     _prefer_detected_faces,
@@ -699,6 +701,111 @@ def _textured_frame(np, size=200):
         (rows * 7 + columns) % 255,
         (columns * 3 + rows * 4) % 255,
     ), axis=-1).astype(np.uint8)
+
+
+def _face_track(boxes, start=0, source="face_detector", reason="Rosto."):
+    """A face region with one keyframe per (time_ms, (x, y, w, h))."""
+    keys = [RegionKeyframe(time_ms=time, box=Box(
+        x=x, y=y, width=w, height=h)) for time, (x, y, w, h) in boxes]
+    item = region(source=source)
+    item.kind = "face"
+    item.category = "biometrico"
+    item.reason = reason
+    item.start_ms, item.end_ms = start, keys[-1].time_ms
+    item.keyframes = keys
+    return item
+
+
+def test_a_smaller_face_box_inside_a_bigger_one_is_the_same_face():
+    big = _face_track([(0, (0.30, 0.40, 0.40, 0.25)),
+                       (1000, (0.35, 0.40, 0.40, 0.25))])
+    small = _face_track([(0, (0.42, 0.45, 0.20, 0.11)),
+                         (1000, (0.47, 0.45, 0.20, 0.11))],
+                        source="gemini", reason="Rosto identificável.")
+    merged = _merge_face_regions([big, small])
+    assert len(merged) == 1
+    face = merged[0]
+    assert face.source == "gemini"
+    assert face.reason == "Rosto identificável."
+    first = face.keyframes[0].box
+    assert (first.x, first.y, first.width, first.height) == pytest.approx(
+        (0.30, 0.40, 0.40, 0.25))  # the union is the bigger box
+    assert face.start_ms == 0 and face.end_ms == 1000
+
+
+def test_pieces_of_a_split_face_track_become_one():
+    first = _face_track([(0, (0.31, 0.42, 0.42, 0.23)),
+                         (200, (0.33, 0.42, 0.42, 0.23))])
+    second = _face_track([(200, (0.34, 0.43, 0.40, 0.22)),
+                          (2000, (0.40, 0.43, 0.40, 0.22))], start=200)
+    merged = _merge_face_regions([first, second])
+    assert len(merged) == 1
+    assert (merged[0].start_ms, merged[0].end_ms) == (0, 2000)
+
+
+def test_a_piece_that_drifts_off_the_face_at_its_end_still_joins_it():
+    # Seen on a real clip: the first 0.2 s of the face drifted to the right.
+    drifting = _face_track([(0, (0.31, 0.42, 0.42, 0.23)),
+                            (100, (0.56, 0.45, 0.24, 0.14)),
+                            (200, (0.66, 0.45, 0.17, 0.10))])
+    steady = _face_track([(200, (0.29, 0.39, 0.44, 0.25)),
+                          (300, (0.30, 0.41, 0.45, 0.25)),
+                          (500, (0.29, 0.44, 0.47, 0.27))], start=200)
+    assert len(_merge_face_regions([drifting, steady])) == 1
+
+
+def test_two_different_faces_stay_two():
+    left = _face_track([(0, (0.05, 0.3, 0.2, 0.2)),
+                        (1000, (0.05, 0.3, 0.2, 0.2))])
+    right = _face_track([(0, (0.65, 0.3, 0.2, 0.2)),
+                         (1000, (0.65, 0.3, 0.2, 0.2))])
+    assert len(_merge_face_regions([left, right])) == 2
+
+
+def test_the_same_spot_at_different_times_is_not_merged():
+    early = _face_track([(0, (0.3, 0.3, 0.2, 0.2)),
+                         (500, (0.3, 0.3, 0.2, 0.2))])
+    late = _face_track([(3000, (0.3, 0.3, 0.2, 0.2)),
+                        (4000, (0.3, 0.3, 0.2, 0.2))], start=3000)
+    assert len(_merge_face_regions([early, late])) == 2
+
+
+def test_only_faces_are_merged():
+    document = region()
+    document.keyframes = [RegionKeyframe(time_ms=0, box=Box(
+        x=0.3, y=0.4, width=0.4, height=0.25)), RegionKeyframe(
+        time_ms=1000, box=Box(x=0.3, y=0.4, width=0.4, height=0.25))]
+    twin = document.model_copy(deep=True)
+    face = _face_track([(0, (0.35, 0.45, 0.2, 0.1)),
+                        (1000, (0.35, 0.45, 0.2, 0.1))])
+    merged = _merge_face_regions([document, twin, face])
+    assert [item.kind for item in merged].count("other") == 2
+    assert [item.kind for item in merged].count("face") == 1
+
+
+def test_the_merged_mask_never_loses_part_of_a_face():
+    # Two overlapping detections of one face that disagree about its edges:
+    # the result covers both at every instant.
+    left = _face_track([(0, (0.30, 0.30, 0.30, 0.30)),
+                        (1000, (0.30, 0.30, 0.30, 0.30))])
+    right = _face_track([(0, (0.35, 0.33, 0.30, 0.30)),
+                         (1000, (0.35, 0.33, 0.30, 0.30))])
+    face = _merge_face_regions([left, right])[0]
+    for instant in (0, 500, 1000):
+        box = face.box_at(instant)
+        assert box.x <= 0.30 and box.y <= 0.30
+        assert box.x + box.width >= 0.65 - 1e-9
+        assert box.y + box.height >= 0.63 - 1e-9
+
+
+def test_duplicate_faces_in_a_photo_become_one():
+    big = _face_track([(0, (0.30, 0.20, 0.40, 0.30))])
+    nested = _face_track([(0, (0.40, 0.25, 0.20, 0.15))], source="gemini")
+    other = region()
+    other.kind = "plate"
+    other.keyframes = other.keyframes[:1]
+    merged = _merge_image_regions([big, nested, other])
+    assert sorted(item.kind for item in merged) == ["face", "plate"]
 
 
 def test_a_face_is_blurred_smoothly_not_as_a_grid_of_cells():
