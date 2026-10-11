@@ -138,13 +138,27 @@ minuto — "A confirmar" em "Custo", abaixo.
 
 ## A chave é do servidor
 
-Quem usa a UI **não precisa de chave**: a `ELEVENLABS_API_KEY` é do servidor,
-lida do ambiente por quem corre o backend. Para a demonstração, ligamos o
-backend com a nossa chave e o utilizador só envia o áudio. Sem ela o backend
-arranca na mesma, com o áudio desligado (`audio_enabled` falso); o texto e o
-PDF funcionam. Os caminhos alternativos (um Worker da Cloudflare como o do
-Gemini, transcrição local com Whisper, a chave colada na UI) e porque ficou
-este estão em [DECISIONS.md](DECISIONS.md), 16.
+Quem usa a UI **não precisa de chave**. Há dois caminhos, escolhidos por
+`audio.scribe_from_env`:
+
+- **Worker da Cloudflare (o normal).** A `ELEVENLABS_API_KEY` fica como
+  segredo do Worker (`npx wrangler secret put ELEVENLABS_API_KEY`) e o
+  backend de cada utilizador só precisa de `GEMINI_GATEWAY_URL` e
+  `GEMINI_GATEWAY_ORIGIN`, os mesmos do Gemini. O backend envia o áudio em
+  bruto para `POST /api/v1/audio/transcribe` e o Worker reencaminha-o para o
+  Scribe. O corte com o `ffmpeg` continua no backend local.
+- **Chave própria.** Com `ELEVENLABS_API_KEY` no ambiente, o backend chama o
+  ElevenLabs diretamente (desenvolvimento local). Tem prioridade sobre o
+  Worker.
+
+Sem nenhum dos dois o backend arranca na mesma, com o áudio desligado
+(`audio_enabled` falso); o texto e o PDF funcionam. As alternativas (transcrição
+local com Whisper, a chave colada na UI) e porque ficou este estão em
+[DECISIONS.md](DECISIONS.md), 16.
+
+O Worker limita o áudio a 25 MB e a 5 pedidos por minuto e por IP (cada
+transcrição gasta créditos). Não é um teto global: defina também um limite de
+gastos na conta do ElevenLabs.
 
 A chave nunca vai para o repositório, para a UI nem para o registo; quem a
 partilhar numa conversa deve gerar uma nova.
@@ -152,7 +166,8 @@ partilhar numa conversa deve gerar uma nova.
 ## Privacidade
 
 - **O áudio original vai para um serviço de terceiros.** A transcrição é
-  feita pelo ElevenLabs Scribe, por isso o áudio **com os dados sensíveis
+  feita pelo ElevenLabs Scribe (por via do Worker da Cloudflare, que não
+  guarda nem regista o áudio), por isso o áudio **com os dados sensíveis
   ainda por censurar** sai da máquina antes de qualquer censura. Isto
   acontece sempre, também com `--no-model`: essa opção só evita o Gemini.
 - Depois, o **texto** da transcrição segue o caminho do pipeline de texto:
@@ -161,8 +176,8 @@ partilhar numa conversa deve gerar uma nova.
 - Não verificámos as condições do ElevenLabs sobre retenção e treino com
   os dados enviados. Até as confirmarmos, **só se devem usar áudios
   fictícios ou com consentimento**, como os da demonstração.
-- A chave (`ELEVENLABS_API_KEY`) só vem do ambiente; os erros do cliente
-  nunca incluem a chave nem o áudio.
+- A chave (`ELEVENLABS_API_KEY`) só vem do ambiente ou do segredo do Worker;
+  os erros do cliente nunca incluem a chave nem o áudio.
 - Na revisão manual, o original e o áudio censurado ficam numa pasta
   temporária privada, apagada ao substituir o documento, ao fechar a sessão e
   ao sair do servidor. O original nunca se devolve pela API.
@@ -183,7 +198,8 @@ Rejeitar e aprovar funcionam como no texto. Os pormenores (erros, ficheiros
 temporários, falhas) estão em [REVIEW.md](REVIEW.md); a decisão de transcrever
 uma só vez em [DECISIONS.md](DECISIONS.md) (15).
 
-Requisitos: `ELEVENLABS_API_KEY` e `ffmpeg`/`ffprobe`; sem eles
+Requisitos: `ELEVENLABS_API_KEY` ou o gateway (`GEMINI_GATEWAY_URL` e
+`GEMINI_GATEWAY_ORIGIN`), e `ffmpeg`/`ffprobe`; sem eles
 `audio_enabled` é falso e `POST /api/audio` responde 503.
 
 ### A UI de áudio
