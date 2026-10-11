@@ -25,10 +25,26 @@ uma versão parcial.
 As regiões cobrem rostos, texto identificável, documentos de identificação,
 matrículas, assinaturas, biometria, códigos e outros objetos que possam ligar
 o conteúdo a uma pessoa. Os rostos usam caixas justas do detetor facial quando
-este encontra uma face dentro da caixa sugerida pelo modelo. As observações
+este encontra uma face dentro da caixa sugerida pelo modelo. Em fotografias,
+o modelo visual decide quais os objetos sensíveis presentes. O detetor local
+apenas refina rostos indicados pelo modelo, com sobreposição suficiente; não
+acrescenta máscaras por si só nem substitui a confiança do modelo por certeza.
+As instruções do revisor são enviadas em ambas as passagens. A segunda passagem
+usa as mesmas regras visuais e procura apenas dados ainda expostos. Esta regra
+de confirmação aplica-se às fotografias; o vídeo mantém a deteção local densa
+para acompanhar rostos entre as amostras do modelo. As observações
 são associadas uma a uma por posição, dimensão e movimento, nunca através de
-mudanças de cena. As caixas são suavizadas e recebem uma margem adaptada à
-velocidade. O utilizador pode acrescentar, mover, redimensionar, limitar no
+mudanças de cena. Deteções repetidas no mesmo fotograma são combinadas, e as
+duas passagens são associadas a partir das observações originais completas.
+Os objetos começam no primeiro fotograma observado, sem antecipação fixa.
+O fluxo ótico acrescenta posições até 10 vezes por segundo entre observações,
+mantendo as caixas do modelo nos seus instantes exatos. Quando o rastreio perde
+confiança, fotogramas adicionais são verificados pelo modelo dentro do
+orçamento de 180 amostras. Entre observações confirmadas, uma falha usa uma
+caixa conservadora que cobre ambas; após a última observação, a máscara termina
+quando deixam de existir características rastreáveis. Só as máscaras de rosto
+são suavizadas e recebem uma margem adaptada à velocidade. O utilizador pode
+acrescentar, mover, redimensionar, limitar no
 tempo ou remover regiões antes de aprovar. Uma caixa manual pode ser rastreada
 para a frente e para trás por fluxo ótico; a linha temporal mostra todos os
 fotogramas-chave gerados e permite corrigi-los.
@@ -43,12 +59,12 @@ acrescenta uma margem de segurança igual ao maior de 4 píxeis ou 3% da largura
 do rosto. No vídeo, os mesmos 32 vértices são suavizados e interpolados entre
 fotogramas-chave, sem atravessar cortes de cena.
 
-As restantes regiões sugeridas pelo modelo também passam por segmentação local
-conservadora no OpenCV. O primeiro plano dentro da caixa é limpo, dilatado com
-uma margem de segurança e convertido num polígono convexo de 32 pontos. Texto,
-documentos, matrículas, assinaturas e códigos exigem cobertura horizontal e
-vertical mais alta do que outros objetos, para que um contorno apertado não
-deixe letras ou números legíveis. Regiões manuais continuam retangulares porque
+Texto, documentos, matrículas, assinaturas e códigos mantêm a caixa completa
+do modelo. A segmentação genérica pode selecionar a mão ou apenas uma zona
+colorida de um cartão e deixar dados expostos. As restantes regiões sugeridas
+pelo modelo passam por segmentação local conservadora no OpenCV. O primeiro
+plano dentro da caixa é limpo, dilatado com uma margem de segurança e convertido
+num polígono convexo de 32 pontos. Regiões manuais continuam retangulares porque
 não têm uma classe ou uma segmentação confirmada a partir da análise original.
 
 O contrato mantém a caixa envolvente em todos os fotogramas-chave. Se o
