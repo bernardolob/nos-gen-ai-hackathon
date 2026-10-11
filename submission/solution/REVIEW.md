@@ -1,12 +1,15 @@
 # Revisão manual (UI e backend)
 
-O utilizador envia um **documento** (PDF ou texto) ou um **áudio**, vê o
-resultado anonimizado e **aprova ou rejeita**. Ao rejeitar escreve
-observações, para ocultar mais ("Mascara também o nome do centro") ou menos
-("Não mascares a informação médica"): o utilizador tem a palavra final. Essas
-observações passam a ser a **prompt do utilizador** (ver
-[DETECTION.md](DETECTION.md)) e o pipeline corre outra vez, gerando a
-tentativa seguinte. As versões rejeitadas ficam no histórico da sessão.
+O utilizador envia um **documento** (PDF ou texto), um **áudio**, uma
+**fotografia** ou um **vídeo**, vê o resultado anonimizado e **aprova ou
+rejeita**. Em texto vê os `*`; em imagem e vídeo pode criar, mover,
+redimensionar e limitar no tempo regiões pixelizadas (ver
+[MEDIA.md](MEDIA.md)). Ao rejeitar escreve observações, para ocultar mais
+("Mascara também o nome do centro") ou menos ("Não mascares a informação
+médica"): o utilizador tem a palavra final. Essas observações passam a ser a
+**prompt do utilizador** (ver [DETECTION.md](DETECTION.md)) e a análise corre
+outra vez, gerando a tentativa seguinte. As versões rejeitadas ficam no
+histórico da sessão.
 
 ```
 texto:  UI <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)
@@ -17,17 +20,20 @@ texto:  UI <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)
 ## Backend (`src/user_validation.py`)
 
 FastAPI, uma só sessão em memória (um servidor local para uma pessoa). A
-revisão é **ou** um texto **ou** um áudio, nunca os dois: enviar um novo
-documento substitui o anterior.
+revisão é **ou** um texto, um áudio, uma imagem **ou** um vídeo, nunca mais
+de um: enviar um novo ficheiro substitui o anterior.
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`); corre o pipeline e começa a revisão (até 10 MB) |
+| `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`, até 10 MB), ou imagem/vídeo (ver [MEDIA.md](MEDIA.md)); começa a revisão |
 | `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta e censura; começa a revisão |
 | `GET /api/audio/current` | o áudio **censurado** da versão atual (`audio/mp4`, sem cache); 404 se ainda não há. Nunca devolve o original |
 | `GET /api/current` | o estado (ver abaixo) |
 | `POST /api/reject` | `{attempt, text, reason}`: guarda a versão, junta `reason` às instruções e gera a seguinte |
 | `POST /api/approve` | aprova a versão atual |
+| `PUT /api/media/regions` | guarda as regiões multimédia editadas |
+| `GET /api/media/source` | serve o original temporário para revisão |
+| `GET /api/media/output` | serve a versão multimédia aprovada |
 
 O **estado** (o mesmo em todas as rotas, e o que a UI mostra) tem os campos
 `has_document`, `attempt`, `text`, `approved`, `history`, `mode` (`model` ou
@@ -78,8 +84,10 @@ Comportamento:
 Escuta só em `127.0.0.1` e o CORS só aceita as origens da UI
 (`REVIEW_UI_ORIGINS`, separadas por vírgulas; por defeito `localhost` e
 `127.0.0.1` nas portas 8080, 5173 e 3000; `*` não é aceite). O documento
-fica só em memória (e o áudio só na pasta temporária) e perde-se ao
-reiniciar. As mensagens de erro nunca incluem o texto.
+fica só em memória (o áudio e os ficheiros multimédia só em pastas
+temporárias, apagadas ao substituir a revisão ou fechar o servidor) e
+perde-se ao reiniciar. As mensagens de erro nunca incluem o texto. As
+amostras visuais vão ao Gemini quando a análise automática está ativa.
 
 ## UI (`Lovable_UI_JunctionX/`)
 
@@ -123,7 +131,9 @@ interface está **em inglês** (decisão da equipa).
 ```bash
 # backend, a partir de submission/solution/src
 pip install -r ../requirements.txt
-export GEMINI_GATEWAY_URL=...  GEMINI_GATEWAY_ORIGIN=...   # opcional
+export GEMINI_GATEWAY_URL=https://nos-gemini-gateway.jnhorta05.workers.dev
+export GEMINI_GATEWAY_ORIGIN=http://localhost:5173
+
 export ELEVENLABS_API_KEY=...                              # opcional (áudio)
 python user_validation.py            # http://127.0.0.1:8000
 

@@ -125,7 +125,7 @@ export async function mockReject(attempt: number, reason: string): Promise<Snaps
   const text = maskWords(source, state.attempt % 2 === 1);
   state = {
     ...state,
-    history: [...state.history, { attempt: state.attempt, text: state.text, reason }],
+    history: [...state.history, { attempt: state.attempt, text: state.text, reason, regions: null }],
     attempt: state.attempt + 1,
     text,
     approved: false,

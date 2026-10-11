@@ -258,7 +258,9 @@ def test_a_failed_upload_leaves_no_files_behind(fake_redact, monkeypatch):
 
     def tracking(*args, **kwargs):
         folder = real(*args, **kwargs)
-        created.append(Path(folder.name))
+        # The session's own storage folder lives until the server closes.
+        if kwargs.get("prefix") == "review_audio_":
+            created.append(Path(folder.name))
         return folder
 
     monkeypatch.setattr(user_validation.tempfile, "TemporaryDirectory",

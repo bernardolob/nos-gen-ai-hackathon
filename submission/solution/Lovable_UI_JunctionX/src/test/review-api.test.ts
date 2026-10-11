@@ -19,7 +19,7 @@ describe("review contract", () => {
     const first = await mockUpload("Utente Maria Santos, NIF 245789123.");
     const next = await mockReject(first.attempt, "ocultar mais");
     expect(next.attempt).toBe(2);
-    expect(next.history).toEqual([{ attempt: 1, text: first.text, reason: "ocultar mais" }]);
+    expect(next.history).toEqual([{ attempt: 1, text: first.text, reason: "ocultar mais", regions: null }]);
   });
 
   it("reject with a stale attempt fails with 409", async () => {
@@ -118,7 +118,7 @@ describe("audio contract", () => {
     expect(next.attempt).toBe(2);
     expect(next.audio_url).toBe("/api/audio/current");
     expect(next.audio_ranges).toBeGreaterThan(first.audio_ranges);
-    expect(next.history).toEqual([{ attempt: 1, text: first.text, reason: "also hide the diagnosis" }]);
+    expect(next.history).toEqual([{ attempt: 1, text: first.text, reason: "also hide the diagnosis", regions: null }]);
   });
 
   it("approving audio keeps the audio fields", async () => {
