@@ -24,7 +24,7 @@ import {
   isMediaFile,
   isVideoFile,
 } from "@/lib/review/api";
-import type { Progress } from "@/lib/review/types";
+import { stageLabel, type Progress } from "@/lib/review/types";
 
 const FORMATS = [
   "PDF",
@@ -103,7 +103,7 @@ export function UploadStep({
       hasTotal && progress
         ? Math.min(100, Math.max(0, Math.round((progress.completed / progress.total) * 100)))
         : null;
-    const stageLabel = progress?.stage?.trim() || status;
+    const label = progress?.stage ? stageLabel(progress.stage) : status;
 
     return (
       <div className="flex flex-col items-center gap-4 rounded-[20px] border border-border bg-card p-12 text-center">
@@ -111,7 +111,7 @@ export function UploadStep({
           <div className="w-full max-w-sm space-y-3">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span className="font-medium text-foreground" role="status">
-                {stageLabel}
+                {label}
               </span>
               <span className="tabular-nums font-semibold text-foreground">{pct}%</span>
             </div>
@@ -127,7 +127,7 @@ export function UploadStep({
           <>
             <Loader2 className="h-10 w-10 animate-spin text-brand" aria-hidden />
             <p className="text-lg font-medium text-foreground" role="status">
-              {stageLabel}
+              {label}
             </p>
             <p className="text-sm text-muted-foreground">
               {isVideo ? "Video analysis can take a while." : "This may take a few seconds."}

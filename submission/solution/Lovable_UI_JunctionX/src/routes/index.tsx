@@ -94,8 +94,7 @@ function Index() {
       if (isWorking(result)) {
         if (result.progress) setProgress(result.progress);
         result = await waitUntilSettled((s) => {
-          setSnapshot(s);
-          if (s.progress) setProgress(s.progress);
+          setProgress(s.progress);
         });
       }
       if (result.status === "failed") {
