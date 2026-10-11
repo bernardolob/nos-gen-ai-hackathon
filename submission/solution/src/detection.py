@@ -24,6 +24,7 @@ DEFAULT_ATTEMPTS = 2
 MARKER = re.compile(r"\s*\[(\d+)\]\s*")
 TAG = re.compile(r"<(/?)(document|user_instructions)>", re.IGNORECASE)
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "internal_prompt.txt"
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / "detection_schema.json"
 
 
 class DetectionError(Exception):
@@ -33,6 +34,15 @@ class DetectionError(Exception):
 def load_internal_prompt(path=PROMPT_PATH):
     """Lê a prompt interna."""
     return Path(path).read_text(encoding="utf-8")
+
+
+def load_response_schema(path=SCHEMA_PATH):
+    """O esquema JSON que obriga o modelo a devolver a lista de itens.
+
+    É o mesmo ficheiro que o Worker da Cloudflare importa, para os dois
+    caminhos (gateway e SDK) pedirem exatamente a mesma forma.
+    """
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def normalize_lines(lines):

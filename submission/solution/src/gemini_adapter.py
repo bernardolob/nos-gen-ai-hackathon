@@ -23,6 +23,7 @@ Se ``GEMINI_API_KEY`` não estiver definida, ``make_cached_generate``
 devolve ``None`` (como o ``gateway.from_env``).
 """
 
+import detection
 from gemini import GeminiClient, GeminiSettings
 from gemini.errors import ConfigurationError
 from pydantic import BaseModel
@@ -56,11 +57,15 @@ def make_cached_generate(settings=None, client=None, response_schema=None):
                 return None
         client = GeminiClient(settings)
 
+    schema = (
+        detection.load_response_schema() if response_schema is None
+        else response_schema)
+
     def generate(system_prompt, content):
         result = client.generate_with_system_instruction(
             system_prompt,
             content,
-            response_schema=response_schema,
+            response_schema=schema,
             response_mime_type="application/json",
         )
         return result.text
