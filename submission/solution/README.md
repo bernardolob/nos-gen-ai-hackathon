@@ -40,6 +40,41 @@ Documento -> Gemini deteta + regras de segurança -> o código mascara
   com o resto do documento, pode identificar uma pessoa ou revelar
   informação sensível sobre ela.
 
+## O projeto em retrospetiva
+
+### Desafios
+
+- **As chaves de API:** conservar a segurança mas permitir o uso. A solução
+  foi um Worker da Cloudflare que guarda as chaves e limita os pedidos.
+- **Perda de código** nas partes relacionadas com os vídeos.
+- **Eficiência de tokens** no Gemini: cache do contexto e respostas mais
+  curtas.
+- **O prompt interno:** preservar bem o RGPD e saber que informação mascarar.
+  Chegámos a um critério de reidentificação, em vez de uma lista fixa.
+
+### O que correu bem
+
+- **O quadro branco partilhado** como meio de organização.
+- **O trabalho em equipa:** a delegação de trabalho e o empenho do grupo.
+- **O brainstorming** e a preparação, os primeiros passos.
+- **Documentação logo desde o início.**
+
+<!-- Fotografias do quadro branco: pôr os ficheiros em docs/whiteboard/ e
+     ligá-los aqui com ![descrição](docs/whiteboard/ficheiro.jpg) -->
+
+### O que correu menos bem
+
+- **Alguns merges:** a falta de atenção deu problemas que só apareceram mais
+  à frente.
+- **Faltaram testes periódicos** de algumas funcionalidades específicas.
+
+### O que ficou por fazer
+
+- Um design da interface mais cuidado.
+- **Censurar o áudio dos vídeos.** Hoje só se censura a parte visual.
+- **Censurar as imagens dentro dos PDFs.**
+- Uma deteção automática melhor em vídeos e imagens.
+
 ## Como correr
 
 Precisa de Python 3.10+, Node.js e, para áudio e vídeo, do `ffmpeg`. O
