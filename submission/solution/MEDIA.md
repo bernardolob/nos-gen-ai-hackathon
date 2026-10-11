@@ -70,10 +70,10 @@ não têm uma classe ou uma segmentação confirmada a partir da análise origin
 O contrato mantém a caixa envolvente em todos os fotogramas-chave. Se o
 refinamento falhar, não cobrir o centro da deteção, produzir uma área
 implausível ou ficar demasiado pequeno face à caixa original, o sistema usa
-essa caixa inteira. Assim, uma falha no refinamento nunca reduz a proteção. A
-pré-visualização Canvas e os exportadores Pillow/OpenCV aplicam a pixelização
-pela mesma forma: pixelizam a caixa e compõem o resultado apenas através da
-máscara poligonal.
+essa caixa inteira. Assim, uma falha no refinamento nunca reduz a proteção. Os
+exportadores Pillow/OpenCV pixelizam a caixa e compõem o resultado através da
+máscara poligonal, exceto nos rostos, que levam o desfoque em elipse descrito
+em "Privacidade e saída".
 
 O protótipo usa o modelo ResNet18 do projeto `yakhyo/face-parsing`. Embora o
 código desse projeto tenha licença MIT, os pesos derivam do CelebAMask-HQ,
@@ -115,10 +115,18 @@ locais. Sem esta variável, a aplicação continua a funcionar com caixas.
 - As respostas e ficheiros usam `Cache-Control: no-store`.
 - O contrato de regiões nunca contém o texto reconhecido; guarda apenas
   categoria, razão genérica, confiança, origem, tempo e coordenadas.
-- A exportação reduz cada região a grandes blocos pixelizados, com uma tonalidade
-  azul-ardósia discreta;
-  os detalhes originais da região não podem ser recuperados do ficheiro de
-  saída. Remove EXIF/GPS e metadados de
+- **Rostos:** desfocados de forma suave, numa **elipse colada à cara** (um
+  pouco maior do que a caixa, com a borda esbatida), em vez de uma grelha de
+  píxeis. A região é reduzida a cerca de 6 células de cor, ampliada com
+  interpolação e desfocada: o detalhe fino (olhos, boca, pele) perde-se por
+  completo e não se recupera do ficheiro. Uma caixa com menos de 8 píxeis cai
+  na grelha. O contorno da elipse vem da caixa, não do polígono (o polígono da
+  segmentação genérica pode ser mais pequeno do que a cara e deixá-la à vista).
+- **Texto, documentos, matrículas, assinaturas, códigos e outros:** grandes
+  blocos pixelizados, com uma tonalidade azul-ardósia discreta, para que nada
+  se leia.
+- Em ambos os casos os detalhes originais da região não podem ser recuperados
+  do ficheiro de saída. Remove EXIF/GPS e metadados de
   contentor e usa nomes de saída genéricos.
 - O áudio do vídeo é preservado. Dados pessoais falados não são censurados
   nesta versão.
