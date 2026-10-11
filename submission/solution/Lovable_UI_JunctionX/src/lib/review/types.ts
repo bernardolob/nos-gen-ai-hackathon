@@ -85,6 +85,7 @@ export const STAGE_LABELS: Record<string, string> = {
   "extrair fotogramas": "Extracting frames",
   "detetar dados visuais": "Detecting sensitive visuals",
   "verificar dados residuais": "Checking for anything missed",
+  "verificar rastreio": "Verifying the tracking",
   "exportar imagem": "Exporting the image",
   "exportar vídeo": "Exporting the video",
   "exportação concluída": "Export complete",
