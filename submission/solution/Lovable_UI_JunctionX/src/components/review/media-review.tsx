@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Crosshair, Loader2, Plus, Shield, Sparkles, Trash2, User } from "lucide-react";
+import { Crosshair, Loader2, Pause, Play, Plus, Shield, Sparkles, Trash2, User, Volume2, VolumeX } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type {
@@ -640,6 +640,7 @@ export function MediaViewer({
   };
 
   return (
+    <div className="space-y-2">
     <div
       ref={containerRef}
       className={`relative w-full overflow-hidden rounded-2xl border border-border bg-black/90 shadow-inner ${
@@ -661,8 +662,10 @@ export function MediaViewer({
       ) : (
         <video
           ref={videoRef}
-          controls
           preload="metadata"
+          playsInline
+          disablePictureInPicture
+          disableRemotePlayback
           src={sourceUrl ?? ""}
           className="absolute inset-0 h-full w-full object-contain"
           onTimeUpdate={(e) => onTimeUpdate(Math.round(e.currentTarget.currentTime * 1000))}
@@ -674,8 +677,6 @@ export function MediaViewer({
           src={previewUrl}
           alt="Preview of the redacted result"
           data-testid="blur-preview"
-          // For a video the bottom strip is left to the player's controls.
-          style={isImage ? undefined : { clipPath: "inset(0 0 44px 0)" }}
           className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
         />
       )}
@@ -848,6 +849,100 @@ export function MediaViewer({
           );
         })}
       </div>
+    </div>
+    {!isImage && (
+      <VideoControls
+        video={videoRef?.current ?? null}
+        currentTimeMs={currentTimeMs}
+        durationMs={snapshot.media.duration_ms ?? 0}
+        onSeek={onTimeUpdate}
+      />
+    )}
+    </div>
+  );
+}
+
+/**
+ * Play, pause, seek and mute, in a bar of their own **below** the picture, so
+ * the outlines and the blur drawn over the video never cover them (the
+ * browser's own bar sits inside the picture). It also leaves out the browser's
+ * full-screen button, which does nothing inside this page.
+ */
+export function VideoControls({
+  video,
+  currentTimeMs,
+  durationMs,
+  onSeek,
+}: {
+  video: HTMLVideoElement | null;
+  currentTimeMs: number;
+  durationMs: number;
+  onSeek: (ms: number) => void;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+
+  useEffect(() => {
+    if (!video) return;
+    const sync = () => {
+      setPlaying(!video.paused && !video.ended);
+      setMuted(video.muted);
+    };
+    sync();
+    for (const name of ["play", "pause", "ended", "volumechange"]) video.addEventListener(name, sync);
+    return () => {
+      for (const name of ["play", "pause", "ended", "volumechange"]) video.removeEventListener(name, sync);
+    };
+  }, [video]);
+
+  const clock = (ms: number) => {
+    const seconds = Math.max(0, Math.round(ms / 1000));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2" data-testid="video-controls">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={playing ? "Pause" : "Play"}
+        onClick={() => {
+          if (!video) return;
+          if (video.paused || video.ended) void video.play();
+          else video.pause();
+        }}
+      >
+        {playing ? <Pause aria-hidden /> : <Play aria-hidden />}
+      </Button>
+      <input
+        type="range"
+        aria-label="Seek"
+        min={0}
+        max={Math.max(1, durationMs)}
+        step={10}
+        value={Math.min(currentTimeMs, Math.max(1, durationMs))}
+        onChange={(event) => {
+          const ms = Number(event.target.value);
+          if (video) video.currentTime = ms / 1000;
+          onSeek(ms);
+        }}
+        className="h-1.5 min-w-0 flex-1 cursor-pointer accent-[var(--brand)]"
+      />
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+        {clock(currentTimeMs)} / {clock(durationMs)}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={muted ? "Unmute" : "Mute"}
+        onClick={() => {
+          if (video) video.muted = !video.muted;
+        }}
+      >
+        {muted ? <VolumeX aria-hidden /> : <Volume2 aria-hidden />}
+      </Button>
     </div>
   );
 }

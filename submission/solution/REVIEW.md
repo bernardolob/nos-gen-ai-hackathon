@@ -184,7 +184,11 @@ interface está **em inglês** (decisão da equipa).
   o desfoque é desenhado ao vivo, num `canvas`, a partir dos fotogramas que o
   navegador mostra (`live-blur.tsx`): é uma aproximação (cara em elipse, o
   resto em mosaico) para o botão continuar a fazer efeito; ao parar, volta a
-  imagem exata. A tira de baixo fica para os controlos do leitor. Com a pré-visualização ligada **não se vê nenhum
+  imagem exata. Os controlos do vídeo (play, pausa, barra de
+  tempo e som) estão numa barra própria **por baixo** da imagem
+  (`VideoControls`), e não na barra do navegador: assim os contornos e o
+  desfoque nunca a tapam, e desaparece o botão de ecrã inteiro, que não fazia
+  nada nesta página. Com a pré-visualização ligada **não se vê nenhum
   contorno nem etiqueta** por cima da imagem, só o resultado: uma região
   continua a poder escolher-se (clicando onde está) e só então mostra o contorno,
   a etiqueta e as pegas de redimensionar; ao desenhar uma região nova vêem-se
