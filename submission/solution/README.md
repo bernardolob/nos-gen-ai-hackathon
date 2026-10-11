@@ -32,10 +32,44 @@ Documento -> Gemini deteta + regras de segurança -> o código mascara
   sensível; quem escreve os `*` é o código, por isso a formatação nunca
   depende do modelo.
 - **Regras de segurança** (NIF, email, telefone, cartão...) apanham o que o
-  modelo falhe e correm sem ele.
+  modelo falhar e correm sem ele.
 - **As chaves não vão para o browser.** Um Worker da Cloudflare guarda as
   chaves do Gemini e do ElevenLabs e deixa qualquer pessoa usar a ferramenta
   sem ter uma.
 - O critério do prompt é a **reidentificação**: é sensível o que, sozinho ou
   com o resto do documento, pode identificar uma pessoa ou revelar
   informação sensível sobre ela.
+
+## Como correr
+
+Precisa de Python 3.10+, Node.js e, para áudio e vídeo, do `ffmpeg`. O
+backend usa o Worker da Cloudflare (ver [GATEWAY.md](GATEWAY.md)), por isso
+não precisa de nenhuma chave nas mãos.
+
+```bash
+# backend, a partir de submission/solution
+pip install -r requirements.txt
+export GEMINI_GATEWAY_URL=<endereço do Worker>
+export GEMINI_GATEWAY_ORIGIN=http://localhost:5173
+PYTHONPATH=src python src/user_validation.py      # http://127.0.0.1:8000
+
+# interface, a partir de submission/solution/Lovable_UI_JunctionX
+npm install && npm run dev                         # http://localhost:5173
+```
+
+Pela linha de comandos também dá para anonimizar um ficheiro sem a interface;
+ver [SOLUTION.md](SOLUTION.md), "Experimentar".
+
+## Documentação
+
+[SOLUTION.md](SOLUTION.md) é o ponto de entrada. Daí chegam-se aos outros:
+
+| Para saber | Ler |
+|---|---|
+| Como está organizado | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Como se deteta e se decide o que mascarar | [DETECTION.md](DETECTION.md), [taxonomy.md](taxonomy.md) |
+| A revisão e a interface | [REVIEW.md](REVIEW.md) |
+| Áudio, imagem e vídeo | [AUDIO.md](AUDIO.md), [MEDIA.md](MEDIA.md) |
+| As chaves e o Worker | [GATEWAY.md](GATEWAY.md), [CLOUDFLARE.md](CLOUDFLARE.md) |
+| Porque decidimos assim | [DECISIONS.md](DECISIONS.md) |
+| Preparar o ambiente e testar | [DEVELOPMENT.md](DEVELOPMENT.md) |
