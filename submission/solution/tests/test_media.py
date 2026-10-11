@@ -683,6 +683,91 @@ def test_video_frame_polygon_keeps_pixels_outside_its_contour():
     assert np.array_equal(frame[16, 79], original[16, 79])
 
 
+def _face_item(x=0.2, y=0.15, width=0.6, height=0.7):
+    item = region(source="face_detector")
+    item.kind = "face"
+    item.start_ms = item.end_ms = 0
+    item.keyframes = [RegionKeyframe(
+        time_ms=0, box=Box(x=x, y=y, width=width, height=height))]
+    return item
+
+
+def _textured_frame(np, size=200):
+    rows, columns = np.indices((size, size))
+    return np.stack((
+        (columns * 5 + rows * 2) % 255,
+        (rows * 7 + columns) % 255,
+        (columns * 3 + rows * 4) % 255,
+    ), axis=-1).astype(np.uint8)
+
+
+def test_a_face_is_blurred_smoothly_not_as_a_grid_of_cells():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    frame = _textured_frame(np)
+    _pixelate_video_regions(frame, [_face_item()], 0, cv2, np)
+    core = frame[70:130, 70:130].astype(int)
+    # Neighbouring pixels in the middle of the face differ little: there are
+    # no hard cell borders (a nearest-neighbour mosaic jumps at every cell).
+    assert np.max(np.abs(np.diff(core, axis=1))) < 12
+    assert np.max(np.abs(np.diff(core, axis=0))) < 12
+
+
+def test_a_face_blur_follows_the_face_not_the_whole_box():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    frame = _textured_frame(np)
+    original = frame.copy()
+    # The box covers 40..160 horizontally and 30..170 vertically.
+    _pixelate_video_regions(frame, [_face_item()], 0, cv2, np)
+    assert not np.array_equal(frame[100, 100], original[100, 100])
+    assert not np.array_equal(frame[100, 45], original[100, 45])
+    # The corners of the box are outside the face ellipse: untouched.
+    for row, column in ((32, 42), (32, 158), (168, 42), (168, 158)):
+        assert np.array_equal(frame[row, column], original[row, column])
+    # And nothing outside the box (plus the small margin) changes.
+    assert np.array_equal(frame[:20], original[:20])
+    assert np.array_equal(frame[:, :25], original[:, :25])
+
+
+def test_a_face_blur_removes_the_fine_detail():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    rows, columns = np.indices((200, 200))
+    plain = np.full((200, 200, 3), 120, dtype=np.uint8)
+    fine = plain.copy()
+    # A one-pixel checkerboard: the finest detail a face could have.
+    fine[(rows + columns) % 2 == 0] = 40
+    fine[(rows + columns) % 2 == 1] = 200
+    _pixelate_video_regions(plain, [_face_item()], 0, cv2, np)
+    _pixelate_video_regions(fine, [_face_item()], 0, cv2, np)
+    assert np.max(np.abs(
+        plain[70:130, 70:130].astype(int) - fine[70:130, 70:130])) < 6
+
+
+def test_a_very_small_face_falls_back_to_the_mosaic():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    frame = _textured_frame(np, 100)
+    original = frame.copy()
+    item = _face_item(x=0.4, y=0.4, width=0.05, height=0.05)
+    _pixelate_video_regions(frame, [item], 0, cv2, np)
+    assert not np.array_equal(frame[41:44, 41:44], original[41:44, 41:44])
+
+
+def test_a_face_in_a_photo_is_blurred_the_same_way(tmp_path):
+    Image = pytest.importorskip("PIL.Image")
+    np = pytest.importorskip("numpy")
+    source, output = tmp_path / "source.png", tmp_path / "output.png"
+    Image.fromarray(_textured_frame(np)).save(source)
+    _render_image(source, output, [_face_item()], "image/png")
+    with Image.open(source) as original, Image.open(output) as result:
+        before = np.asarray(original.convert("RGB")).astype(int)
+        after = np.asarray(result.convert("RGB")).astype(int)
+    assert np.max(np.abs(np.diff(after[70:130, 70:130], axis=1))) < 12
+    assert np.array_equal(after[32, 42], before[32, 42])
+
+
 @pytest.mark.skipif(
     shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
     reason="ffmpeg is required",

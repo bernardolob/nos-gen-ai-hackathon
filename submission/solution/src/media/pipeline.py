@@ -1506,6 +1506,54 @@ def _merge_image_regions(regions):
     return output
 
 
+# Faces are not covered with a block mosaic: the crop is reduced to a handful
+# of colour cells (which is what makes it irreversible), enlarged smoothly and
+# lightly blurred, and shown through an ellipse that hugs the face, with a
+# soft edge.
+FACE_BLUR_CELLS = 6        # cells across the shorter side of the face
+FACE_ELLIPSE_MARGIN = 1.08  # the ellipse is a little larger than the box
+FACE_EDGE_SOFTNESS = 0.03   # edge feather, as a fraction of the shorter side
+FACE_MIN_SIDE = 8           # smaller boxes fall back to the plain mosaic
+
+
+def _blur_face(image, box, cv2, np):
+    """Blur one face in place. ``image`` is a BGR or RGB array and ``box`` is
+    ``(left, top, right, bottom)`` in pixels. Returns False if the box is too
+    small, so the caller can use the mosaic instead."""
+    height, width = image.shape[:2]
+    left, top, right, bottom = box
+    box_w, box_h = right - left, bottom - top
+    if min(box_w, box_h) < FACE_MIN_SIDE:
+        return False
+    # Work on a crop a bit larger than the box: the ellipse is larger too.
+    pad_x = int(round(box_w * (FACE_ELLIPSE_MARGIN - 1) / 2)) + 2
+    pad_y = int(round(box_h * (FACE_ELLIPSE_MARGIN - 1) / 2)) + 2
+    x0, y0 = max(0, left - pad_x), max(0, top - pad_y)
+    x1, y1 = min(width, right + pad_x), min(height, bottom + pad_y)
+    area = image[y0:y1, x0:x1]
+    area_h, area_w = area.shape[:2]
+    short = min(box_w, box_h)
+    cell = max(4.0, short / FACE_BLUR_CELLS)
+    columns = max(1, int(math.ceil(area_w / cell)))
+    rows = max(1, int(math.ceil(area_h / cell)))
+    coarse = cv2.resize(area, (columns, rows), interpolation=cv2.INTER_AREA)
+    blurred = cv2.resize(
+        coarse, (area_w, area_h), interpolation=cv2.INTER_CUBIC)
+    blurred = cv2.GaussianBlur(blurred, (0, 0), cell * 0.5)
+    sigma = max(1.5, short * FACE_EDGE_SOFTNESS)
+    mask = np.zeros((area_h, area_w), dtype=np.float32)
+    center = (int(round((left + right) / 2 - x0)),
+              int(round((top + bottom) / 2 - y0)))
+    axes = (int(round(box_w / 2 * FACE_ELLIPSE_MARGIN + 2 * sigma)),
+            int(round(box_h / 2 * FACE_ELLIPSE_MARGIN + 2 * sigma)))
+    cv2.ellipse(mask, center, axes, 0, 0, 360, 1.0, -1)
+    mask = np.clip(cv2.GaussianBlur(mask, (0, 0), sigma), 0.0, 1.0)[..., None]
+    mixed = area.astype(np.float32) * (1.0 - mask) + (
+        blurred.astype(np.float32) * mask)
+    area[:] = np.clip(mixed + 0.5, 0, 255).astype(area.dtype)
+    return True
+
+
 def _redact_jpeg(data, regions, time_ms):
     import io
     from PIL import Image
@@ -1517,8 +1565,8 @@ def _redact_jpeg(data, regions, time_ms):
 
 
 def _pixelate_image_regions(image, regions, time_ms):
-    from PIL import Image, ImageDraw
     width, height = image.size
+    faces = []
     for region in regions:
         box = region.box_at(time_ms)
         if box is None:
@@ -1529,31 +1577,60 @@ def _pixelate_image_regions(image, regions, time_ms):
         bottom = min(height, round((box.y + box.height) * height))
         if right <= left or bottom <= top:
             continue
-        area = image.crop((left, top, right, bottom))
-        area_width, area_height = area.size
-        # Average each large cell before enlarging it; nearest-neighbour keeps
-        # the result visibly pixelated without retaining fine facial detail.
-        cell_size = max(24, -(-min(area_width, area_height) // 5))
-        columns = max(1, -(-area_width // cell_size))
-        rows = max(1, -(-area_height // cell_size))
-        coarse = area.resize(
-            (columns, rows),
-            resample=Image.Resampling.BOX,
-        )
-        mosaic = coarse.resize(area.size, resample=Image.Resampling.NEAREST)
-        tint = Image.new("RGB", area.size, (43, 69, 90))
-        redacted = Image.blend(mosaic, tint, 0.22)
-        polygon = region.polygon_at(time_ms)
-        if polygon is None:
-            image.paste(redacted, (left, top))
+        if region.kind == "face":
+            faces.append((region, (left, top, right, bottom)))
             continue
-        mask = Image.new("L", area.size, 0)
-        ImageDraw.Draw(mask).polygon([
-            (round(point.x * width) - left,
-             round(point.y * height) - top)
-            for point in polygon
-        ], fill=255)
-        image.paste(redacted, (left, top), mask)
+        _mosaic_image_region(
+            image, region, time_ms, (left, top, right, bottom))
+    if faces:
+        _blur_image_faces(image, faces, time_ms)
+
+
+def _blur_image_faces(image, faces, time_ms):
+    import numpy as np
+    from PIL import Image
+    try:
+        import cv2
+    except ImportError:
+        raise MediaError("O OpenCV não está instalado.") from None
+    array = np.array(image)
+    for region, box in faces:
+        if not _blur_face(array, box, cv2, np):
+            _mosaic_image_region(image, region, time_ms, box)
+            array = np.array(image)
+    image.paste(Image.fromarray(array))
+
+
+def _mosaic_image_region(image, region, time_ms, box):
+    """Cover a region with a coarse, tinted mosaic (text, plates, cards)."""
+    from PIL import Image, ImageDraw
+    width, height = image.size
+    left, top, right, bottom = box
+    area = image.crop((left, top, right, bottom))
+    area_width, area_height = area.size
+    # Average each large cell before enlarging it; nearest-neighbour keeps
+    # the result visibly pixelated without retaining fine detail.
+    cell_size = max(24, -(-min(area_width, area_height) // 5))
+    columns = max(1, -(-area_width // cell_size))
+    rows = max(1, -(-area_height // cell_size))
+    coarse = area.resize(
+        (columns, rows),
+        resample=Image.Resampling.BOX,
+    )
+    mosaic = coarse.resize(area.size, resample=Image.Resampling.NEAREST)
+    tint = Image.new("RGB", area.size, (43, 69, 90))
+    redacted = Image.blend(mosaic, tint, 0.22)
+    polygon = region.polygon_at(time_ms)
+    if polygon is None:
+        image.paste(redacted, (left, top))
+        return
+    mask = Image.new("L", area.size, 0)
+    ImageDraw.Draw(mask).polygon([
+        (round(point.x * width) - left,
+         round(point.y * height) - top)
+        for point in polygon
+    ], fill=255)
+    image.paste(redacted, (left, top), mask)
 
 
 def _render_image(source, output, regions, content_type):
@@ -1585,6 +1662,9 @@ def _pixelate_video_regions(frame, regions, time_ms, cv2, np):
         left, top = max(0, left), max(0, top)
         right, bottom = min(width, right), min(height, bottom)
         if right <= left or bottom <= top:
+            continue
+        if region.kind == "face" and _blur_face(
+                frame, (left, top, right, bottom), cv2, np):
             continue
         area = frame[top:bottom, left:right]
         area_width, area_height = right - left, bottom - top
