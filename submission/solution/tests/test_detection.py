@@ -124,6 +124,12 @@ class BuildRequestTest(unittest.TestCase):
         self.assertIn('Wrong: "text": "Nome: Rui Pinto"', prompt)
         self.assertIn('Right: "text": "Rui Pinto"', prompt)
 
+    def test_prompt_forbids_null_fields(self):
+        """A prompt proíbe campos null (reason e occurrence)."""
+        prompt = detection.load_internal_prompt()
+        self.assertIn('NEVER output "reason": null', prompt)
+        self.assertIn('NEVER output "occurrence": null', prompt)
+
     def test_prompt_and_a_long_document_fit_the_gateway_limit(self):
         """O gateway recusa pedidos acima do limite do Worker."""
         document = detection.build_request(["x" * 80] * 200)

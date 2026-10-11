@@ -1,5 +1,6 @@
 """Secure connection to Google Gemini (pinned model, sanitized errors)."""
 
+from .caching import PromptCache
 from .client import MODEL_ID, GeminiClient
 from .config import EnvSettings, GeminiSettings
 from .errors import (
@@ -41,6 +42,7 @@ __all__ = [
     "ModelInfo",
     "ModelMismatchError",
     "ModelUnavailableError",
+    "PromptCache",
     "RateLimitError",
     "ResponseValidationError",
     "StrictModel",

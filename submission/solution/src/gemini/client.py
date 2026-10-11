@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -9,6 +10,7 @@ import httpx
 from google import genai
 from google.genai import errors, types
 
+from .caching import PromptCache
 from .config import GeminiSettings
 from .errors import (
     AuthenticationError,
@@ -24,6 +26,8 @@ from .errors import (
     ResponseValidationError,
 )
 from .models import GenerationResult, ModelInfo
+
+LOGGER = logging.getLogger(__name__)
 
 MODEL_ID = "gemini-3.5-flash-lite"
 RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]
@@ -76,6 +80,11 @@ class GeminiClient:
     ) -> None:
         self._closed = False
         self._sdk_client = _sdk_client or self._create_sdk_client(settings)
+        self._cache = PromptCache(
+            self._sdk_client,
+            MODEL_ID,
+            ttl_seconds=settings.cache_ttl_seconds,
+        )
 
     @staticmethod
     def _create_sdk_client(settings: GeminiSettings) -> genai.Client:
@@ -108,6 +117,7 @@ class GeminiClient:
         """Release HTTP resources; repeated calls are harmless."""
 
         if not self._closed:
+            self._cache.delete()
             self._sdk_client.close()
             self._closed = True
 
@@ -147,6 +157,71 @@ class GeminiClient:
                 contents=prompt,
             ),
         )
+        return self._validated_result(response)
+
+    def generate_with_system_instruction(
+        self,
+        system_instruction: str,
+        content: str,
+        response_schema: Any = None,
+        response_mime_type: str | None = None,
+    ) -> GenerationResult:
+        """Send content with a cached system instruction.
+
+        The ``system_instruction`` is cached on the first call and
+        reused in subsequent calls within the TTL, avoiding
+        retokenization and reducing input costs.  If caching fails
+        (e.g. below the model's minimum token count), the system
+        instruction is sent inline as a fallback.
+        """
+        self._ensure_open()
+        if not isinstance(system_instruction, str) or \
+                not system_instruction.strip():
+            raise InvalidInputError(
+                "The system instruction must contain text."
+            )
+        if not isinstance(content, str) or not content.strip():
+            raise InvalidInputError("The content must contain text.")
+
+        mime_type = response_mime_type or (
+            "application/json" if response_schema else None
+        )
+        cache_name = self._cache.ensure(system_instruction)
+
+        if cache_name:
+            LOGGER.debug("A usar cache %s para a chamada.", cache_name)
+            response = self._call(
+                lambda: self._sdk_client.models.generate_content(
+                    model=MODEL_ID,
+                    contents=content,
+                    config=types.GenerateContentConfig(
+                        cached_content=cache_name,
+                        response_mime_type=mime_type,
+                        response_schema=response_schema,
+                    ),
+                ),
+            )
+        else:
+            LOGGER.debug(
+                "Cache indisponível; a enviar a instrução de sistema "
+                "inline."
+            )
+            response = self._call(
+                lambda: self._sdk_client.models.generate_content(
+                    model=MODEL_ID,
+                    contents=content,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        response_mime_type=mime_type,
+                        response_schema=response_schema,
+                    ),
+                ),
+            )
+
+        return self._validated_result(response)
+
+    def _validated_result(self, response: Any) -> GenerationResult:
+        """Extract and validate the text from a Gemini response."""
         try:
             text = response.text
             provider_model = getattr(response, "model_version", None)
