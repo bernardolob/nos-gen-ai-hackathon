@@ -21,6 +21,7 @@ Códigos de saída: 0 sem problemas, 1 a verificação encontrou problemas,
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -159,7 +160,10 @@ def main(argv=None, generate=None):
         if args.no_model:
             generate = None
         elif generate is None:
-            if args.use_cache:
+            use_cache = args.use_cache or (
+                os.environ.get("USE_CACHE", "").lower() in ("1", "true", "yes")
+            )
+            if use_cache:
                 generate = gemini_adapter.make_cached_generate()
             else:
                 generate = (

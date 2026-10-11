@@ -164,6 +164,7 @@ class GeminiClient:
         system_instruction: str,
         content: str,
         response_schema: Any = None,
+        response_mime_type: str | None = None,
     ) -> GenerationResult:
         """Send content with a cached system instruction.
 
@@ -182,6 +183,9 @@ class GeminiClient:
         if not isinstance(content, str) or not content.strip():
             raise InvalidInputError("The content must contain text.")
 
+        mime_type = response_mime_type or (
+            "application/json" if response_schema else None
+        )
         cache_name = self._cache.ensure(system_instruction)
 
         if cache_name:
@@ -192,9 +196,7 @@ class GeminiClient:
                     contents=content,
                     config=types.GenerateContentConfig(
                         cached_content=cache_name,
-                        response_mime_type=(
-                            "application/json" if response_schema else None
-                        ),
+                        response_mime_type=mime_type,
                         response_schema=response_schema,
                     ),
                 ),
@@ -210,9 +212,7 @@ class GeminiClient:
                     contents=content,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
-                        response_mime_type=(
-                            "application/json" if response_schema else None
-                        ),
+                        response_mime_type=mime_type,
                         response_schema=response_schema,
                     ),
                 ),

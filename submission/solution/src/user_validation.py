@@ -30,6 +30,7 @@ from pathlib import Path
 
 import detection
 import gateway
+import gemini_adapter
 import pipeline
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
@@ -250,10 +251,16 @@ def create_app(generate=None, origins=None):
 
 def main():
     import uvicorn
-    app = create_app(gateway.from_env())
-    print("Revisão em http://%s:%d (%s)" % (
-        HOST, PORT, "com o Gemini" if app.state.session.generate
-        else "só regras de segurança"))
+    generate = (
+        gemini_adapter.make_cached_generate() or gateway.from_env()
+    )
+    app = create_app(generate)
+    mode = (
+        "com o Gemini (cache ativo)"
+        if getattr(generate, "client", None)
+        else ("com o Gemini" if generate else "só regras de segurança")
+    )
+    print("Revisão em http://%s:%d (%s)" % (HOST, PORT, mode))
     uvicorn.run(app, host=HOST, port=PORT)
 
 

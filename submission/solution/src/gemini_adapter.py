@@ -38,7 +38,7 @@ class DetectionItem(BaseModel):
     occurrence: Optional[int] = None
 
 
-def make_cached_generate(settings=None, client=None):
+def make_cached_generate(settings=None, client=None, response_schema=None):
     """Devolve ``generate(sistema, conteúdo)`` com cache, ou None.
 
     Devolve None se as variáveis de ambiente não estiverem definidas
@@ -58,7 +58,10 @@ def make_cached_generate(settings=None, client=None):
 
     def generate(system_prompt, content):
         result = client.generate_with_system_instruction(
-            system_prompt, content, response_schema=list[DetectionItem]
+            system_prompt,
+            content,
+            response_schema=response_schema,
+            response_mime_type="application/json",
         )
         return result.text
 

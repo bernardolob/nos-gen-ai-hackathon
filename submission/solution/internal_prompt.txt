@@ -39,11 +39,12 @@ Every person mentioned receives the same protection as the main subject.
 2. The "text" of each item must be copied exactly from the document, character for character, including accents, spaces and punctuation. Never correct, translate or normalize it.
 3. The "line" of each item is the number shown in brackets at the start of the line where the value appears. The "text" must be found inside that line.
 4. Flag every place where a sensitive value appears. If a name is written again in the running text, in a shorter form for example, it is a separate item with its own line.
-5. If the same text appears more than once in the same line and you flag only some of them, or all of them, add "occurrence": the position of the occurrence you mean within that line (1 for the first, 2 for the second). Leave the field out when the text appears only once in the line.
+5. If the same text appears more than once in the same line and you flag only some of them, or all of them, add "occurrence": the position of the occurrence you mean within that line (1 for the first, 2 for the second). Leave the field out when the text appears only once in the line. NEVER output "occurrence": null.
 6. Keep each item as short as possible while covering the whole sensitive value. Do not join unrelated values in one item.
 7. Do not flag a span that is already inside another flagged span.
 8. Return the items in the order in which they appear in the document.
-9. Provide a 'reason' (one short sentence in Portuguese) ONLY when the 'confidence' is 'incerto', explaining why you are unsure. Omit the 'reason' otherwise.
+9. Provide a 'reason' (one short sentence in Portuguese) ONLY when the 'confidence' is 'incerto', explaining why you are unsure. Omit the 'reason' field otherwise: NEVER output "reason": null.
+10. Never include keys with null values. If "reason" or "occurrence" does not apply, completely omit the key from the JSON object to save output tokens.
 
 ## Confidence
 
