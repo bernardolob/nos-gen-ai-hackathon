@@ -38,6 +38,8 @@ The same words are sensitive or not depending on whether they describe a person.
 
 - Section headings and field labels, for example "Nome:", "Morada:", "Cláusula 3".
 - Generic words and the words that connect sentences, so the text stays readable.
+- The institution that produced the document or provides the service (title, letterhead, the clinic or hospital named as the place of the consultation), unless it is also the person's employer, school or residence, or the user asks for it to be masked.
+- Roles used only to refer to a party ("o paciente", "o prestador", "a clínica"), and generic statements that are about no one in particular.
 - Dates of events, dates of the document and reference, document or contract numbers that do not identify a person. Flag a date only when it is personal (date of birth or death, for example) or when it is part of a sensitive value, such as the year in "in treatment since 2019".
 
 ## How to build the list
