@@ -27,26 +27,37 @@ from .regions import Box, MediaRegion, RegionKeyframe, padded_box
 MEDIA_PROMPT = """You are inspecting images for visual personal-data
 redaction. Find EVERY visible region that identifies, links to, or profiles a
 natural person. This includes faces; names; home addresses and postal codes;
-Citizen Cards, passports, driving licences and other identity documents;
+Citizen Cards, student cards, passports, driving licences and other identity
+documents;
 identity, tax, social-security, employee, student and customer numbers;
 telephone numbers, email addresses and usernames; vehicle plates; signatures;
 fingerprints and other biometrics; payment or bank data; QR codes and barcodes;
 badges, mail labels and screens; and visible medical, genetic, religious,
 political, family, behavioural or employment information.
 
-Cover an entire identity document, badge, signature, fingerprint, vehicle
-plate, QR/barcode, mail label or screen whenever masking only part could leak
-information. For faces, return a TIGHT box around the face itself: include
-eyes, nose, mouth and chin, but exclude hair, neck, shoulders, body and empty
-background. Each face must have its own box; never return the whole image as
-a face box. Prefer a false positive to an exposed personal value. Do not
-return the sensitive text itself. Images are labelled with a numeric frame_id.
+Cover an entire identity document, payment card, badge, signature, fingerprint,
+vehicle plate, QR/barcode, mail label or screen whenever masking only part
+could leak information. For faces, return a TIGHT box around the face itself:
+include eyes, nose, mouth and chin, but exclude hair, neck, shoulders, body
+and empty background. Each face must have its own box; never return the whole
+image as a face box. Interpret objects in the context of the whole scene.
+A face requires recognizable facial structure; do not infer faces from fingers,
+shadows, clothing, furniture or background textures. Detect personal data
+supported by visible evidence, rather than assuming every object is sensitive.
+Use confidence "incerto" for ambiguous evidence. Do not return separate regions
+for information already covered by an entire document or card region. If no
+personal data is visible, return an empty detections list. Do not return the
+sensitive text itself. Images are labelled with a numeric frame_id. Inspect
+each frame independently: moving objects need new bounds in each frame, even
+when it is the same object. Never copy coordinates from a previous frame.
 box_2d is [ymin, xmin, ymax, xmax], using integers from 0 to 1000.
 """
 
-RESIDUAL_PROMPT = """These images already contain strong pixelated redactions.
+RESIDUAL_PROMPT = MEDIA_PROMPT + """
+These images already contain strong pixelated redactions.
 Find any personal or sensitive visual information that remains visible. Do not
-return regions that are already fully pixelated. Use the same contract and
+return regions that are already fully pixelated or mistake pixelation artifacts
+for faces or personal data. Use the same contract and
 never return the sensitive text itself."""
 
 MEDIA_ANALYZE_PATH = "/api/v1/media/analyze"

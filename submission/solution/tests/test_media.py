@@ -33,6 +33,7 @@ from media.regions import (  # noqa: E402
     transform_polygon,
 )
 from media.pipeline import (  # noqa: E402
+    MediaProcessor,
     _capture_time_ms,
     _extend_face_tracks_to_edges,
     _link_regions,
@@ -41,10 +42,14 @@ from media.pipeline import (  # noqa: E402
     _prefer_detected_faces,
     _probe_video,
     _refine_region_polygons,
+    _refine_model_image_faces,
     _render_image,
     _render_video,
     _segment_box_polygon,
     _track_manual_region,
+    _track_video_objects,
+    _time_regions,
+    _smooth_region,
 )
 
 
@@ -211,6 +216,77 @@ def test_face_detector_replaces_a_whole_image_model_face_box():
     assert tight.keyframes[0].box.width == pytest.approx(0.208)
 
 
+@pytest.mark.parametrize("first_kind,residual_kind", [
+    ("identity_document", None),
+    (None, None),
+    ("face", None),
+    (None, "face"),
+])
+def test_image_masks_require_model_detection_and_receive_instructions(
+        tmp_path, monkeypatch, first_kind, residual_kind):
+    from media import pipeline
+    Image = pytest.importorskip("PIL.Image")
+    path = tmp_path / "scene.png"
+    Image.new("RGB", (200, 200), "white").save(path)
+    local = region(source="face_detector")
+    local.kind = "face"
+    local.start_ms = local.end_ms = 0
+    local.keyframes = [RegionKeyframe(
+        time_ms=0, box=Box(x=0.7, y=0.7, width=0.1, height=0.1))]
+    monkeypatch.setattr(pipeline, "_detect_image_faces", lambda _: [local])
+
+    class Analyzer:
+        def __init__(self):
+            self.calls = []
+
+        def verify(self):
+            return MediaModel("gemini-3.5-flash-lite",
+                              ("image", "video", "structured_output"), True)
+
+        def analyze(self, frames, *, residual=False, instructions=None):
+            self.calls.append((residual, instructions))
+            kind = residual_kind if residual else first_kind
+            if kind is None:
+                return []
+            item = region(source="gemini")
+            item.kind = kind
+            item.start_ms = item.end_ms = 0
+            item.keyframes = [item.keyframes[0]]
+            return [(0, item)]
+
+    analyzer = Analyzer()
+    _, _, masks, _ = MediaProcessor(analyzer).analyze(
+        path, "image/png", instructions="Respect reviewer corrections.")
+    expected = [kind for kind in (first_kind, residual_kind) if kind]
+    assert [mask.kind for mask in masks] == expected
+    assert all(mask.source == "gemini" for mask in masks)
+    assert analyzer.calls == [
+        (False, "Respect reviewer corrections."),
+        (True, "Respect reviewer corrections."),
+    ]
+
+
+def test_image_face_refinement_keeps_model_confidence_and_unmatched_faces():
+    model = region(source="gemini")
+    model.kind = "face"
+    model.confidence = "incerto"
+    model.start_ms = model.end_ms = 0
+    model.keyframes = [model.keyframes[0]]
+    local = model.model_copy(deep=True)
+    local.source = "face_detector"
+    local.confidence = "certo"
+    local.keyframes[0].box = Box(x=0.11, y=0.21, width=0.18, height=0.18)
+    unrelated = local.model_copy(deep=True)
+    unrelated.keyframes[0].box = Box(x=0.7, y=0.7, width=0.1, height=0.1)
+    refined, = _refine_model_image_faces([model], [local, unrelated])
+    assert refined.keyframes[0].box == local.keyframes[0].box
+    assert refined.source == "gemini"
+    assert refined.confidence == "incerto"
+    assert refined.reason == model.reason
+    assert model.keyframes[0].box != refined.keyframes[0].box
+    assert _refine_model_image_faces([model], [unrelated]) == [model]
+
+
 def test_face_deduplication_uses_the_detector_box_at_model_time():
     detected = region(source="face_detector")
     detected.kind = "face"
@@ -273,6 +349,109 @@ def test_overlapping_detection_windows_link_by_observation_time():
     tracks = _link_regions([first, second], 1300)
     assert len(tracks) == 1
     assert [key.time_ms for key in tracks[0].keyframes] == [0, 500]
+
+
+def test_video_detection_does_not_activate_before_its_observed_frame():
+    item = region(source="gemini")
+    item.kind = "identity_document"
+    observed, = _time_regions(
+        [(7, item)], [(7, 2000, b"jpeg")], {"duration_ms": 4000})
+    assert observed.box_at(1999) is None
+    assert observed.start_ms == observed.end_ms == 2000
+    assert observed.keyframes[0].time_ms == 2000
+
+
+def test_residual_duplicates_merge_without_losing_existing_keyframes():
+    item = region(source="gemini")
+    item.kind = "identity_document"
+    item.start_ms, item.end_ms = 1000, 2000
+    item.keyframes = [RegionKeyframe(
+        time_ms=time_ms, box=Box(x=x, y=0.3, width=0.2, height=0.2))
+        for time_ms, x in [(1000, 0.1), (1500, 0.15), (2000, 0.2)]]
+    residual = item.model_copy(deep=True)
+    residual.start_ms = residual.end_ms = 1500
+    residual.keyframes = [RegionKeyframe(
+        time_ms=1500, box=Box(x=0.17, y=0.3, width=0.2, height=0.2))]
+    tracks = _link_regions([item, residual], 3000)
+    assert len(tracks) == 1
+    assert [key.time_ms for key in tracks[0].keyframes] == [1000, 1500, 2000]
+    middle = tracks[0].box_at(1500)
+    assert middle.x == pytest.approx(0.15)
+    assert middle.x + middle.width == pytest.approx(0.37)
+
+
+def test_document_bounds_do_not_shrink_or_move_to_future_positions():
+    Image = pytest.importorskip("PIL.Image")
+    import io
+    image = Image.new("RGB", (100, 100), "white")
+    for x in range(40, 65):
+        for y in range(20, 80):
+            image.putpixel((x, y), (10, 80, 150))
+    data = io.BytesIO()
+    image.save(data, format="JPEG")
+    item = region(source="gemini")
+    item.kind = "identity_document"
+    item.keyframes[0].box = Box(x=0.15, y=0.15, width=0.55, height=0.7)
+    original = item.model_copy(deep=True)
+    _refine_region_polygons(data.getvalue(), [item])
+    assert item == original
+    assert _smooth_region(item) == original
+
+
+def test_video_object_flow_follows_motion_and_stops_when_object_disappears(
+        tmp_path):
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    source = tmp_path / "appearing-card.mp4"
+    writer = cv2.VideoWriter(
+        str(source), cv2.VideoWriter_fourcc(*"mp4v"), 10, (160, 100))
+    if not writer.isOpened():
+        pytest.skip("OpenCV video writer is unavailable")
+    texture = np.random.default_rng(12).integers(
+        30, 255, (32, 48, 3), dtype=np.uint8)
+    for index in range(30):
+        frame = np.zeros((100, 160, 3), dtype=np.uint8)
+        if 10 <= index < 25:
+            left = 20 + (index - 10) * 2
+            frame[30:62, left:left + 48] = texture
+        writer.write(frame)
+    writer.release()
+    item = region(source="gemini")
+    item.kind = "identity_document"
+    item.start_ms, item.end_ms = 1200, 1800
+    item.keyframes = [
+        RegionKeyframe(time_ms=time_ms, box=Box(
+            x=left / 160, y=0.3, width=48 / 160, height=0.32))
+        for time_ms, left in [(1200, 24), (1800, 36)]
+    ]
+    uncertain_times = set()
+    tracked, = _track_video_objects(
+        source, [item], {"fps": 10, "duration_ms": 3000},
+        uncertain_times=uncertain_times)
+    assert tracked.box_at(1199) is None
+    assert tracked.box_at(1500).x == pytest.approx(30 / 160, abs=0.015)
+    assert tracked.box_at(2200).x == pytest.approx(44 / 160, abs=0.015)
+    assert tracked.box_at(2600) is None
+    assert tracked.end_ms <= 2500
+    assert len(tracked.keyframes) >= 10
+    assert 2500 in uncertain_times
+    assert min(uncertain_times) >= 1200
+
+    class NegativeRecoveryAnalyzer:
+        def __init__(self):
+            self.frames = []
+
+        def analyze(self, frames, **options):
+            self.frames.extend(frames)
+            return []
+
+    analyzer = NegativeRecoveryAnalyzer()
+    recovered, = MediaProcessor(analyzer)._recover_video_objects(
+        source, [item], [item], [], [(0, 1200, b""), (1, 1800, b"")],
+        {"fps": 10, "duration_ms": 3000}, [], None, lambda *args: None)
+    assert analyzer.frames
+    assert all(frame[1].startswith(b"\xff\xd8") for frame in analyzer.frames)
+    assert recovered.box_at(2600) is None
 
 
 def test_tracking_assignment_is_one_to_one_and_stops_at_scene_cuts():

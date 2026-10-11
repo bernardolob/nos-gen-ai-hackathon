@@ -118,16 +118,17 @@ class MediaProcessor:
             report("validar imagem", 0, 1)
             info, frame = _read_image(path)
             report("analisar imagem", 0, 2)
-            detections = self._analyze_batch([(0, frame)])
+            detections = self._analyze_batch(
+                [(0, frame)], instructions=instructions)
             detected_faces = _detect_image_faces(frame)
-            regions = _prefer_detected_faces(
+            regions = _refine_model_image_faces(
                 [region for _, region in detections], detected_faces)
             _refine_region_polygons(frame, regions)
-            regions = _merge_image_regions(regions + detected_faces)
+            regions = _merge_image_regions(regions)
             redacted = _redact_jpeg(frame, regions, 0)
             residual = self._analyze_batch(
                 [(0, redacted)], residual=True, instructions=instructions)
-            residual_regions = _prefer_detected_faces(
+            residual_regions = _refine_model_image_faces(
                 [region for _, region in residual], detected_faces)
             _refine_region_polygons(frame, residual_regions)
             regions = _merge_image_regions(
@@ -154,6 +155,7 @@ class MediaProcessor:
         combined = _link_regions(
             _prefer_detected_faces(llm_regions, face_regions) + face_regions,
             info["duration_ms"], scene_cuts=scene_cuts)
+        combined = _track_video_objects(path, combined, info, scene_cuts)
         for offset in range(0, len(samples), BATCH_SIZE):
             batch = samples[offset:offset + BATCH_SIZE]
             preview = [
@@ -163,14 +165,52 @@ class MediaProcessor:
             found = self._analyze_batch(
                 preview, residual=True, instructions=instructions)
             _refine_found_polygons(found, batch)
-            combined.extend(_prefer_detected_faces(
-                _time_regions(found, samples, info), face_regions))
+            llm_regions.extend(_time_regions(found, samples, info))
             completed += 1
             report("verificar dados residuais", completed, total_batches)
         combined = _link_regions(
-            combined, info["duration_ms"], scene_cuts=scene_cuts)
+            _prefer_detected_faces(llm_regions, face_regions) + face_regions,
+            info["duration_ms"], scene_cuts=scene_cuts)
+        combined = self._recover_video_objects(
+            path, combined, llm_regions, face_regions, samples, info,
+            scene_cuts, instructions, report)
         combined = [_smooth_region(track) for track in combined]
         return kind, info, combined, model
+
+    def _recover_video_objects(self, path, combined, observations, faces,
+                               samples, info, scene_cuts, instructions,
+                               report):
+        uncertain_times = set()
+        tracked = _track_video_objects(
+            path, combined, info, scene_cuts, uncertain_times=uncertain_times)
+        uncertain_times.difference_update(sample[1] for sample in samples)
+        if not uncertain_times:
+            return tracked
+        # Bound additional model work using the same total frame budget. The
+        # dense tracker still provides conservative coverage between anchors.
+        times = sorted(uncertain_times)
+        remaining = max(0, MAX_SAMPLES - len(samples))
+        if not remaining:
+            return tracked
+        if len(times) > remaining:
+            times = [times[round(index * (len(times) - 1) / (remaining - 1))]
+                     for index in range(remaining)] if remaining > 1 else [
+                         times[0]]
+        extra = _read_video_recovery_frames(path, times, len(samples))
+        batches = math.ceil(len(extra) / BATCH_SIZE)
+        for offset in range(0, len(extra), BATCH_SIZE):
+            batch = extra[offset:offset + BATCH_SIZE]
+            report("verificar rastreio", offset // BATCH_SIZE, batches)
+            found = self._analyze_batch(
+                [(sample[0], sample[2]) for sample in batch],
+                instructions=instructions)
+            _refine_found_polygons(found, batch)
+            observations.extend(_time_regions(found, extra, info))
+        combined = _link_regions(
+            _prefer_detected_faces(observations, faces) + faces,
+            info["duration_ms"], scene_cuts=scene_cuts)
+        report("verificar rastreio", batches, batches)
+        return _track_video_objects(path, combined, info, scene_cuts)
 
     def track(self, source, region, duration_ms, seed_time_ms=None):
         """Track one reviewer-authored box in both directions."""
@@ -548,6 +588,11 @@ def _refine_region_polygons(jpeg, regions):
     if frame is None:
         return
     for region in regions:
+        # GrabCut can select a hand or only the colored half of a card. For
+        # structured data, preserve the full model box so no text is exposed.
+        if region.kind in {
+                "identity_document", "text", "plate", "signature", "code"}:
+            continue
         for keyframe in region.keyframes:
             if keyframe.polygon is not None:
                 continue
@@ -764,7 +809,7 @@ def _sample_video(path, info, report):
 
 
 def _extend_face_tracks_to_edges(tracks, last_frame_ms, duration_ms, fps):
-    edge_tolerance_ms = max(500, round(2 * 1000 / fps))
+    edge_tolerance_ms = max(1, round(2 * 1000 / fps))
     for track in tracks:
         # Container duration includes the final frame's display interval. A
         # track seen near either edge must cover that entire interval too.
@@ -803,6 +848,42 @@ def _detect_image_faces(jpeg):
                 time_ms=0, box=box, polygon=polygon)],
         ))
     return faces
+
+
+def _refine_model_image_faces(regions, detected_faces):
+    """Refine model-selected faces without adding local face candidates.
+
+    Local detectors can mistake textures for faces. For still images, the
+    visual model decides what exists; a local candidate only supplies geometry
+    when it substantially overlaps a model-selected face. Keep the model's
+    reason, confidence and provenance, including when no local match exists.
+    """
+    output = []
+    for region in regions:
+        if region.kind != "face" or region.source != "gemini":
+            output.append(region)
+            continue
+        box = region.keyframes[0].box
+        matches = [
+            (intersection_over_union(box, candidate.keyframes[0].box),
+             candidate)
+            for candidate in detected_faces
+            if candidate.kind == "face"
+        ]
+        score, candidate = max(matches, key=lambda match: match[0],
+                               default=(0, None))
+        if score >= 0.3:
+            refined = region.model_copy(deep=True)
+            refined.keyframes[0].box = candidate.keyframes[0].box.model_copy(
+                deep=True)
+            polygon = candidate.keyframes[0].polygon
+            refined.keyframes[0].polygon = (
+                [point.model_copy(deep=True) for point in polygon]
+                if polygon is not None else None)
+            output.append(refined)
+        else:
+            output.append(region)
+    return output
 
 
 def _prefer_detected_faces(regions, detected_faces):
@@ -861,8 +942,8 @@ def _time_regions(found, samples, info):
         time_ms = by_id.get(frame_id)
         if time_ms is None:
             continue
-        region.start_ms = max(0, time_ms - 250)
-        region.end_ms = min(info["duration_ms"], time_ms + 750)
+        region.start_ms = time_ms
+        region.end_ms = time_ms
         region.keyframes[0].time_ms = time_ms
         output.append(region)
     return output
@@ -871,13 +952,26 @@ def _time_regions(found, samples, info):
 def _link_regions(regions, duration_ms, scene_cuts=()):
     """Associate observations one-to-one using time, motion and geometry."""
 
-    observations = sorted(
-        regions, key=lambda item: item.keyframes[0].time_ms)
+    observations = []
+    for region in regions:
+        keys = sorted((key for key in region.keyframes
+                       if region.start_ms <= key.time_ms <= region.end_ms),
+                      key=lambda key: key.time_ms)
+        for index, keyframe in enumerate(keys):
+            observation = region.model_copy(deep=True)
+            observation.keyframes = [keyframe.model_copy(deep=True)]
+            observation.start_ms = (
+                region.start_ms if index == 0 else keyframe.time_ms)
+            observation.end_ms = (
+                region.end_ms if index == len(keys) - 1 else keyframe.time_ms)
+            observations.append(observation)
+    observations.sort(key=lambda item: item.keyframes[0].time_ms)
     grouped = {}
     for region in observations:
         grouped.setdefault(region.keyframes[0].time_ms, []).append(region)
     tracks = []
     for time_ms, current in grouped.items():
+        current = _deduplicate_frame_regions(current)
         candidates = []
         for track_index, track in enumerate(tracks):
             last_time = track.keyframes[-1].time_ms
@@ -892,6 +986,13 @@ def _link_regions(regions, duration_ms, scene_cuts=()):
                     continue
                 score = _association_score(
                     predicted, region.keyframes[0].box)
+                # A noisy first observation can produce an extreme velocity.
+                # Also compare the last measured bounds before splitting an
+                # otherwise continuous object into overlapping tracks.
+                measured_score = _association_score(
+                    track.keyframes[-1].box, region.keyframes[0].box)
+                if measured_score is not None:
+                    score = max(score or 0, measured_score)
                 if score is not None:
                     candidates.append(
                         (score, track_index, region_index))
@@ -919,6 +1020,33 @@ def _link_regions(regions, duration_ms, scene_cuts=()):
         track.end_ms = min(
             duration_ms, max(track.start_ms, track.end_ms))
     return tracks
+
+
+def _deduplicate_frame_regions(regions):
+    """Combine repeated detections at the same time, covering both boxes."""
+    output = []
+    for region in regions:
+        box = region.keyframes[0].box
+        duplicate = next((current for current in output
+                          if current.kind == region.kind and
+                          current.source == region.source and
+                          intersection_over_union(
+                              current.keyframes[0].box, box) >= 0.5), None)
+        if duplicate is None:
+            output.append(region.model_copy(deep=True))
+            continue
+        if region.kind == "face":
+            continue
+        previous = duplicate.keyframes[0].box
+        left, top = min(previous.x, box.x), min(previous.y, box.y)
+        right = max(previous.x + previous.width, box.x + box.width)
+        bottom = max(previous.y + previous.height, box.y + box.height)
+        duplicate.keyframes[0].box = Box(
+            x=left, y=top, width=right - left, height=bottom - top)
+        duplicate.keyframes[0].polygon = None
+        duplicate.start_ms = min(duplicate.start_ms, region.start_ms)
+        duplicate.end_ms = max(duplicate.end_ms, region.end_ms)
+    return output
 
 
 def _crosses_scene_cut(start_ms, end_ms, scene_cuts):
@@ -983,6 +1111,10 @@ def _smooth_region(region):
     """Remove single-frame jitter and add a motion-aware safety edge."""
 
     result = region.model_copy(deep=True)
+    # Moving document bounds are measured/flow-tracked. Averaging with future
+    # positions shifts the mask away from the text it must cover.
+    if result.kind != "face":
+        return result
     keys = result.keyframes
     if len(keys) < 2:
         return result
@@ -1036,6 +1168,189 @@ def _smooth_region(region):
         keyframe.box = box
         keyframe.polygon = polygon
     return result
+
+
+def _read_video_recovery_frames(path, times, first_id=0):
+    import cv2
+
+    capture = cv2.VideoCapture(str(path))
+    samples = []
+    for time_ms in times:
+        capture.set(cv2.CAP_PROP_POS_MSEC, time_ms)
+        ok, frame = capture.read()
+        if not ok:
+            capture.release()
+            raise MediaValidationError("Não foi possível ler um fotograma.")
+        samples.append((first_id + len(samples), time_ms,
+                        _encode_video_preview(frame, cv2)))
+    capture.release()
+    return samples
+
+
+def _track_video_objects(path, regions, info, scene_cuts=(),
+                         uncertain_times=None):
+    """Follow model-selected objects between anchors, never before appearance.
+
+    Model observations remain authoritative at their exact timestamps. Local
+    optical flow adds measured positions at 10 Hz and continues only while
+    visual features remain trackable. A failed flow between confirmed anchors
+    uses their enclosing box until the next anchor; after the final anchor a
+    failed flow ends the mask instead of holding a stale position indefinitely.
+    """
+    import cv2
+    import numpy as np
+
+    objects = [region for region in regions
+               if region.source == "gemini" and region.kind != "face"]
+    if not objects:
+        return regions
+    anchor_times = {key.time_ms for region in objects
+                    for key in region.keyframes}
+    interval = max(1, round(info["fps"] / TRACK_SAMPLE_RATE))
+    capture = cv2.VideoCapture(str(path))
+    frames = []
+    index, previous_time = 0, -1
+    last = None
+    while True:
+        ok, frame = capture.read()
+        if not ok:
+            break
+        time_ms = _capture_time_ms(capture, index, info["fps"], previous_time)
+        previous_time = time_ms
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        ratio = min(1.0, 640 / max(gray.shape[:2]))
+        if ratio < 1:
+            gray = cv2.resize(gray, None, fx=ratio, fy=ratio,
+                              interpolation=cv2.INTER_AREA)
+        last = (time_ms, gray)
+        if index % interval == 0 or time_ms in anchor_times:
+            frames.append(last)
+        index += 1
+    capture.release()
+    if not frames:
+        raise MediaValidationError("O vídeo não contém fotogramas legíveis.")
+    if last[0] != frames[-1][0]:
+        frames.append(last)
+    frame_display_ms = max(1, round(1000 / info["fps"]))
+    output = [region for region in regions if region not in objects]
+    for region in objects:
+        anchors = sorted(region.keyframes, key=lambda key: key.time_ms)
+        by_time = {key.time_ms: key for key in anchors}
+        tracked = []
+        previous_gray = None
+        current_key = None
+        lost = False
+        for time_ms, gray in frames:
+            if time_ms < anchors[0].time_ms:
+                continue
+            if current_key is not None and _crosses_scene_cut(
+                    current_key.time_ms, time_ms, scene_cuts):
+                break
+            anchor = by_time.get(time_ms)
+            if anchor is not None:
+                current_key = anchor.model_copy(deep=True)
+                lost = False
+            elif current_key is not None:
+                moved = None if lost else _flow_object_keyframe(
+                    previous_gray, gray, current_key, time_ms, cv2, np)
+                if moved is None:
+                    if uncertain_times is not None:
+                        uncertain_times.add(time_ms)
+                    future = next((key for key in anchors
+                                   if key.time_ms > time_ms), None)
+                    if future is None:
+                        if uncertain_times is not None:
+                            uncertain_times.update(
+                                position for position, _ in frames
+                                if time_ms <= position <=
+                                anchors[-1].time_ms + TRACK_MAX_GAP_MS and
+                                not _crosses_scene_cut(
+                                    time_ms, position, scene_cuts))
+                        break
+                    past = max((key for key in anchors
+                                if key.time_ms < time_ms),
+                               key=lambda key: key.time_ms)
+                    first, second = past.box, future.box
+                    left, top = min(first.x, second.x), min(first.y, second.y)
+                    right = max(first.x + first.width,
+                                second.x + second.width)
+                    bottom = max(first.y + first.height,
+                                 second.y + second.height)
+                    current_key = RegionKeyframe(time_ms=time_ms, box=Box(
+                        x=left, y=top, width=right - left,
+                        height=bottom - top))
+                    lost = True
+                else:
+                    current_key = moved
+            else:
+                continue
+            tracked.append(current_key)
+            previous_gray = gray
+        if tracked:
+            result = region.model_copy(deep=True)
+            result.keyframes = tracked
+            result.start_ms = tracked[0].time_ms
+            result.end_ms = min(info["duration_ms"],
+                                tracked[-1].time_ms + frame_display_ms)
+            output.append(result)
+    return output
+
+
+def _flow_object_keyframe(previous, current, keyframe, time_ms, cv2, np):
+    """Estimate translation and tilt from consistent feature matches."""
+    height, width = previous.shape[:2]
+    box = keyframe.box
+    mask = np.zeros_like(previous)
+    left = max(0, round((box.x + box.width * 0.04) * width))
+    top = max(0, round((box.y + box.height * 0.04) * height))
+    right = min(width, round((box.x + box.width * 0.96) * width))
+    bottom = min(height, round((box.y + box.height * 0.96) * height))
+    mask[top:bottom, left:right] = 255
+    points = cv2.goodFeaturesToTrack(
+        previous, mask=mask, maxCorners=120, qualityLevel=0.01,
+        minDistance=3, blockSize=5)
+    if points is None or len(points) < 6:
+        return None
+    options = dict(winSize=(31, 31), maxLevel=3)
+    moved, status, _ = cv2.calcOpticalFlowPyrLK(
+        previous, current, points, None, **options)
+    if moved is None:
+        return None
+    back, back_status, _ = cv2.calcOpticalFlowPyrLK(
+        current, previous, moved, None, **options)
+    if back is None:
+        return None
+    valid = ((status.reshape(-1) == 1) & (back_status.reshape(-1) == 1) &
+             (np.linalg.norm((back - points).reshape(-1, 2), axis=1) < 1.5))
+    before = points.reshape(-1, 2)[valid]
+    after = moved.reshape(-1, 2)[valid]
+    if len(before) < 6:
+        return None
+    matrix, inliers = cv2.estimateAffine2D(
+        before, after, method=cv2.RANSAC, ransacReprojThreshold=2.5)
+    if matrix is None or inliers is None or inliers.sum() < max(
+            6, len(before) * 0.5):
+        return None
+    scales = np.linalg.svd(matrix[:, :2], compute_uv=False)
+    if scales.min() < 0.65 or scales.max() > 1.5:
+        return None
+    corners = np.asarray([
+        [box.x * width, box.y * height],
+        [(box.x + box.width) * width, box.y * height],
+        [(box.x + box.width) * width, (box.y + box.height) * height],
+        [box.x * width, (box.y + box.height) * height],
+    ], dtype=np.float32)
+    transformed = cv2.transform(corners[None], matrix)[0]
+    minimum, maximum = transformed.min(axis=0), transformed.max(axis=0)
+    left, top = max(0, minimum[0] / width), max(0, minimum[1] / height)
+    right, bottom = min(1, maximum[0] / width), min(1, maximum[1] / height)
+    if right - left < 0.005 or bottom - top < 0.005:
+        return None
+    moved_box = Box(x=float(left), y=float(top),
+                    width=float(right - left), height=float(bottom - top))
+    return RegionKeyframe(time_ms=time_ms, box=moved_box,
+                          polygon=transform_polygon(
+                              keyframe.polygon, box, moved_box))
 
 
 def _track_manual_region(path, region, duration_ms, seed_time_ms=None):
