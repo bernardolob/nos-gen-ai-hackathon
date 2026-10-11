@@ -81,8 +81,6 @@ export function LiveBlur({
       ref={canvasRef}
       data-testid="live-blur"
       aria-hidden
-      // The bottom strip is left to the player's controls.
-      style={{ clipPath: "inset(0 0 44px 0)" }}
       className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain"
     />
   );
