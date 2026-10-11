@@ -106,6 +106,7 @@ export async function mockUpload(text: string, usedSample = false): Promise<Snap
     kind: "text",
     attempt: 1,
     text: maskWords(source, false),
+    original_text: source,
     warnings: 1,
   };
   return structuredClone(state);
@@ -122,6 +123,7 @@ export async function mockUploadAudio(): Promise<Snapshot> {
     kind: "audio",
     attempt: 1,
     text,
+    original_text: source,
     audio_url: AUDIO_PATH,
     audio_ranges: countRanges(text),
   };

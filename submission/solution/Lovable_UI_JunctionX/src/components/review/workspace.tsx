@@ -5,23 +5,147 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MAX_REASON_CHARS, type HistoryEntry, type Snapshot } from "@/lib/review/types";
 import { censoredAudioUrl } from "@/lib/review/api";
 
-export function MaskedText({ text, className = "" }: { text: string; className?: string }) {
-  const parts = text.split(/(\*+)/);
+interface TextPart {
+  type: "text";
+  text: string;
+}
+
+interface MaskedPart {
+  type: "masked";
+  text: string;
+  originalWord?: string;
+}
+
+type Part = TextPart | MaskedPart;
+
+function alignLine(maskLine: string, origLine?: string): Part[] {
+  const tokens = maskLine.split(/(\*+)/);
+  if (!origLine) {
+    return tokens
+      .filter(Boolean)
+      .map((t) => (t.startsWith("*") ? { type: "masked", text: t } : { type: "text", text: t }));
+  }
+
+  const parts: Part[] = [];
+  let origIdx = 0;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!token) continue;
+
+    if (token.startsWith("*")) {
+      const nextLit = tokens[i + 1] ?? "";
+      let origWord = "";
+      if (!nextLit) {
+        origWord = origLine.slice(origIdx);
+        origIdx = origLine.length;
+      } else {
+        const pos = origLine.indexOf(nextLit, origIdx);
+        if (pos !== -1) {
+          origWord = origLine.slice(origIdx, pos);
+          origIdx = pos;
+        } else {
+          const trimmedLit = nextLit.trimStart();
+          const firstChar = trimmedLit[0];
+          const charPos = firstChar ? origLine.indexOf(firstChar, origIdx) : -1;
+          if (charPos !== -1) {
+            origWord = origLine.slice(origIdx, charPos);
+            origIdx = charPos;
+          } else {
+            origWord = "";
+          }
+        }
+      }
+      const cleanWord = origWord.trim();
+      parts.push({
+        type: "masked",
+        text: token,
+        originalWord: cleanWord || undefined,
+      });
+    } else {
+      origIdx += token.length;
+      parts.push({ type: "text", text: token });
+    }
+  }
+
+  return parts;
+}
+
+export function MaskedText({
+  text,
+  originalText,
+  className = "",
+}: {
+  text: string;
+  originalText?: string;
+  className?: string;
+}) {
+  const maskLines = text.split("\n");
+  const origLines = originalText ? originalText.split("\n") : [];
+
   return (
-    <pre className={`whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground ${className}`}>
-      {parts.map((p, i) =>
-        p.startsWith("*") ? (
-          <mark key={i} className="rounded-sm bg-primary px-1 text-primary-foreground" aria-label="redacted data">
-            {p}
-          </mark>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </pre>
+    <TooltipProvider delayDuration={150} skipDelayDuration={300}>
+      <pre className={`whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground ${className}`}>
+        {maskLines.map((maskLine, lineIdx) => {
+          const parts = alignLine(maskLine, origLines[lineIdx]);
+          return (
+            <span key={lineIdx}>
+              {parts.map((part, partIdx) => {
+                if (part.type !== "masked") {
+                  return <span key={partIdx}>{part.text}</span>;
+                }
+
+                if (!part.originalWord) {
+                  return (
+                    <mark
+                      key={partIdx}
+                      className="rounded-sm bg-primary px-1 text-primary-foreground"
+                      aria-label="redacted data"
+                    >
+                      {part.text}
+                    </mark>
+                  );
+                }
+
+                return (
+                  <Tooltip key={partIdx}>
+                    <TooltipTrigger asChild>
+                      <mark
+                        tabIndex={0}
+                        className="cursor-pointer rounded-sm bg-primary px-1 text-primary-foreground transition-all duration-150 hover:opacity-90 hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary"
+                        aria-label={`redacted: ${part.originalWord}`}
+                      >
+                        {part.text}
+                      </mark>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      avoidCollisions
+                      sideOffset={6}
+                      className="z-50 select-none rounded-md border border-border/80 bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-lg backdrop-blur"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-sans font-medium uppercase tracking-wider text-muted-foreground">
+                          Original:
+                        </span>
+                        <span className="font-mono font-semibold text-primary">
+                          {part.originalWord}
+                        </span>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+              {lineIdx < maskLines.length - 1 ? "\n" : null}
+            </span>
+          );
+        })}
+      </pre>
+    </TooltipProvider>
   );
 }
 
@@ -244,7 +368,11 @@ export function ReviewWorkspace({
         {/* The frame clips the scan effect; the inner box is the one that scrolls. */}
         <div key={snapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
           <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
-            <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
+            <MaskedText
+              text={snapshot.text}
+              originalText={snapshot.original_text}
+              className={`stage-pv ${busy ? "opacity-40" : ""}`}
+            />
           </div>
         </div>
         {busy && (
@@ -347,7 +475,11 @@ export function ReviewWorkspace({
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">“{h.reason}”</p>
                 <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">
-                  <MaskedText text={h.text} className="text-xs leading-6" />
+                  <MaskedText
+                    text={h.text}
+                    originalText={snapshot.original_text}
+                    className="text-xs leading-6"
+                  />
                 </div>
               </article>
             ))}
