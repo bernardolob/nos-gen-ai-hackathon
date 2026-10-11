@@ -13,6 +13,7 @@ import type {
   Snapshot,
 } from "@/lib/review/types";
 import { mediaSourceUrl } from "@/lib/review/api";
+import { LiveBlur } from "./live-blur";
 
 export const CATEGORY_LABELS: Record<string, string> = {
   identificacao: "Personal identification",
@@ -265,6 +266,7 @@ export function MediaViewer({
   isDrawing = false,
   onToggleDrawMode,
   previewUrl = null,
+  liveBlur = false,
   onPlayingChange,
 }: {
   snapshot: Snapshot;
@@ -281,6 +283,8 @@ export function MediaViewer({
   onToggleDrawMode?: () => void;
   /** The file with the redaction applied (see previewMedia); drawn over the original. */
   previewUrl?: string | null;
+  /** Draw the blur live from the video frames (while it plays, when no still preview exists). */
+  liveBlur?: boolean;
   onPlayingChange?: (playing: boolean) => void;
 }) {
   const isImage = snapshot.kind === "image";
@@ -381,7 +385,7 @@ export function MediaViewer({
   // With the blur preview on, the picture is shown as the export will look:
   // no dashed outlines or labels, except on the region being edited (and while
   // drawing a new one). The regions stay clickable.
-  const quiet = Boolean(previewUrl) && !isDrawing;
+  const quiet = (Boolean(previewUrl) || liveBlur) && !isDrawing;
 
   const renderedRegions = useMemo(() => {
     return activeRegions
@@ -673,6 +677,13 @@ export function MediaViewer({
           // For a video the bottom strip is left to the player's controls.
           style={isImage ? undefined : { clipPath: "inset(0 0 44px 0)" }}
           className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
+        />
+      )}
+
+      {liveBlur && !previewUrl && !isImage && (
+        <LiveBlur
+          video={videoRef?.current ?? null}
+          regions={renderedRegions.map(({ region, box }) => ({ region, box }))}
         />
       )}
 
