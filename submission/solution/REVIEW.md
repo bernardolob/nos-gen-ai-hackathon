@@ -228,8 +228,8 @@ sem rolar para o lado, a escolha sobrevive ao recarregar, e as setas do teclado
 selecionam e aplicam o tema.
 
 **Limites:** os temas só mexem na marca, por isso o resto da UI (neutros e
-cores de estado) é igual em todos. Não se verificou com um leitor de ecrã.
-O Safari antigo, sem `oklch()`, mostra as cores do navegador por defeito.
+cores de estado) é igual em todos. Não se verificou com um leitor de ecrã,
+nem em browsers que não sejam o do painel da app.
 
 ## Testes
 
