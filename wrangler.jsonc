@@ -16,10 +16,18 @@
         "limit": 60,
         "period": 60
       }
+    },
+    {
+      "name": "AUDIO_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
     }
   ],
   "secrets": {
-    "required": ["GEMINI_API_KEY"]
+    "required": ["GEMINI_API_KEY", "ELEVENLABS_API_KEY"]
   },
   "vars": {
     "PUBLIC_APP_ORIGINS": "http://localhost:5173",
@@ -29,6 +37,7 @@
     "MAX_REQUEST_BYTES": "1048576",
     "MAX_MEDIA_REQUEST_BYTES": "12582912",
     "MAX_MEDIA_FRAME_BYTES": "2097152",
-    "MAX_MEDIA_FRAMES": "8"
+    "MAX_MEDIA_FRAMES": "8",
+    "MAX_AUDIO_REQUEST_BYTES": "26214400"
   }
 }

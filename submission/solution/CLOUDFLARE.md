@@ -25,6 +25,7 @@ The edge exposes only:
 | `POST` | `/api/v1/generate` | Rate-limited Gemini generation |
 | `GET` | `/api/v1/media/capabilities` | Verifies the configured media model |
 | `POST` | `/api/v1/media/analyze` | Analyzes up to eight sampled JPEG frames |
+| `POST` | `/api/v1/audio/transcribe` | Transcribes raw audio with ElevenLabs Scribe |
 
 ## Configure
 
@@ -43,7 +44,16 @@ Create the Gemini secret interactively:
 
 ```bash
 npx wrangler secret put GEMINI_API_KEY
+npx wrangler secret put ELEVENLABS_API_KEY
 ```
+
+The audio route takes the raw audio as `application/octet-stream` (up to
+`MAX_AUDIO_REQUEST_BYTES`, 25 MB), requires an allowed `Origin`, and forwards it
+to ElevenLabs `scribe_v2` with word timestamps. It has its own
+`AUDIO_RATE_LIMITER` (5 requests per client IP per minute) because each call
+spends ElevenLabs credits; give its `namespace_id` a distinct integer too.
+Also set a spending limit in the ElevenLabs account: the rate limit is per IP,
+not a global cap.
 
 The `API_RATE_LIMITER` binding permits 60 generation requests per client IP
 per minute. This covers both analysis passes over a 60-second video's bounded
@@ -91,6 +101,9 @@ request or response bodies and sends `store: false` to Gemini. Keep body logging
 disabled in any additional observability or error-reporting integration. Check
 Google's current Gemini terms before using free-tier processing for personal or
 confidential information.
+
+For audio, the original recording passes through the Worker to ElevenLabs. The
+Worker does not store or log it.
 
 For media, the local backend decodes videos and submits only sampled JPEG
 frames in bounded batches. The Worker validates JPEG magic bytes, turns each

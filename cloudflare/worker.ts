@@ -4,7 +4,9 @@ interface RateLimiter {
 
 interface Env {
   API_RATE_LIMITER: RateLimiter;
+  AUDIO_RATE_LIMITER: RateLimiter;
   GEMINI_API_KEY: string;
+  ELEVENLABS_API_KEY: string;
   GEMINI_MODEL: string;
   GEMINI_MEDIA_MODEL: string;
   PUBLIC_APP_ORIGINS: string;
@@ -13,6 +15,7 @@ interface Env {
   MAX_MEDIA_REQUEST_BYTES: string;
   MAX_MEDIA_FRAME_BYTES: string;
   MAX_MEDIA_FRAMES: string;
+  MAX_AUDIO_REQUEST_BYTES: string;
 }
 
 interface GenerationPayload {
@@ -48,9 +51,13 @@ interface ProviderDetection {
 const GENERATE_PATH = "/api/v1/generate";
 const MEDIA_ANALYZE_PATH = "/api/v1/media/analyze";
 const MEDIA_CAPABILITIES_PATH = "/api/v1/media/capabilities";
+const AUDIO_TRANSCRIBE_PATH = "/api/v1/audio/transcribe";
 const HEALTH_PATH = "/health";
 const GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_TIMEOUT_MS = 60_000;
+const ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
+const ELEVENLABS_STT_MODEL = "scribe_v2";
+const ELEVENLABS_TIMEOUT_MS = 120_000;
 const REQUIRED_MEDIA_CAPABILITIES = [
   "image",
   "video",
@@ -518,6 +525,42 @@ async function verifyMediaModel(env: Env) {
   };
 }
 
+async function readAudioBody(
+  request: Request,
+  env: Env,
+): Promise<ArrayBuffer | null> {
+  const maxBytes = positiveInteger(env.MAX_AUDIO_REQUEST_BYTES);
+  if (maxBytes === null) {
+    throw new Error("Invalid Worker limits");
+  }
+  const declaredLength = request.headers.get("Content-Length");
+  if (!declaredLength || Number(declaredLength) > maxBytes) {
+    return null;
+  }
+  const audio = await request.arrayBuffer();
+  return audio.byteLength > 0 && audio.byteLength <= maxBytes ? audio : null;
+}
+
+async function transcribeAudio(audio: ArrayBuffer, env: Env): Promise<unknown> {
+  const form = new FormData();
+  form.append("model_id", ELEVENLABS_STT_MODEL);
+  form.append("timestamps_granularity", "word");
+  form.append("file", new Blob([audio]), "audio");
+  const response = await fetch(ELEVENLABS_STT_URL, {
+    method: "POST",
+    headers: { "xi-api-key": env.ELEVENLABS_API_KEY },
+    body: form,
+    signal: AbortSignal.timeout(ELEVENLABS_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    const error = new Error("ElevenLabs request failed");
+    Object.assign(error, { providerStatus: response.status });
+    throw error;
+  }
+  return response.json();
+}
+
 function providerStatus(error: unknown): number | null {
   if (typeof error !== "object" || error === null) {
     return null;
@@ -543,6 +586,7 @@ export default {
       GENERATE_PATH,
       MEDIA_ANALYZE_PATH,
       MEDIA_CAPABILITIES_PATH,
+      AUDIO_TRANSCRIBE_PATH,
     ]);
     if (!apiPaths.has(url.pathname)) {
       return errorResponse("Not found.", 404, requestId);
@@ -563,8 +607,10 @@ export default {
     if (request.method !== expectedMethod) {
       return errorResponse("Method not allowed.", 405, requestId, origin);
     }
+    const isAudio = url.pathname === AUDIO_TRANSCRIBE_PATH;
     if (
       request.method === "POST" &&
+      !isAudio &&
       !request.headers
         .get("Content-Type")
         ?.toLowerCase()
@@ -579,9 +625,49 @@ export default {
     }
 
     const rateLimitKey = request.headers.get("CF-Connecting-IP") ?? "unknown";
-    const { success } = await env.API_RATE_LIMITER.limit({ key: rateLimitKey });
+    const limiter = isAudio ? env.AUDIO_RATE_LIMITER : env.API_RATE_LIMITER;
+    const { success } = await limiter.limit({ key: rateLimitKey });
     if (!success) {
       return errorResponse("Too many requests.", 429, requestId, origin);
+    }
+
+    if (isAudio) {
+      let audio: ArrayBuffer | null;
+      try {
+        audio = await readAudioBody(request, env);
+      } catch {
+        return errorResponse(
+          "Worker configuration is invalid.",
+          503,
+          requestId,
+          origin,
+        );
+      }
+      if (!audio) {
+        return errorResponse(
+          "Audio request validation failed.",
+          413,
+          requestId,
+          origin,
+        );
+      }
+      try {
+        return jsonResponse(
+          await transcribeAudio(audio, env),
+          200,
+          requestId,
+          origin,
+        );
+      } catch (error) {
+        return errorResponse(
+          isTemporaryProviderError(error)
+            ? "ElevenLabs is temporarily unavailable."
+            : "ElevenLabs returned an invalid response.",
+          isTemporaryProviderError(error) ? 503 : 502,
+          requestId,
+          origin,
+        );
+      }
     }
 
     if (url.pathname === MEDIA_CAPABILITIES_PATH) {
