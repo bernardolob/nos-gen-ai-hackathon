@@ -15,9 +15,10 @@ texto nem para deteção apenas de rostos.
 O modelo recebe fotografias ou amostras JPEG do vídeo como partes de imagem
 reais. O vídeo é amostrado uniformemente até 3 fotogramas por segundo e nas
 mudanças de cena, sem esgotar o orçamento antes do fim do ficheiro. Um detetor
-OpenCV procura rostos até 10 vezes por segundo. Se
-`OPENCV_FACE_DETECTOR_MODEL` apontar para um modelo ONNX YuNet, usa-o; sem esse
-ficheiro mantém o Haar cascade offline como fallback. Uma segunda
+OpenCV procura rostos até 10 vezes por segundo. O modelo ONNX YuNet incluído em `assets/models/` (confiança mínima 0,85) é
+usado por defeito, e `OPENCV_FACE_DETECTOR_MODEL` pode substituir o seu
+caminho. Se o modelo não puder ser carregado, mantém o Haar cascade offline
+como fallback. Uma segunda
 passagem procura dados residuais depois de aplicar as primeiras ocultações.
 Uma falha de qualquer lote interrompe a análise: nunca gera silenciosamente
 uma versão parcial.
@@ -99,9 +100,10 @@ três capacidades necessárias devolve HTTP 503 nos uploads multimédia.
 São necessários Pillow, OpenCV e os executáveis `ffmpeg`/`ffprobe`. As
 dependências Python constam de `requirements.txt`.
 
-Para ativar YuNet, descarregue um modelo `face_detection_yunet_*.onnx` do
-repositório oficial OpenCV Zoo e defina o seu caminho absoluto em
-`OPENCV_FACE_DETECTOR_MODEL`. O ficheiro e a deteção ficam locais.
+YuNet já vem incluído (`assets/models/`, com a licença MIT e o SHA-256 no
+README da pasta), por isso não é preciso descarregar nada. Para usar outro
+modelo compatível, defina o seu caminho em `OPENCV_FACE_DETECTOR_MODEL`. O
+ficheiro e a deteção ficam locais.
 
 Para ativar a máscara ajustada, descarregue `resnet18.onnx` da versão usada
 pelo projeto `yakhyo/face-parsing` e defina o seu caminho absoluto em

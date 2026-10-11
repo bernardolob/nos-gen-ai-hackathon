@@ -44,6 +44,10 @@ TRACK_MAX_GAP_MS = 1100
 FACE_POLYGON_POINTS = 32
 FACE_PARSER_SIZE = 512
 FACE_LABELS = frozenset(range(1, 13)) | {15}
+DEFAULT_FACE_DETECTOR_MODEL = (
+    Path(__file__).resolve().parents[2] / "assets" / "models" /
+    "face_detection_yunet_2023mar.onnx"
+)
 
 
 class MediaError(Exception):
@@ -402,14 +406,15 @@ def _capture_time_ms(capture, index, fps, previous=-1):
 
 
 def _create_face_detector(cv2):
-    """Prefer a YuNet ONNX detector and retain an offline Haar fallback."""
+    """Use the bundled YuNet model, with an explicit path override."""
 
-    model_path = os.environ.get("OPENCV_FACE_DETECTOR_MODEL", "").strip()
+    model_path = os.environ.get("OPENCV_FACE_DETECTOR_MODEL", "").strip() or (
+        str(DEFAULT_FACE_DETECTOR_MODEL))
     if model_path and Path(model_path).is_file() and hasattr(
             cv2, "FaceDetectorYN"):
         try:
             detector = cv2.FaceDetectorYN.create(
-                model_path, "", (320, 320), 0.72, 0.3, 5000)
+                model_path, "", (320, 320), 0.85, 0.3, 5000)
             return "yunet", detector
         except (cv2.error, OSError, ValueError):
             pass
