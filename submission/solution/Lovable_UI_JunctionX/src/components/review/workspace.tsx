@@ -14,7 +14,7 @@ export function MaskedText({ text, className = "" }: { text: string; className?:
     <pre className={`whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground ${className}`}>
       {parts.map((p, i) =>
         p.startsWith("*") ? (
-          <mark key={i} className="rounded-sm bg-primary px-1 text-primary-foreground" aria-label="redacted data">
+          <mark key={i} className="masked-mark rounded-sm px-1 font-mono" aria-label="redacted data">
             {p}
           </mark>
         ) : (
