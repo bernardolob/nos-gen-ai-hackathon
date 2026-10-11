@@ -491,6 +491,7 @@ class ReviewSession:
                 "audio_enabled": self.audio_enabled(),
                 "attempt": self.attempt,
                 "text": self.text,
+                "original_text": "\n".join(self.lines) if self.lines else "",
                 "approved": self.approved,
                 "history": [v.model_dump() for v in self.history],
                 "mode": (

@@ -116,6 +116,7 @@ export interface Snapshot {
   kind: ReviewKind;
   attempt: number;
   text: string;
+  original_text: string;
   approved: boolean;
   history: HistoryEntry[];
   /** "multimodal" is an image or video review. */
@@ -145,6 +146,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   kind: "text",
   attempt: 0,
   text: "",
+  original_text: "",
   approved: false,
   history: [],
   mode: "model",
