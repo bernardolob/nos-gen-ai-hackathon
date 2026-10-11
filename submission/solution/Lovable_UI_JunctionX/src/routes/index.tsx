@@ -10,12 +10,16 @@ import {
   approveVersion,
   getCurrent,
   isAudioFile,
+  isMediaFile,
   isMockMode,
+  isVideoFile,
+  isWorking,
   rejectVersion,
   uploadFile,
+  waitUntilSettled,
   wasSampleSubstituted,
 } from "@/lib/review/api";
-import { ApiError, type Snapshot } from "@/lib/review/types";
+import { ApiError, type Progress, type Snapshot } from "@/lib/review/types";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -44,6 +48,7 @@ function Index() {
   const [wantsNew, setWantsNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
+  const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState<(() => void) | null>(null);
   const [dark, setDark] = useState(false);
@@ -83,8 +88,19 @@ function Index() {
     if (!file || uploading) return;
     setUploading(true);
     setError(null);
+    setProgress(null);
     try {
-      const result = await uploadFile(file);
+      let result = await uploadFile(file);
+      if (isWorking(result)) {
+        if (result.progress) setProgress(result.progress);
+        result = await waitUntilSettled((s) => {
+          setSnapshot(s);
+          if (s.progress) setProgress(s.progress);
+        });
+      }
+      if (result.status === "failed") {
+        throw new Error(result.error || "The file could not be analyzed.");
+      }
       setSnapshot(result);
       setSampleNotice(isMockMode && wasSampleSubstituted());
       setFile(null);
@@ -93,6 +109,7 @@ function Index() {
       setError(message(e));
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   };
 
@@ -172,7 +189,7 @@ function Index() {
               Share the document, not the data.
             </h1>
             <p className="reveal mx-auto max-w-[520px] text-[1.05rem] text-muted-foreground" style={{ "--d": "0.2s" } as CSSProperties}>
-              Documents and audio, anonymized in seconds. Every redaction is yours to review before it is final.
+              Documents, audio, photos and videos, anonymized in seconds. Every redaction is yours to review before it is final.
             </p>
 
             <div className="reveal mx-auto mt-10 max-w-[640px] text-left" style={{ "--d": "0.3s" } as CSSProperties}>
@@ -195,10 +212,23 @@ function Index() {
                     status={
                       file && isAudioFile(file)
                         ? "Transcribing and censoring the audio... this can take several seconds."
+                        : file && isVideoFile(file)
+                        ? "Analyzing video frames... this can take a while."
+                        : file && isMediaFile(file)
+                        ? "Analyzing image... (about 5 s)"
                         : "Analyzing the document... (about 8 s)"
                     }
+                    progress={progress}
                     error={error}
-                    errorTitle={file ? "The document could not be analyzed" : "Could not load the current review"}
+                    errorTitle={
+                      file
+                        ? isMediaFile(file)
+                          ? isVideoFile(file)
+                            ? "The video could not be analyzed"
+                            : "The image could not be analyzed"
+                          : "The document could not be analyzed"
+                        : "Could not load the current review"
+                    }
                     onRetry={() => (file ? void upload() : void load())}
                     audioEnabled={snapshot?.audio_enabled ?? false}
                   />
