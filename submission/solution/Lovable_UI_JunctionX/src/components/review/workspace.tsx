@@ -241,8 +241,11 @@ export function ReviewWorkspace({
             )}
           </div>
         </div>
-        <div key={snapshot.attempt} className="document-paper stage-frame stage-scan max-h-[34rem] overflow-auto rounded-2xl border border-border bg-card p-6" aria-busy={busy}>
-          <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
+        {/* The frame clips the scan effect; the inner box is the one that scrolls. */}
+        <div key={snapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
+          <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
+            <MaskedText text={snapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
+          </div>
         </div>
         {busy && (
           <div className="absolute inset-0 top-10 grid place-items-center rounded-lg bg-background/60" role="status">
