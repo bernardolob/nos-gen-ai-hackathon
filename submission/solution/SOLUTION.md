@@ -229,8 +229,8 @@ gateway:
 As instruções iniciais pedem para mascarar também **toda a informação de saúde**
 (o notebook dos organizadores trata-a como sensível) e as datas e durações que
 fazem parte de um facto sensível ("desde 2018", "há 5 anos", "parou há 3
-anos"), e deixam como estão os títulos, as etiquetas, o título, a data do
-relatório e a referência, como no exemplo oficial. Só **acrescentam**
+anos"), e deixam como estão os cabeçalhos das secções, as etiquetas, o título, a data
+do relatório e a referência, como no exemplo oficial. Só **acrescentam**
 máscaras; o Sexo fica visível porque não consta da lista dos organizadores.
 
 Para refazer a submissão, a partir de `submission/solution/src`:
@@ -259,9 +259,9 @@ resposta (`response_format`), que não está em `prompt.txt`.
 
 ## Pontos em aberto
 
-- Confirmar com a NOS que `submission/prompt.txt` pode conter a prompt
-  interna, uma vez que o documento final é produzido pelo código a partir do
-  JSON.
+- Confirmar com a NOS que `submission/prompt.txt` pode conter o pedido exato
+  (prompt interno, documento e instruções iniciais), uma vez que o documento
+  final é produzido pelo código a partir do JSON. Está preenchido assim.
 - Confirmar com a NOS onde entregar o relatório explicativo: o guia de
   submissão só pede `submission.txt`, `prompt.txt` e o código.
 - Decisões da taxonomia (exames e sintomas, sexo ou género, nome da
