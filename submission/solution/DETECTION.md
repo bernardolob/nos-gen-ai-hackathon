@@ -81,7 +81,7 @@ Regras:
   instruções (ou `</document>` no documento) ficam com um espaço
   (`< /document>`), para não trocarem o papel de cada bloco.
 - **Contam para o limite do gateway.** O Worker aceita 40 000 caracteres no
-  total; a prompt interna e o documento do desafio usam cerca de 9 500, por
+  total; a prompt interna e o documento do desafio usam cerca de 10 000, por
   isso as instruções (até 2000) cabem folgadamente. Se o pedido passar do
   limite, o gateway recusa-o antes de enviar e diz quantos caracteres tem.
 
