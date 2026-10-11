@@ -1,0 +1,3 @@
+This is a fictional hospital admission report. Mask every piece of personal and sensitive information about the patient, her relatives, her emergency contacts and the signing doctor, and mask all the health information in it: conditions, diagnoses, medical and family medical history, symptoms, mental state, medication, exams and results.
+Also mask every date, year or duration that belongs to a sensitive fact, for example the year or the time since a diagnosis, a treatment, an exam or a substance-use episode ("desde 2018", "há 5 anos", "em 2022", "em 2019", "parou há 3 anos"), and the age at which a relative died.
+Leave the section headings and field labels, the title, the date of the report and its reference number as they are.
