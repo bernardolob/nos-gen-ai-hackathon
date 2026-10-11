@@ -16,15 +16,17 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Progress as ProgressBar } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ACCEPT_AUDIO,
   ACCEPT_DOCUMENTS,
   ACCEPT_MEDIA,
   isAudioFile,
   isMediaFile,
+  isMockMode,
   isVideoFile,
 } from "@/lib/review/api";
-import { stageLabel, type Progress } from "@/lib/review/types";
+import { MAX_INSTRUCTIONS, stageLabel, type Progress } from "@/lib/review/types";
 
 const FORMATS = [
   "PDF",
@@ -53,6 +55,8 @@ const formatSize = (bytes: number) => {
 export function UploadStep({
   file,
   onFile,
+  instructions = "",
+  onInstructions = () => {},
   onAnalyze,
   loading,
   status,
@@ -64,6 +68,8 @@ export function UploadStep({
 }: {
   file: File | null;
   onFile: (f: File | null) => void;
+  instructions?: string;
+  onInstructions?: (text: string) => void;
   onAnalyze: () => void;
   loading: boolean;
   status: string;
@@ -239,6 +245,32 @@ export function UploadStep({
             </span>
           ))}
         </div>
+      </div>
+
+      <div className="mt-6">
+        <Label htmlFor="initial-instructions" className="text-sm font-medium text-foreground">
+          Instructions <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Textarea
+          id="initial-instructions"
+          value={instructions}
+          maxLength={MAX_INSTRUCTIONS}
+          onChange={(e) => onInstructions(e.target.value)}
+          placeholder={
+            'Tell the system what to mask or keep, for example: "Also mask the name of the clinic" or "Do not mask medical information".'
+          }
+          className="mt-2 min-h-[88px] bg-background"
+        />
+        <p className="mt-1 flex justify-between gap-3 text-xs text-muted-foreground">
+          <span>
+            {isMockMode
+              ? "Demo mode: instructions are not applied."
+              : "Applied to the first version and to every new one after a rejection."}
+          </span>
+          <span aria-live="polite">
+            {instructions.length}/{MAX_INSTRUCTIONS}
+          </span>
+        </p>
       </div>
 
       {isAudio && (
