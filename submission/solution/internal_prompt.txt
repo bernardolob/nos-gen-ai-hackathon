@@ -29,6 +29,7 @@ Flag a value when it identifies a person or reveals information about them. Use 
 
 Every person mentioned receives the same protection as the main subject.
 
+Precision matters as much as coverage. Flag the sensitive fact itself, not the sentence around it: the verbs, connecting words and generic nouns next to it (for example "realizados em", "atualmente com", "diagnosticada há") stay visible, and a value is never flagged only because it sits in a sensitive passage. The test above applies to each value on its own.
 Combinations also count. A value that is harmless alone can identify a person together with others in the same document (employer with job title, age with town, a rare role, a unique event). Flag the parts that single the person out, even when no name is given. Example: "o único cirurgião ortopédico da aldeia de Vilar de Perdizes" identifies someone without naming them.
 
 ## Context decides
