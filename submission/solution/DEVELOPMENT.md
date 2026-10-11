@@ -18,6 +18,21 @@ PDF, de imagem e de vídeo precisam do PyMuPDF, do Pillow e do OpenCV (tudo em
 `requirements.txt`), e o vídeo e o áudio do `ffmpeg` (ver abaixo). A UI precisa
 do Node.js (`npm install` na pasta da UI).
 
+### Requisitos, em resumo
+
+| O quê | Para quê | Onde |
+|---|---|---|
+| Python 3.10+ | tudo | |
+| `requirements.txt` | backend, PDF, imagem, vídeo (PyMuPDF, Pillow, OpenCV 4.10+, FastAPI, uvicorn, httpx, pydantic) | `pip install -r` |
+| `ffmpeg` **e `ffprobe`** no PATH | vídeo e áudio. Sem o `ffprobe` um vídeo falha logo com "ffprobe is not installed."; sem o `ffmpeg` o áudio fica desligado | binários do sistema (Windows: `winget install Gyan.FFmpeg`, num terminal novo) |
+| Node.js | a UI | `npm install` na pasta da UI |
+| Modelo de rostos YuNet | deteção de rostos no vídeo e na imagem | **já vem no repositório** (`assets/models/`, 232 KB, licença MIT); não se descarrega nada. `OPENCV_FACE_DETECTOR_MODEL` troca-o |
+| `GEMINI_GATEWAY_URL`, `GEMINI_GATEWAY_ORIGIN`, `GEMINI_MEDIA_MODEL` (ou `GEMINI_API_KEY`) | o modelo e a transcrição | exportadas no terminal que lança o backend (o `.env` não é lido) |
+
+O backend e a UI correm em `127.0.0.1:8000` e `127.0.0.1:8080`. Se o terminal
+que lança o backend não tiver o `ffmpeg` no PATH, o vídeo falha com
+"ffprobe is not installed."; reinicia-o num terminal onde `ffprobe -version`
+funcione.
 ### Chave do Gemini
 
 Só vai ser precisa para a deteção. Cria uma em
