@@ -26,8 +26,8 @@ export const DEFAULT_API_URL = "http://127.0.0.1:8000";
 
 const RAW = (import.meta.env["VITE_API_URL"] as string | undefined)?.trim();
 const API_URL = RAW?.replace(/\/+$/, "");
-/** Mock mode when VITE_API_URL is unset or VITE_USE_MOCK=true, so the preview keeps working. */
-export const isMockMode = !API_URL || import.meta.env["VITE_USE_MOCK"] === "true";
+/** Mock mode when VITE_API_URL is unset, VITE_USE_MOCK=true or running tests, so the preview keeps working. */
+export const isMockMode = !API_URL || import.meta.env["VITE_USE_MOCK"] === "true" || import.meta.env["MODE"] === "test";
 
 /** File picker `accept` values. */
 export const ACCEPT_DOCUMENTS = ".pdf,.txt,.md";

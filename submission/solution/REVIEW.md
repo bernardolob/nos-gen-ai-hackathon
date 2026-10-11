@@ -134,6 +134,12 @@ interface está **em inglês** (decisão da equipa).
   `mediaSourceUrl`, `mediaOutputUrl`, os tipos das regiões e um modo de
   demonstração com uma fotografia e um vídeo falsos. Os testes de contrato
   verificam os campos, os limites e o vocabulário das regiões contra o backend.
+- **Passar o rato por um `*`** mostra a palavra que ele esconde. Para isso o
+  estado traz `original_text` (o texto do documento, ou a transcrição do
+  áudio): é o texto original, com os dados sensíveis, e só sai do servidor
+  local para o navegador de quem enviou o ficheiro. A UI alinha cada `*` com
+  a palavra por posição; se não conseguir, mostra só o `*`. Em imagem e vídeo
+  `original_text` vem vazio.
 - O trabalho do Lovable vem pelo branch `lovable/ui`, nunca diretamente para
   a `main`, e revê-se o diff antes de juntar.
 - Gestor de pacotes: a UI traz `bun.lock`; `npm install` funciona, mas não se
