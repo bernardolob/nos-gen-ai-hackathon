@@ -294,15 +294,30 @@ def _capture_time_ms(capture, index, fps, previous=-1):
     return candidate
 
 
+def _resolve_model_path(model_path: str) -> Path | None:
+    if not model_path:
+        return None
+    path = Path(model_path)
+    if path.is_file():
+        return path
+    solution_root = Path(__file__).resolve().parent.parent
+    candidate = solution_root / model_path
+    if candidate.is_file():
+        return candidate
+    return None
+
+
 def _create_face_detector(cv2):
     """Prefer a YuNet ONNX detector and retain an offline Haar fallback."""
 
     model_path = os.environ.get("OPENCV_FACE_DETECTOR_MODEL", "").strip()
-    if model_path and Path(model_path).is_file() and hasattr(
-            cv2, "FaceDetectorYN"):
+    path = _resolve_model_path(model_path)
+    if path is None:
+        path = _resolve_model_path("assets/face_detection_yunet_2023mar.onnx")
+    if path and hasattr(cv2, "FaceDetectorYN"):
         try:
             detector = cv2.FaceDetectorYN.create(
-                model_path, "", (320, 320), 0.72, 0.3, 5000)
+                str(path), "", (320, 320), 0.72, 0.3, 5000)
             return "yunet", detector
         except (cv2.error, OSError, ValueError):
             pass
@@ -315,10 +330,11 @@ def _create_face_parser(cv2):
     """Load the optional local face-parsing ONNX model."""
 
     model_path = os.environ.get("OPENCV_FACE_PARSER_MODEL", "").strip()
-    if not model_path or not Path(model_path).is_file():
+    path = _resolve_model_path(model_path)
+    if not path:
         return None
     try:
-        return cv2.dnn.readNetFromONNX(model_path)
+        return cv2.dnn.readNetFromONNX(str(path))
     except (cv2.error, OSError, ValueError):
         return None
 
