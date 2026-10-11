@@ -61,7 +61,7 @@ export function MaskedText({ text, className = "" }: { text: string; className?:
     <pre className={`whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground ${className}`}>
       {parts.map((p, i) =>
         p.startsWith("*") ? (
-          <mark key={i} className="rounded-sm bg-primary px-1 text-primary-foreground" aria-label="redacted data">
+          <mark key={i} className="masked-mark rounded-sm px-1 font-mono" aria-label="redacted data">
             {p}
           </mark>
         ) : (
@@ -653,7 +653,7 @@ export function ReviewWorkspace({
                 </div>
               </div>
               <div key={activeSnapshot.attempt} className="document-paper stage-frame stage-scan rounded-2xl border border-border bg-card" aria-busy={busy}>
-                <div className="max-h-[34rem] overflow-y-auto p-6" tabIndex={0} aria-label="Anonymized text">
+                <div className="max-h-[34rem] overflow-y-auto p-6 clean-scrollbar" tabIndex={0} aria-label="Anonymized text">
                   <MaskedText text={activeSnapshot.text} className={`stage-pv ${busy ? "opacity-40" : ""}`} />
                 </div>
               </div>
@@ -824,7 +824,7 @@ export function ReviewWorkspace({
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">“{h.reason}”</p>
                 {!isMedia && (
-                  <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3">
+                  <div className="mt-3 max-h-60 overflow-auto rounded-md bg-muted p-3 clean-scrollbar">
                     <MaskedText text={h.text} className="text-xs leading-6" />
                   </div>
                 )}
