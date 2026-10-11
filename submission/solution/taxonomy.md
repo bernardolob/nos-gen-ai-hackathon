@@ -26,6 +26,29 @@ Keep labels, punctuation and line structure.
 If a value is repeated in the free text (for example a shorter form of a
 name), mask it there too.
 
+## Criterion: re-identification
+
+The categories below are illustrations, not the definition. The definition
+comes from the organizers: the goal is to prevent the identification of the
+person and to protect sensitive information, preserving the structure and the
+non-sensitive content whenever possible. If a value can make the person
+identifiable, it is sensitive.
+
+The prompt turns this into a test applied to each value: could it, alone or
+combined with the rest of the document or with common knowledge, identify a
+person, or reveal sensitive information (GDPR Art. 9) about an identifiable
+person? Three consequences:
+
+- **Context decides.** "Dores abdominais" or "exames de sangue" are sensitive
+  when they refer to a specific person, and not in generic text ("as dores
+  abdominais podem ter várias causas"). Each occurrence is judged on its own.
+- **Combinations count.** Employer plus job title, age plus town, or a rare
+  role ("o único cirurgião ortopédico da aldeia de X") can single a person out
+  without a name.
+- **Precision matters.** Only the sensitive fact is flagged, not the verbs and
+  connecting words around it, and the institution that issued the document
+  stays visible, as in the organizers' example.
+
 ## Categories
 
 The ids are used in the prompt, in the code and in the report.
