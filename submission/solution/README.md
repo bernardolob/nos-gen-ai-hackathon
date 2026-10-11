@@ -44,10 +44,10 @@ Documento -> Gemini deteta + regras de segurança -> o código mascara
 
 | Nome | GitHub |
 |---|---|
+| João Horta | [@jnhorta](https://github.com/jnhorta) |
+| Manuel Anão | [@ManuelOliveiraAnao](https://github.com/ManuelOliveiraAnao) |
 | Bernardo Lobão | [@bernardolob](https://github.com/bernardolob) |
 | Francisco Campos | [@Francisco-Campos05](https://github.com/Francisco-Campos05) |
-| João Horta | [@jnhorta](https://github.com/jnhorta) |
-| Manuel Oliveira Anão | [@ManuelOliveiraAnao](https://github.com/ManuelOliveiraAnao) |
 
 ## O projeto em retrospetiva
 
