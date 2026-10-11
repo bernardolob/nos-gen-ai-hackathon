@@ -81,7 +81,7 @@ Regras:
   instruções (ou `</document>` no documento) ficam com um espaço
   (`< /document>`), para não trocarem o papel de cada bloco.
 - **Contam para o limite do gateway.** O Worker aceita 40 000 caracteres no
-  total; a prompt interna e o documento do desafio usam cerca de 9 500, por
+  total; a prompt interna e o documento do desafio usam cerca de 10 000, por
   isso as instruções (até 2000) cabem folgadamente. Se o pedido passar do
   limite, o gateway recusa-o antes de enviar e diz quantos caracteres tem.
 
@@ -194,6 +194,26 @@ houve nenhum `visible`. Depende de o modelo identificar todos os valores
 pedidos: um que o modelo não devolva continua mascarado pelas regras, que é
 o lado seguro.
 
+## O critério de sensibilidade
+
+A prompt decide pelo critério dado pelos organizadores, a **reidentificação**:
+um valor é sensível se, sozinho ou com o resto do documento, puder identificar
+a pessoa ou revelar informação sensível sobre ela. As categorias são exemplos
+desse critério, não o seu limite (ver [taxonomy.md](taxonomy.md)). Daqui vêm
+três regras da prompt: o contexto decide (uma dor abdominal de uma pessoa é
+sensível, a frase genérica sobre dores abdominais não é), as combinações
+contam (cargo mais empregador, idade mais localidade) e a precisão pesa tanto
+como a cobertura (mascara-se o facto sensível, não a frase à volta; a
+instituição que emitiu o documento fica visível).
+
+Medido com o Gemini, antes e depois, sobre o PDF do desafio e três textos
+sintéticos (consulta, email e contrato): a clínica e a cidade deixaram de ser
+mascaradas, o texto genérico sobre dores abdominais passou a ficar visível na
+maioria das execuções, e o número de `*` no PDF ficou ao nível anterior (182 a
+204 contra 187). **É uma comparação qualitativa**, sem o gabarito dos
+organizadores, e o modelo varia de execução para execução (o mesmo PDF deu 78,
+86 e 96 itens). Não prova ganho de precisão.
+
 ## Limitações
 
 - **Um só pedido por documento.** Documentos longos que não caibam no pedido
@@ -219,10 +239,12 @@ o lado seguro.
 - **Não adivinha valores.** Se o texto não está na linha, nem sem distinguir
   maiúsculas, fica como veio e o mascaramento procura-o nas linhas vizinhas e
   no documento todo, e gera um aviso se não o encontrar.
-- **Ainda não foi testada com o Gemini.** Os testes usam um cliente falso. O
-  cliente real, e o adaptador para ele, estão por fazer. Isto quer dizer que
-  **a qualidade da deteção em si (o que o modelo apanha) ainda não está
-  medida**: o que se testa aqui é o que fazemos com a resposta.
+- **A qualidade da deteção não está medida a sério.** Os testes usam um
+  cliente falso: testam o que fazemos com a resposta, não o que o modelo
+  apanha. A comparação com o Gemini em "O critério de sensibilidade" é
+  qualitativa e o modelo não é determinístico; um caso genérico (por exemplo,
+  "os exames de sangue são pedidos de rotina") continua a ser mascarado em
+  algumas execuções.
 
 ## Testes
 
