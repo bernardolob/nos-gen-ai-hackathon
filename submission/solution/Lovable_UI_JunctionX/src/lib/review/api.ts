@@ -1,4 +1,13 @@
-import { MOCK_AUDIO_URL, mockApprove, mockCurrent, mockReject, mockUpload, mockUploadAudio, SAMPLE_TEXT } from "./mock";
+import {
+  MOCK_AUDIO_URL,
+  mockApprove,
+  mockCurrent,
+  mockReject,
+  mockUpload,
+  mockUploadAudio,
+  SAMPLE_TEXT,
+  wasSampleSubstituted,
+} from "./mock";
 import { ApiError, MAX_AUDIO_BYTES, MAX_UPLOAD_BYTES, type Snapshot } from "./types";
 
 /** Local backend address used during development (set VITE_API_URL to it to go live). */
@@ -34,6 +43,8 @@ export function audioContentTypeFor(file: File): "audio/mpeg" | "audio/mp4" | "a
 }
 
 export const isAudioFile = (file: File): boolean => audioContentTypeFor(file) !== null;
+
+export { wasSampleSubstituted };
 
 export async function parseError(res: Response): Promise<ApiError> {
   let detail = "";
@@ -77,7 +88,8 @@ export async function uploadDocument(file: File): Promise<Snapshot> {
   if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(413, "The document is larger than 10 MB.");
   if (isMockMode) {
     await wait(1800);
-    return mockUpload(type === "text/plain" ? await file.text() : SAMPLE_TEXT);
+    if (type === "text/plain") return mockUpload(await file.text());
+    return mockUpload(SAMPLE_TEXT, true);
   }
   return request("/api/document", { method: "POST", headers: { "Content-Type": type }, body: file });
 }

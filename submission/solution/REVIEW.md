@@ -110,7 +110,13 @@ interface está **em inglês** (decisão da equipa).
   da UI).
 - **Modo demonstração.** Sem `VITE_API_URL` a UI usa dados falsos e mostra um
   aviso fixo no topo. Para ligar ao backend: `cp .env.example .env`
-  (`VITE_API_URL=http://127.0.0.1:8000`).
+  (`VITE_API_URL=http://127.0.0.1:8000`). Um PDF não se lê no browser em modo
+  demonstração (falta o PyMuPDF), por isso qualquer ficheiro que não seja
+  `.txt`/`.md` mostra o documento de exemplo mascarado em vez do ficheiro
+  escolhido; a UI avisa com um alerta na página de revisão
+  (`wasSampleSubstituted`, em `src/lib/review/mock.ts`) para ninguém confundir
+  o exemplo com o resultado real. O mesmo vale sempre para o áudio em modo
+  demonstração (a transcrição é sempre a mesma amostra).
 - **A UI do áudio.** Aceita mp3, m4a e wav no mesmo envio dos documentos e,
   antes de enviar um áudio, mostra o **aviso de privacidade** (o áudio
   original vai para o ElevenLabs) e exige marcar "I understand". Se o
