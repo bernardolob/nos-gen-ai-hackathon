@@ -73,6 +73,28 @@ export interface MediaModel {
  */
 export type ReviewStatus = "idle" | "processing" | "exporting" | "ready" | "failed" | "approved";
 
+/**
+ * The backend names its stages in Portuguese (`progress.stage`). Show
+ * `stageLabel(stage)`, never the raw value.
+ */
+export const STAGE_LABELS: Record<string, string> = {
+  "validar imagem": "Checking the image",
+  "analisar imagem": "Analysing the image",
+  "análise concluída": "Analysis complete",
+  "validar vídeo": "Checking the video",
+  "extrair fotogramas": "Extracting frames",
+  "detetar dados visuais": "Detecting sensitive visuals",
+  "verificar dados residuais": "Checking for anything missed",
+  "exportar imagem": "Exporting the image",
+  "exportar vídeo": "Exporting the video",
+  "exportação concluída": "Export complete",
+  // Demo mode.
+  analysing: "Analysing",
+  exporting: "Exporting",
+};
+
+export const stageLabel = (stage: string): string => STAGE_LABELS[stage] ?? "Working";
+
 export interface Progress {
   stage: string;
   completed: number;

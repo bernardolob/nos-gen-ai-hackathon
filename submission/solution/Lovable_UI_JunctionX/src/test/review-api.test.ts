@@ -24,7 +24,7 @@ import {
   wasSampleSubstituted,
 } from "@/lib/review/api";
 import { mockApprove, mockReject, mockUpload, mockUploadAudio, resetMock, SAMPLE_TRANSCRIPT } from "@/lib/review/mock";
-import { EMPTY_SNAPSHOT, MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, type Snapshot } from "@/lib/review/types";
+import { EMPTY_SNAPSHOT, MAX_AUDIO_BYTES, MAX_IMAGE_BYTES, stageLabel, type Snapshot } from "@/lib/review/types";
 
 describe("review contract", () => {
   beforeEach(() => resetMock());
@@ -274,5 +274,14 @@ describe("image and video contract (demo mode)", () => {
     const edited = await updateRegions(done.attempt, done.regions.slice(1));
     expect(edited.approved).toBe(false);
     expect(mediaOutputUrl(edited)).toBeNull();
+  });
+});
+
+describe("progress stages", () => {
+  it("labels the backend's Portuguese stages in English and never shows an unknown one raw", () => {
+    expect(stageLabel("extrair fotogramas")).toBe("Extracting frames");
+    expect(stageLabel("exportação concluída")).toBe("Export complete");
+    expect(stageLabel("something new")).toBe("Working");
+    expect(stageLabel("")).toBe("Working");
   });
 });

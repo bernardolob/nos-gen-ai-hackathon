@@ -125,3 +125,12 @@ def test_the_ui_region_vocabulary_is_the_backends():
 def test_the_media_region_fields_are_the_backends():
     from media.regions import MediaRegion
     assert interface_fields("MediaRegion") == set(MediaRegion.model_fields)
+
+
+def test_the_ui_labels_every_progress_stage_of_the_backend():
+    media = Path(user_validation.__file__).parent / "media" / "pipeline.py"
+    stages = set(re.findall(r'report\("([^"]+)"', media.read_text("utf-8")))
+    assert stages, "o pipeline já não reporta etapas?"
+    types = TYPES.read_text(encoding="utf-8")
+    labelled = set(re.findall(r'^\s+"([^"]+)":', types, re.MULTILINE))
+    assert stages <= labelled, stages - labelled
