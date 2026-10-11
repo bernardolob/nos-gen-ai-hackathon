@@ -8,8 +8,9 @@ redimensionar e limitar no tempo regiões pixelizadas (ver
 ("Mascara também o nome do centro") ou menos ("Não mascares a informação
 médica"): o utilizador tem a palavra final. Essas observações passam a ser a
 **prompt do utilizador** (ver [DETECTION.md](DETECTION.md)) e a análise corre
-outra vez, gerando a tentativa seguinte. As versões rejeitadas ficam no
-histórico da sessão.
+outra vez, gerando a tentativa seguinte. O utilizador pode também escrever
+**instruções iniciais** ao enviar o ficheiro, num campo opcional, e elas valem
+logo na primeira versão. As versões rejeitadas ficam no histórico da sessão.
 
 ```
 texto:  UI <-> src/user_validation.py -> pipeline.run -> Gemini (gateway)
@@ -25,8 +26,8 @@ de um: enviar um novo ficheiro substitui o anterior.
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`, até 10 MB), ou imagem/vídeo (ver [MEDIA.md](MEDIA.md)); começa a revisão |
-| `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta e censura; começa a revisão |
+| `POST /api/document` | corpo = PDF (`application/pdf`) ou texto UTF-8 (`text/plain`, até 10 MB), ou imagem/vídeo (ver [MEDIA.md](MEDIA.md)); começa a revisão. Aceita o cabeçalho opcional `X-User-Instructions` (ver abaixo) |
+| `POST /api/audio` | corpo = áudio (`audio/mpeg`, `audio/mp4`, `audio/x-m4a` ou `audio/wav`, até 25 MB); transcreve, deteta e censura; começa a revisão. Aceita o cabeçalho opcional `X-User-Instructions` |
 | `GET /api/audio/current` | o áudio **censurado** da versão atual (`audio/mp4`, sem cache); 404 se ainda não há. Nunca devolve o original |
 | `GET /api/current` | o estado (ver abaixo) |
 | `POST /api/reject` | `{attempt, text, reason}`: guarda a versão, junta `reason` às instruções e gera a seguinte |
@@ -44,9 +45,18 @@ O **estado** (o mesmo em todas as rotas, e o que a UI mostra) tem os campos
 
 Comportamento:
 
+- **Instruções iniciais.** O cabeçalho `X-User-Instructions` leva o texto que
+  o utilizador escreveu ao enviar o ficheiro, em percent-encoding (como o
+  `X-File-Name`), até **1500 caracteres** (mais dá 422 sem chamar o modelo, e
+  o texto nunca vem na mensagem de erro). Valem na primeira versão (texto,
+  áudio, imagem e vídeo) e **em todas as seguintes**: vão sempre no pedido,
+  em primeiro lugar, e nunca são descartadas. Enviar um novo ficheiro
+  esquece-as. Vão num cabeçalho, e não na URL, para não aparecerem no registo
+  de acessos. Em branco ou ausente, nada muda.
 - **As observações acumulam-se.** Cada pedido ao modelo leva todas as
-  observações anteriores, até 2000 caracteres (ficam as mais recentes). Uma
-  só observação com mais de 2000 dá erro 422.
+  observações anteriores, até 2000 caracteres no total, contando as
+  instruções iniciais (das observações ficam as mais recentes). Uma só
+  observação que, com as instruções iniciais, passe das 2000 dá erro 422.
 - **Uma rejeição que falha não muda nada.** Se o modelo, o gateway ou a
   censura do áudio falham, a resposta é 502 com uma mensagem fixa, a versão
   (e o seu áudio) continuam em revisão e a observação não fica guardada.
@@ -99,7 +109,7 @@ interface está **em inglês** (decisão da equipa).
 |---|---|
 | `src/routes/index.tsx` | a página e os estados (arranque, envio, revisão) |
 | `src/components/review/workspace.tsx` | o espaço de revisão: texto mascarado, contadores, aprovar/rejeitar, histórico, diálogo de feedback |
-| `src/components/anonymizer/steps.tsx` | só o `UploadStep` (escolher ou largar o ficheiro) |
+| `src/components/anonymizer/steps.tsx` | só o `UploadStep` (escolher ou largar o ficheiro e, opcionalmente, escrever as instruções iniciais) |
 | `src/lib/review/api.ts`, `types.ts`, `mock.ts` | a camada de serviço: **o contrato com o backend** |
 | `src/routes/__root.tsx`, `src/styles.css` | o esqueleto, o aviso de demonstração e os estilos |
 | `src/components/ui/` | componentes shadcn genéricos |
@@ -118,6 +128,12 @@ interface está **em inglês** (decisão da equipa).
   (`wasSampleSubstituted`, em `src/lib/review/mock.ts`) para ninguém confundir
   o exemplo com o resultado real. O mesmo vale sempre para o áudio em modo
   demonstração (a transcrição é sempre a mesma amostra).
+- **Instruções iniciais.** O `UploadStep` tem um campo opcional "Instructions",
+  com contador (1500 caracteres, `MAX_INSTRUCTIONS`). `uploadFile(file,
+  instructions)` envia-as no cabeçalho `X-User-Instructions`
+  (`instructionHeaders`, em `api.ts`) com o ficheiro, e a página limpa o campo
+  depois de enviar. Em modo demonstração o campo avisa que as instruções não
+  se aplicam. Testes em `src/test/initial-instructions.test.tsx`.
 - **A UI do áudio.** Aceita mp3, m4a e wav no mesmo envio dos documentos e,
   antes de enviar um áudio, mostra o **aviso de privacidade** (o áudio
   original vai para o ElevenLabs) e exige marcar "I understand". Se o
