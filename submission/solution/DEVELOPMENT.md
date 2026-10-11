@@ -165,3 +165,13 @@ git config user.email "o-teu-email@exemplo.com"
 | Aviso `The fitz API is deprecated` | É só um aviso do PyMuPDF; a alternativa é `import pymupdf` |
 | O `git` não é reconhecido num terminal já aberto | Abre um terminal novo depois de instalar o Git |
 | O `git push` falha com `could not read Username` | Falta iniciar sessão no GitHub: `gh auth login` |
+| A UI diz "Audio censoring is not available on this server." | O backend não tem como transcrever: falta `GEMINI_GATEWAY_URL` e `GEMINI_GATEWAY_ORIGIN` (ou `ELEVENLABS_API_KEY`), ou falta o `ffmpeg`. Reinicia o backend com essas variáveis; o arranque diz `áudio: ligado` ou `desligado`. Confirma também que a porta 8000 é mesmo este backend |
+| Ao enviar áudio, "Não foi possível transcrever o áudio" | O backend não conseguiu falar com o Worker. O backend não mostra o código, por isso testa a rota à mão (abaixo). 404: o Worker publicado não tem a rota de áudio (falta `npm run deploy` a partir de uma branch que a tenha). 403: o `GEMINI_GATEWAY_ORIGIN` não consta de `PUBLIC_APP_ORIGINS`. 429: mais de 5 pedidos por minuto. 502 ou 503: problema com o segredo `ELEVENLABS_API_KEY` ou com o ElevenLabs |
+
+Para testar a rota de áudio do Worker sem a UI (o esperado é 413, porque o corpo vai vazio):
+
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "Origin: http://localhost:5173" \
+  -H "Content-Type: application/octet-stream" --data-binary "" \
+  https://nos-gemini-gateway.jnhorta05.workers.dev/api/v1/audio/transcribe
+```
