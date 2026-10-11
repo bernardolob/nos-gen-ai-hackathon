@@ -94,6 +94,19 @@ but they are not user authentication. A public production application should
 also validate an authenticated user session or a Cloudflare Turnstile token
 before forwarding costly requests.
 
+## Routes
+
+| Route | What it does |
+|---|---|
+| `POST /api/v1/generate` | text for the detection. `{"prompt"}`, plus an optional `"format": "detection"` that makes Gemini answer with the JSON schema in `submission/solution/detection_schema.json` (the schema lives in the Worker; any other value or field is 422) |
+| `GET /api/v1/media/capabilities`, `POST /api/v1/media/analyze` | images and video frames for the visual detection |
+| `POST /api/v1/audio/transcribe` | raw audio to ElevenLabs Scribe (key kept as the `ELEVENLABS_API_KEY` secret, 5 requests per minute and per IP, 25 MB) |
+
+After changing the Worker, redeploy it: the routes and the schema only exist
+once published. Deploying needs **write** permission on the Cloudflare account
+that owns the Worker (a read-only member gets a 403 from `wrangler`); set
+`CLOUDFLARE_ACCOUNT_ID` when you have several accounts.
+
 ## Privacy and logs
 
 The submitted text passes through the Worker and Gemini. The Worker does not log

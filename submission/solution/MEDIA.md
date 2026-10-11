@@ -131,6 +131,24 @@ locais. Sem esta variável, a aplicação continua a funcionar com caixas.
 - O áudio do vídeo é preservado. Dados pessoais falados não são censurados
   nesta versão.
 
+## Verificação real
+
+Com o Worker de produção, o Gemini (`gemini-3.5-flash-lite`) e o `ffmpeg`:
+
+| Teste | Resultado |
+|---|---|
+| Fotografia: um cartão de cidadão fictício com uma cara e uma matrícula | cara, cartão e matrícula detetados com o contorno certo; a exportação deixa-os ilegíveis |
+| Vídeo sintético (6 s): um cartão a deslizar e uma matrícula | pronto em 27 s; 2 regiões com 60 quadros-chave cada, a seguir o movimento; exportação em cerca de 4 s |
+| Vídeo real (6,7 s): uma cara que vira a cabeça e um cartão que entra e passa à frente da cara | pronto em 50 s; a cara em vários troços, o cartão duas vezes; exportação em cerca de 4 s, MP4 H.264 com o áudio; a cara fica desfocada em todos os fotogramas vistos |
+
+**Limites verificados:** quando o cartão **entra** em cena, desfocado pelo
+movimento, houve uns 0,2 s sem máscara (o modelo só o vê na primeira amostra,
+cerca de 3 por segundo, e o rastreio começa aí), embora nada se lesse. O
+modelo varia de uma execução para outra (7 e 9 regiões no mesmo vídeo, e uma
+vez apanhou parte do logótipo de uma t-shirt, que não é um dado pessoal).
+Rostos a sério em vários planos, vários rostos e filmagens longas não foram
+testados.
+
 ## API da revisão
 
 | Método | Rota | Função |
