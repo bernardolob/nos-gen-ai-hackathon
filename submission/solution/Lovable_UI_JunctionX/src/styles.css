@@ -125,6 +125,8 @@
 }
 
 .dark {
+  /* Native controls (the arrows of number inputs, scrollbars) follow the theme. */
+  color-scheme: dark;
   --glow: oklch(0.585 0.233 277 / 22%);
   --ok: oklch(0.723 0.219 149.6);
   --warn: oklch(0.75 0.183 55);
