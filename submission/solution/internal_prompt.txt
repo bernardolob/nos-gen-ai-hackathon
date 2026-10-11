@@ -24,7 +24,7 @@ Flag a value when it identifies a person or reveals information about them. Use 
 - financeiro: payment card number, expiry date and security code, bank account or IBAN, insurance policy numbers and plans, income, salary, debts, benefits.
 - familia: marital status, children (names and ages), and the relationship of a named person to the main subject (for example spouse, brother, close friend).
 - comportamento: substance use and dependency treatment, alcohol, smoking, criminal records or legal proceedings, disciplinary records, habits and personal conduct.
-- quasi_identificador: employer or workplace, school, occupation or job title, and ages, when they help single a person out.
+- quasi_identificador: employer or workplace, school, occupation or job title, and ages, when they help single a person out, also the town or village where the person lives, was born or works, and any rare role or event that points to one person.
 
 Every person mentioned receives the same protection as the main subject.
 
